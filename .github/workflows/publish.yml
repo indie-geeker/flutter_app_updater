@@ -19,8 +19,6 @@ jobs:
           mkdir -p ~/.pub-cache
           echo '${{ secrets.PUB_CREDENTIALS_JSON }}' > ~/.pub-cache/credentials.json
 
-      - name: Install dependencies
-        run: flutter pub get
 
       - name: Run pub publish (dry run)
         run: flutter pub publish --dry-run
