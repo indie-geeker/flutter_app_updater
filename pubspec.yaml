@@ -1,6 +1,6 @@
 name: flutter_app_updater
 description: "一个轻量级的Flutter应用内更新框架."
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/indie-geeker
 
 environment:
