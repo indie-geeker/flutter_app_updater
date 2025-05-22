@@ -1,4 +1,4 @@
-library app_updater;
+library flutter_app_updater;
 
 export 'src/app_update_controller.dart';
 export 'src/app_update_service.dart';
