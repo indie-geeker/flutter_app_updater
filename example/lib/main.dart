@@ -1,6 +1,6 @@
 import 'dart:developer' as developer;
 
-import 'package:flutter_app_updater/app_updater.dart';
+import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter/material.dart';
 
 import 'mock_api.dart';
