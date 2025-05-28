@@ -501,7 +501,7 @@ class UpdateDialogState extends State<UpdateDialog> {
   }
 
   // 下载完成时的按钮
-  Widget _buildDownloadedActions(BuildContext context, ThemeData theme) {
+  Widget _buildDownloadedActions(BuildContext ctx, ThemeData theme) {
     return ElevatedButton(
       style: widget.primaryButtonStyle,
       onPressed: () async {

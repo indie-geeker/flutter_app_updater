@@ -9,12 +9,6 @@ void main() {
   runApp(const MyApp());
 }
 
-// 定义全局导航键
-// 这个键可以用于获取当前构建上下文
-// 确保对话框有正确的 MaterialLocalizations 上下文
-// 很多库如对话框和本地化都依赖于这个上下文
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -75,8 +69,6 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      // 添加导航键以获取正确的应用上下文
-      navigatorKey: navigatorKey,
       // 添加国际化支持
       localizationsDelegates: const [
         // 使用内置的本地化委托
@@ -111,12 +103,9 @@ class _MyAppState extends State<MyApp> {
                       debugPrint('Changelog: ${updateInfo.changelog}');
 
                       // 清晰地显示更新对话框
-                      // 使用 navigatorKey.currentContext 获取全局上下文
-                      // 这个上下文有正确的 MaterialLocalizations
-                      final ctx = navigatorKey.currentContext;
-                      if (ctx != null) {
+                      if (mounted) {
                         await _flutterAppUpdaterPlugin.showUpdateDialog(
-                          context: ctx,
+                          context: this.context,
                           updateInfo: updateInfo,
                         );
                       }

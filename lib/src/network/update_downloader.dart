@@ -68,8 +68,6 @@ class UpdateDownloader {
   /// 下载请求
   HttpClientRequest? _request;
 
-  /// 下载响应
-  HttpClientResponse? _response;
 
   /// 输出文件流
   IOSink? _fileSink;
@@ -281,7 +279,6 @@ class UpdateDownloader {
 
       // 发送请求
       final response = await request.close();
-      _response = response;
 
       // 检查响应状态
       final isResume = resumeFrom > 0 && supportRangeDownload;
@@ -480,16 +477,12 @@ class UpdateDownloader {
       _request?.abort();
       _request = null;
       
-      // 安全地释放响应对象
-      _response = null;
-      
       // 关闭 HTTP 客户端
       _httpClient?.close();
       _httpClient = null;
     } catch (e) {
       debugPrint('关闭 HTTP 连接时出错: $e');
       _request = null;
-      _response = null;
       _httpClient = null;
     }
     
