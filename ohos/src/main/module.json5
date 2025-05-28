@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "flutter_app_updater",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}

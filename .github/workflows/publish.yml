@@ -1,0 +1,39 @@
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # 例如 v1.0.0 时自动触发
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0' # Replace with the required version
+
+      - name: Setup Pub Credentials
+        run: |
+          mkdir -p ~/.pub-cache
+          mkdir -p ~/.config/dart
+          echo '${{ secrets.CREDENTIALS_JSON }}' > ~/.pub-cache/credentials.json
+          echo '${{ secrets.CREDENTIALS_JSON }}' > ~/.config/dart/pub-credentials.json
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Dry run publish
+        run: flutter pub publish --dry-run
+
+
+      - name: Publish to pub.dev
+        run: flutter pub publish -f
+
+
+
