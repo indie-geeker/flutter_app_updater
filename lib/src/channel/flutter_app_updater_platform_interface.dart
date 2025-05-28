@@ -28,7 +28,10 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
-  Future<String?> getAppVersion() {
+  Future<String?> getAppVersionCode() {
+    throw UnimplementedError('appVersion() has not been implemented.');
+  }
+  Future<String?> getAppVersionName() {
     throw UnimplementedError('appVersion() has not been implemented.');
   }
 

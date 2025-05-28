@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.annotation.NonNull
 import androidx.core.content.FileProvider
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -34,19 +33,33 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
   override fun onMethodCall(call: MethodCall, result: Result) {
     when (call.method) {
       "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
-      "getAppVersion" -> getAppVersion(result)
+      "getAppVersionCode" -> getAppVersionCode(result)
+      "getAppVersionName" -> getAppVersionName(result)
       "installApp" -> installApp(call.arguments as String, result)
       else -> result.notImplemented()
     }
   }
 
 
-  private fun getAppVersion(result: Result) {
+  private fun getAppVersionCode(result: Result) {
+    try {
+      val packageInfo = applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0)
+      if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        result.success(packageInfo.longVersionCode.toString())
+        return
+      }
+      result.success(packageInfo.versionCode.toString())
+    } catch (e: Exception) {
+      result.error("VERSION_ERROR", "获取版本号失败", e.message)
+    }
+  }
+
+  private fun getAppVersionName(result: Result) {
     try {
       val packageInfo = applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0)
       result.success(packageInfo.versionName)
     } catch (e: Exception) {
-      result.error("VERSION_ERROR", "获取版本号失败", e.message)
+      result.error("VERSION_ERROR", "获取版本名称失败", e.message)
     }
   }
 

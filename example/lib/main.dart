@@ -24,7 +24,8 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
-  String _appVersion = 'Unknown';
+  String _appVersionCode = 'Unknown';
+  String _appVersionName = 'Unknown';
   final _flutterAppUpdaterPlugin = FlutterAppUpdater(
       updateUrl: "https://power.earthg.cn/update/update.json",
       versionKey: "newVersionCode",
@@ -46,20 +47,27 @@ class _MyAppState extends State<MyApp> {
   Future<void> initPlatformState() async {
     String platformVersion;
     String appVersion;
+    String appVersionName;
     try {
       platformVersion =
           await _flutterAppUpdaterPlugin.getPlatformVersion() ?? 'Unknown platform version';
       appVersion =
-          await _flutterAppUpdaterPlugin.getAppVersion() ?? 'Unknown app version';
+          await _flutterAppUpdaterPlugin.getAppVersionCode() ?? 'Unknown app version';
+
+      appVersionName =
+          await _flutterAppUpdaterPlugin.getAppVersionName() ?? 'Unknown app version name';
+
     } on PlatformException {
       platformVersion = 'Failed to get platform version.';
       appVersion = 'Failed to get app version.';
+      appVersionName = 'Failed to get app version name.';
     }
     if (!mounted) return;
 
     setState(() {
       _platformVersion = platformVersion;
-      _appVersion = appVersion;
+      _appVersionCode = appVersion;
+      _appVersionName = appVersionName;
     });
   }
 
@@ -87,7 +95,8 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             children: [
               Text('Running on: $_platformVersion\n'),
-              Text('App Version: $_appVersion\n'),
+              Text('App Version: $_appVersionCode\n'),
+              Text('App Version Name: $_appVersionName\n'),
               ElevatedButton(
                 onPressed: () async {
                   try {

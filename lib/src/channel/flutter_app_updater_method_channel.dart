@@ -23,7 +23,12 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   }
 
   @override
-  Future<String?> getAppVersion() async {
-    return await methodChannel.invokeMethod("getAppVersion");
+  Future<String?> getAppVersionCode() async {
+    return await methodChannel.invokeMethod("getAppVersionCode");
+  }
+
+  @override
+  Future<String?> getAppVersionName() async {
+    return await methodChannel.invokeMethod<String>("getAppVersionName");
   }
 }

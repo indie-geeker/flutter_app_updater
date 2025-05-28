@@ -216,7 +216,11 @@ class FlutterAppUpdater {
     return FlutterAppUpdaterPlatform.instance.getPlatformVersion();
   }
 
-  Future<String?> getAppVersion() {
-    return FlutterAppUpdaterPlatform.instance.getAppVersion();
+  Future<String?> getAppVersionCode() {
+    return FlutterAppUpdaterPlatform.instance.getAppVersionCode();
+  }
+
+  Future<String?> getAppVersionName() {
+    return FlutterAppUpdaterPlatform.instance.getAppVersionName();
   }
 }
