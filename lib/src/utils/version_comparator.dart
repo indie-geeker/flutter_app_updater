@@ -24,15 +24,17 @@ class VersionComparator {
     final newer = _parseVersion(cleanNewVersion);
 
     // 比较主版本、次版本、修订版本
-    for (int i = 0; i < 3; i++) {
-      if (i >= current.length) return -1; // 新版本有更多部分
-      if (i >= newer.length) return 1;    // 当前版本有更多部分
+    // 使用max确保比较所有部分，不足部分视为0
+    final maxLength = current.length > newer.length ? current.length : newer.length;
 
-      final currentPart = current[i];
-      final newPart = newer[i];
+    for (int i = 0; i < maxLength; i++) {
+      // 获取对应位置的版本号，不存在则为0
+      final currentPart = i < current.length ? current[i] : 0;
+      final newPart = i < newer.length ? newer[i] : 0;
 
-      final comparison = currentPart.compareTo(newPart);
-      if (comparison != 0) return comparison;
+      // 使用数值比较而不是字符串比较
+      if (currentPart < newPart) return -1; // 新版本更大
+      if (currentPart > newPart) return 1;  // 当前版本更大
     }
 
     // 主要版本号相同，检查预发布版本

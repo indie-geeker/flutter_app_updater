@@ -11,6 +11,7 @@ import '../models/update_progress.dart';
 import '../models/update_status.dart';
 import '../network/update_downloader.dart';
 import '../utils/update_checker.dart';
+import '../utils/update_logger.dart';
 
 /// 应用更新控制器
 ///
@@ -161,10 +162,13 @@ class UpdateController extends ChangeNotifier {
       final updateInfo = await _checker.checkForUpdate();
 
       if (updateInfo != null) {
-        _updateInfo = updateInfo;
-        _updateStatus(UpdateStatus.available);
+        _updateState(
+          status: UpdateStatus.available,
+          updateInfo: updateInfo,
+          clearError: true,
+        );
       } else {
-        _updateStatus(UpdateStatus.notAvailable);
+        _updateState(status: UpdateStatus.notAvailable, clearError: true);
       }
 
       return updateInfo;
@@ -196,7 +200,7 @@ class UpdateController extends ChangeNotifier {
       return null;
     }
 
-    _savePath = savePath ?? _generateSavePath();
+    _savePath = savePath ?? await _generateSavePath();
 
     try {
       _cancelToken = CancelToken();
@@ -293,7 +297,7 @@ class UpdateController extends ChangeNotifier {
       if (Platform.isAndroid) {
         // 调用平台通道安装APK
         await FlutterAppUpdaterPlatform.instance.installApp(path: file.path);
-        debugPrint('开始安装更新：${file.path}');
+        UpdateLogger.info('开始安装更新：${file.path}', tag: 'UpdateController');
         return true;
       } else {
         _setError(const UpdateError(
@@ -317,11 +321,15 @@ class UpdateController extends ChangeNotifier {
     _cancelToken?.cancel();
     _downloader?.dispose();
     _downloader = null;
-    _updateInfo = null;
     _progress = null;
-    _error = null;
     _savePath = null;
+
+    // 使用统一的状态更新方法重置所有状态
+    _updateInfo = null;
+    _error = null;
     _updateStatus(UpdateStatus.idle);
+
+    UpdateLogger.info('控制器状态已重置', tag: 'UpdateController');
   }
 
   @override
@@ -336,29 +344,88 @@ class UpdateController extends ChangeNotifier {
     super.dispose();
   }
 
-  /// 更新状态
-  void _updateStatus(UpdateStatus status) {
-    if (_status != status) {
+  /// 统一的状态更新方法
+  ///
+  /// 提供原子化的状态更新，避免竞态条件
+  /// 确保状态、错误和更新信息的一致性
+  ///
+  /// [status] 新的状态（可选，如果为null则不更新）
+  /// [error] 错误信息（可选）
+  /// [updateInfo] 更新信息（可选）
+  /// [clearError] 是否清除错误（默认false）
+  void _updateState({
+    UpdateStatus? status,
+    UpdateError? error,
+    UpdateInfo? updateInfo,
+    bool clearError = false,
+  }) {
+    bool hasChanges = false;
+
+    // 更新状态
+    if (status != null && _status != status) {
       _status = status;
       _statusController.add(status);
+      hasChanges = true;
+      UpdateLogger.debug('状态更新: $status', tag: 'UpdateController');
+    }
+
+    // 更新或清除错误
+    if (error != null) {
+      _error = error;
+      _errorController.add(error);
+      hasChanges = true;
+      UpdateLogger.error('错误发生: ${error.message}', tag: 'UpdateController', error: error);
+    } else if (clearError && _error != null) {
+      _error = null;
+      hasChanges = true;
+    }
+
+    // 更新UpdateInfo
+    if (updateInfo != null) {
+      _updateInfo = updateInfo;
+      hasChanges = true;
+      UpdateLogger.info('更新信息已设置: 版本 ${updateInfo.newVersion}', tag: 'UpdateController');
+    }
+
+    // 仅在有变化时通知监听者
+    if (hasChanges) {
       notifyListeners();
     }
   }
 
-  /// 设置错误
+  /// 更新状态（保持向后兼容）
+  void _updateStatus(UpdateStatus status) {
+    _updateState(status: status);
+  }
+
+  /// 设置错误（保持向后兼容）
   void _setError(UpdateError error) {
-    _error = error;
-    _errorController.add(error);
-    notifyListeners();
+    _updateState(error: error);
   }
 
   /// 生成文件保存路径
-  String _generateSavePath() {
+  ///
+  /// 根据平台获取合适的下载目录：
+  /// - Android: 使用应用专属外部存储目录（无需权限）
+  /// - iOS: 使用应用临时目录
+  /// - 其他平台: 使用系统临时目录
+  Future<String> _generateSavePath() async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     if (Platform.isAndroid) {
-      // 在Android上，通常保存到外部存储的Download目录
-      return '/storage/emulated/0/Download/app_update_$timestamp.apk';
+      // 在Android上，通过platform channel获取合适的下载目录
+      // 优先使用应用专属外部存储（Android 10+无需权限）
+      try {
+        final downloadDir = await FlutterAppUpdaterPlatform.instance.getDownloadPath();
+        if (downloadDir != null && downloadDir.isNotEmpty) {
+          return '$downloadDir/app_update_$timestamp.apk';
+        }
+      } catch (e) {
+        UpdateLogger.warning('获取下载路径失败，使用回退路径: $e', tag: 'UpdateController');
+      }
+
+      // 回退：使用应用缓存目录
+      return '${Directory.systemTemp.path}/app_update_$timestamp.apk';
     } else if (Platform.isIOS) {
       // 在iOS上，保存到应用的临时目录
       return '${Directory.systemTemp.path}/app_update_$timestamp.ipa';

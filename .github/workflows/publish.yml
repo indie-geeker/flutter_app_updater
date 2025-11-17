@@ -16,7 +16,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # Replace with the required version
+          flutter-version: '3.35.6' # Replace with the required version
 
       - name: Setup Pub Credentials
         run: |

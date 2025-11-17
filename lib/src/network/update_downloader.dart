@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
+import 'package:crypto/crypto.dart' as crypto;
 
 import '../models/update_error.dart';
 import '../models/update_progress.dart';
 import '../models/update_status.dart';
+import '../utils/retry_strategy.dart';
+import '../utils/update_logger.dart';
 
 /// 应用更新下载器
 ///
@@ -26,6 +28,12 @@ class UpdateDownloader {
 
   /// 文件MD5校验值
   final String? md5;
+
+  /// 下载总超时时间
+  final Duration downloadTimeout;
+
+  /// 重试策略
+  final RetryStrategy retryStrategy;
 
   /// 下载进度流控制器
   final _progressController = StreamController<UpdateProgress>.broadcast();
@@ -93,11 +101,15 @@ class UpdateDownloader {
     this.supportRangeDownload = true,
     this.expectedFileSize,
     this.md5,
+    this.downloadTimeout = const Duration(minutes: 30),
+    this.retryStrategy = RetryStrategy.standard,
   });
 
   /// 开始下载任务
   ///
   /// 返回一个 [Future] 完成时表示下载已完成，并返回下载的文件
+  ///
+  /// 设置了总超时时间[downloadTimeout]，超时后会抛出错误
   Future<File> download({
     CancelToken? cancelToken,
   }) async {
@@ -132,10 +144,21 @@ class UpdateDownloader {
         }
       }
 
-      // 开始或恢复下载
-      await _startDownload(downloadedBytes);
+      // 使用重试机制开始或恢复下载
+      await _downloadWithRetry(downloadedBytes);
 
-      return _downloadCompleter!.future;
+      return _downloadCompleter!.future.timeout(
+        downloadTimeout,
+        onTimeout: () {
+          _updateStatus(UpdateStatus.error);
+          const error = UpdateError(
+            code: 'DOWNLOAD_TIMEOUT',
+            message: '下载超时',
+          );
+          _errorController.add(error);
+          throw error;
+        },
+      );
     } catch (e) {
       final error = e is UpdateError
           ? e
@@ -143,7 +166,10 @@ class UpdateDownloader {
 
       _updateStatus(UpdateStatus.error);
       _errorController.add(error);
-      _downloadCompleter!.completeError(error);
+
+      if (!_downloadCompleter!.isCompleted) {
+        _downloadCompleter!.completeError(error);
+      }
 
       rethrow;
     }
@@ -224,7 +250,7 @@ class UpdateDownloader {
       }
     } catch (e) {
       // 忽略文件删除错误
-      debugPrint('删除临时文件失败: $e');
+      UpdateLogger.warning('删除临时文件失败: $e', tag: 'UpdateDownloader');
     }
   }
 
@@ -237,17 +263,87 @@ class UpdateDownloader {
     await _errorController.close();
   }
 
+  /// 使用重试机制下载
+  ///
+  /// [resumeFrom] 从指定字节位置恢复下载
+  ///
+  /// 根据配置的重试策略自动重试失败的下载
+  Future<void> _downloadWithRetry(int resumeFrom) async {
+    int attemptNumber = 0;
+
+    while (true) {
+      try {
+        // 记录重试信息
+        if (attemptNumber > 0) {
+          UpdateLogger.info(
+            '第${attemptNumber + 1}次尝试下载（重试$attemptNumber次）',
+            tag: 'UpdateDownloader',
+          );
+        } else {
+          UpdateLogger.info('开始下载', tag: 'UpdateDownloader');
+        }
+
+        // 尝试下载
+        await _startDownload(resumeFrom);
+
+        // 下载成功，退出重试循环
+        if (attemptNumber > 0) {
+          UpdateLogger.info(
+            '下载成功（经过$attemptNumber次重试）',
+            tag: 'UpdateDownloader',
+          );
+        }
+        return;
+
+      } catch (e) {
+
+        // 检查是否被取消或暂停
+        if (_cancelToken?.isCanceled == true || _isPaused) {
+          UpdateLogger.debug('下载被取消或暂停，停止重试', tag: 'UpdateDownloader');
+          rethrow;
+        }
+
+        // 检查是否应该重试
+        if (!retryStrategy.shouldRetry(e, attemptNumber)) {
+          UpdateLogger.warning(
+            '下载失败，不满足重试条件: ${e.toString()}',
+            tag: 'UpdateDownloader',
+          );
+          rethrow;
+        }
+
+        // 检查是否还有重试次数
+        if (!retryStrategy.canRetry(attemptNumber)) {
+          UpdateLogger.error(
+            '下载失败，已达到最大重试次数${retryStrategy.maxAttempts}',
+            tag: 'UpdateDownloader',
+            error: e,
+          );
+          rethrow;
+        }
+
+        // 计算延迟时间
+        final delay = retryStrategy.getDelay(attemptNumber);
+        UpdateLogger.warning(
+          '下载失败: ${e.toString()}，将在${delay.inSeconds}秒后重试（剩余${retryStrategy.maxAttempts - attemptNumber}次机会）',
+          tag: 'UpdateDownloader',
+        );
+
+        // 等待后重试
+        await Future.delayed(delay);
+        attemptNumber++;
+      }
+    }
+  }
+
   /// 开始或恢复下载
   Future<void> _startDownload(int resumeFrom) async {
     _recentDownloadedBytes.clear();
     _recentTimestamps.clear();
 
     try {
-      // 创建目录
-      final dir = Directory(savePath.substring(0, savePath.lastIndexOf('/')));
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
+      // 确保下载目录存在
+      await _ensureDirectoryExists(_tempFilePath);
 
       // 打开文件
       final file = File(_tempFilePath);
@@ -430,14 +526,26 @@ class UpdateDownloader {
     await _closeConnection();
 
     try {
+      final tempFile = File(_tempFilePath);
+
       // 检查MD5（如果提供）
-      if (md5 != null) {
-        // 此处应添加MD5校验代码
-        // 为保持轻量级，暂不实现
+      if (md5 != null && md5!.isNotEmpty) {
+        UpdateLogger.info('开始校验文件MD5...', tag: 'UpdateDownloader');
+        final isValid = await _verifyFileMd5(tempFile, md5!);
+        if (!isValid) {
+          // MD5校验失败，删除临时文件
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+          throw const UpdateError(
+            code: 'MD5_MISMATCH',
+            message: 'MD5校验失败，文件可能已损坏或被篡改',
+          );
+        }
+        UpdateLogger.info('MD5校验通过', tag: 'UpdateDownloader');
       }
 
       // 移动文件到最终位置
-      final tempFile = File(_tempFilePath);
       if (await tempFile.exists()) {
         // 如果目标文件已存在，先删除它
         final targetFile = File(savePath);
@@ -469,6 +577,63 @@ class UpdateDownloader {
     }
   }
 
+  /// 确保目录存在
+  ///
+  /// [filePath] 文件路径
+  ///
+  /// 从文件路径中提取目录并确保其存在
+  /// 如果目录不存在则递归创建
+  Future<void> _ensureDirectoryExists(String filePath) async {
+    try {
+      final file = File(filePath);
+      final directory = file.parent;
+
+      if (!await directory.exists()) {
+        UpdateLogger.debug('创建目录: ${directory.path}', tag: 'UpdateDownloader');
+        await directory.create(recursive: true);
+        UpdateLogger.debug('目录创建成功: ${directory.path}', tag: 'UpdateDownloader');
+      }
+    } catch (e) {
+      UpdateLogger.error(
+        '创建目录失败',
+        error: e,
+        tag: 'UpdateDownloader',
+      );
+      rethrow;
+    }
+  }
+
+  /// 验证文件MD5
+  ///
+  /// [file] 要验证的文件
+  /// [expectedMd5] 期望的MD5值
+  ///
+  /// 返回true表示MD5匹配，false表示不匹配
+  Future<bool> _verifyFileMd5(File file, String expectedMd5) async {
+    try {
+      if (!await file.exists()) {
+        return false;
+      }
+
+      // 读取文件并计算MD5
+      final bytes = await file.readAsBytes();
+      final digest = crypto.md5.convert(bytes);
+      final actualMd5 = digest.toString();
+
+      // 比较MD5（忽略大小写）
+      final expected = expectedMd5.toLowerCase().trim();
+      final actual = actualMd5.toLowerCase().trim();
+
+      UpdateLogger.debug('期望MD5: $expected', tag: 'UpdateDownloader');
+      UpdateLogger.debug('实际MD5: $actual', tag: 'UpdateDownloader');
+
+      return expected == actual;
+    } catch (e) {
+      UpdateLogger.error('MD5校验过程出错: $e', tag: 'UpdateDownloader', error: e);
+      return false;
+    }
+  }
+
   /// 关闭连接并释放资源
   Future<void> _closeConnection() async {
     // 首先安全地释放 HTTP 资源
@@ -481,11 +646,11 @@ class UpdateDownloader {
       _httpClient?.close();
       _httpClient = null;
     } catch (e) {
-      debugPrint('关闭 HTTP 连接时出错: $e');
+      UpdateLogger.warning('关闭 HTTP 连接时出错: $e', tag: 'UpdateDownloader');
       _request = null;
       _httpClient = null;
     }
-    
+
     // 单独处理文件流关闭
     if (_fileSink != null) {
       try {
@@ -495,7 +660,7 @@ class UpdateDownloader {
         await sink?.flush();
         await sink?.close();
       } catch (e) {
-        debugPrint('关闭文件流时出错: $e');
+        UpdateLogger.warning('关闭文件流时出错: $e', tag: 'UpdateDownloader');
         // 仅确保引用被释放
         _fileSink = null;
       }

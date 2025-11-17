@@ -1,6 +1,6 @@
 name: flutter_app_updater
 description: "轻量级的Flutter应用内更新框架，专为不同项目需求设计，支持完全自定义UI和下载功能。"
-version: 2.0.0
+version: 2.1.0
 homepage: https://github.com/indie-geeker/flutter_app_updater
 
 environment:
@@ -11,11 +11,13 @@ dependencies:
   flutter:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  test: ^1.24.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

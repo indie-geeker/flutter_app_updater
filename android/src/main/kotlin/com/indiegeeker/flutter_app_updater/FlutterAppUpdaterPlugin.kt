@@ -36,6 +36,7 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       "getAppVersionCode" -> getAppVersionCode(result)
       "getAppVersionName" -> getAppVersionName(result)
       "installApp" -> installApp(call.arguments as String, result)
+      "getDownloadPath" -> getDownloadPath(result)
       else -> result.notImplemented()
     }
   }
@@ -88,6 +89,43 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       result.success(true)
     } catch (e: Exception) {
       result.error("INSTALL_ERROR", "安装失败", e.message)
+    }
+  }
+
+  private fun getDownloadPath(result: Result) {
+    try {
+      // 使用应用私有的缓存目录，无需申请存储权限
+      // Android 10+(API 29)以后推荐使用应用私有目录
+      val downloadDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Android 10+ 使用应用专属外部存储目录
+        applicationContext.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+      } else {
+        // Android 10以下，尝试使用外部存储的Download目录
+        // 如果无法访问，则回退到应用私有目录
+        val externalDownloadDir = android.os.Environment.getExternalStoragePublicDirectory(
+          android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+        if (externalDownloadDir != null && externalDownloadDir.exists()) {
+          externalDownloadDir
+        } else {
+          // 回退到应用私有外部目录
+          applicationContext.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+        }
+      }
+
+      if (downloadDir != null) {
+        // 确保目录存在
+        if (!downloadDir.exists()) {
+          downloadDir.mkdirs()
+        }
+        result.success(downloadDir.absolutePath)
+      } else {
+        // 最终回退：使用应用内部缓存目录
+        val cacheDir = applicationContext.cacheDir
+        result.success(cacheDir.absolutePath)
+      }
+    } catch (e: Exception) {
+      result.error("PATH_ERROR", "获取下载路径失败", e.message)
     }
   }
 }

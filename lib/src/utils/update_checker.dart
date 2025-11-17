@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_app_updater/src/utils/version_comparator.dart';
 
 import '../models/update_error.dart';
 import '../models/update_info.dart';
 import '../network/http_client.dart';
 import '../utils/constants.dart';
+import '../utils/update_logger.dart';
 
 /// 定义更新检查器回调函数类型
 typedef UpdateCheckerCallback = Future<Map<String, dynamic>> Function();
@@ -79,21 +79,21 @@ class UpdateChecker {
       );
 
       // 打印版本信息以便调试
-      debugPrint('当前应用版本: $currentVersion');
-      debugPrint('服务器返回版本: ${updateInfo.newVersion}');
-      
+      UpdateLogger.info('当前应用版本: $currentVersion', tag: 'UpdateChecker');
+      UpdateLogger.info('服务器返回版本: ${updateInfo.newVersion}', tag: 'UpdateChecker');
+
       // 比较版本判断是否需要更新
       final hasUpdate = VersionComparator.hasUpdate(currentVersion, updateInfo.newVersion);
       final compareResult = VersionComparator.compare(currentVersion, updateInfo.newVersion);
-      debugPrint('版本比较结果: $compareResult (负数表示有更新，0表示相同，正数表示无需更新)');
-      debugPrint('是否有可用更新: $hasUpdate');
+      UpdateLogger.debug('版本比较结果: $compareResult (负数表示有更新，0表示相同，正数表示无需更新)', tag: 'UpdateChecker');
+      UpdateLogger.info('是否有可用更新: $hasUpdate', tag: 'UpdateChecker');
       
       if (hasUpdate) {
         return updateInfo;
       }
 
       // 没有可用更新
-      debugPrint('无可用更新: 当前版本($currentVersion)不低于服务器版本(${updateInfo.newVersion})');
+      UpdateLogger.info('无可用更新: 当前版本($currentVersion)不低于服务器版本(${updateInfo.newVersion})', tag: 'UpdateChecker');
       return null;
     } catch (e) {
       throw UpdateError.parse(e);

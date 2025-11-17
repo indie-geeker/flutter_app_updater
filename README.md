@@ -18,7 +18,7 @@
 
 ```yaml
 dependencies:
-  flutter_app_updater: ^0.1.0
+  flutter_app_updater: ^2.1.0
 ```
 
 然后运行：
@@ -116,6 +116,81 @@ updater.showUpdateDialog(
 ```
 
 ## 高级配置
+
+
+### 配置重试策略
+
+配置下载失败时的重试行为：
+
+```dart
+import 'package:flutter_app_updater/flutter_app_updater.dart';
+
+// 使用预定义策略
+final controller = UpdateController(
+  updateUrl: 'https://api.example.com/update.json',
+);
+
+final downloader = UpdateDownloader(
+  url: 'https://example.com/app.apk',
+  savePath: '/path/to/save/app.apk',
+  // 使用快速重试策略（5次，0.5秒起始延迟）
+  retryStrategy: RetryStrategy.fast,
+);
+
+// 自定义重试策略
+final customDownloader = UpdateDownloader(
+  url: 'https://example.com/app.apk',
+  savePath: '/path/to/save/app.apk',
+  retryStrategy: const RetryStrategy(
+    maxAttempts: 5,              // 最多重试5次
+    initialDelay: Duration(seconds: 2),  // 首次重试延迟2秒
+    backoffFactor: 2.0,          // 指数退避因子
+    maxDelay: Duration(minutes: 1),      // 最大延迟1分钟
+    enableJitter: true,          // 启用抖动避免同时重试
+  ),
+);
+
+// 禁用重试
+final noRetryDownloader = UpdateDownloader(
+  url: 'https://example.com/app.apk',
+  savePath: '/path/to/save/app.apk',
+  retryStrategy: RetryStrategy.disabled,
+);
+```
+
+### 配置日志级别
+
+控制日志输出级别：
+
+```dart
+import 'package:flutter_app_updater/flutter_app_updater.dart';
+
+void main() {
+  // 设置日志级别
+  // none - 不输出任何日志
+  // error - 仅输出错误
+  // warning - 输出警告和错误
+  // info - 输出信息、警告和错误（推荐）
+  // debug - 输出所有日志（用于调试）
+
+  // 生产环境：仅错误
+  UpdateLogger.setLogLevel(LogLevel.error);
+
+  // 开发环境：详细调试
+  UpdateLogger.setLogLevel(LogLevel.debug);
+
+  runApp(MyApp());
+}
+
+// 也可以在代码中手动记录日志
+void customLogging() {
+  UpdateLogger.debug('调试信息', tag: 'MyApp');
+  UpdateLogger.info('普通信息', tag: 'MyApp');
+  UpdateLogger.warning('警告信息', tag: 'MyApp');
+  UpdateLogger.error('错误信息', error: Exception('Something went wrong'), tag: 'MyApp');
+}
+```
+
 
 ### 初始化参数
 
