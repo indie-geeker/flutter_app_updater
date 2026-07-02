@@ -1,26 +1,34 @@
 import 'dart:convert';
 
 import '../utils/constants.dart';
+import 'update_error.dart';
 
 /// 应用更新信息模型
 ///
 /// 这个模型设计为足够灵活，可以适应不同项目的接口返回格式
 /// 实现了 [fromJson] 和 [fromMap] 构造函数以支持不同的数据源
-class UpdateInfo{
+class UpdateInfo {
   /// 新版本号
   final String newVersion;
+
   /// 新版本下载地址
   final String downloadUrl;
+
   /// 新版本说明
   final String changelog;
+
   /// 是否强制更新
   final bool isForceUpdate;
+
   /// 版本发布时间
   final DateTime? publishDate;
+
   /// 文件大小(字节)
   final int? fileSize;
+
   /// 文件MD5校验值
   final String? md5;
+
   /// 额外信息，用于存储不同项目特有的字段
   final Map<String, dynamic>? extraInfo;
 
@@ -35,8 +43,8 @@ class UpdateInfo{
     this.extraInfo,
   });
 
-
-  factory UpdateInfo.fromMap(Map<String, dynamic> data,{
+  factory UpdateInfo.fromMap(
+    Map<String, dynamic> data, {
     String versionKey = defaultVersionKey,
     String downloadUrlKey = defaultDownloadUrlKey,
     String? changelogKey = defaultChangelogKey,
@@ -45,7 +53,6 @@ class UpdateInfo{
     String? fileSizeKey = defaultFileSizeKey,
     String? md5Key = defaultMd5Key,
   }) {
-
     // 尝试解析日期，支持多种格式
     DateTime? publishDate;
     if (publishDateKey != null && data.containsKey(publishDateKey)) {
@@ -62,20 +69,26 @@ class UpdateInfo{
       }
     }
 
-    // 提取主要字段
-    // 版本号处理 - 支持字符串或数字类型
-    final versionValue = data[versionKey];
-    final String newVersion = versionValue is int || versionValue is double 
-        ? versionValue.toString() 
-        : (versionValue as String? ?? '');
-        
-    final downloadUrl = data[downloadUrlKey] as String? ?? '';
-    final changelog = data[changelogKey] as String? ?? '';
-    
+    final newVersion = _requiredString(
+      data,
+      versionKey,
+      fieldName: 'version',
+      allowNumber: true,
+    );
+
+    final downloadUrl = _requiredString(
+      data,
+      downloadUrlKey,
+      fieldName: 'downloadUrl',
+    );
+
+    final changelog =
+        changelogKey == null ? '' : data[changelogKey]?.toString() ?? '';
+
     // 强制更新处理 - 支持布尔值或字符串类型(“true”/“false”)
     final forceUpdateValue = data[isForceUpdateKey];
-    final bool isForceUpdate = forceUpdateValue is bool 
-        ? forceUpdateValue 
+    final bool isForceUpdate = forceUpdateValue is bool
+        ? forceUpdateValue
         : (forceUpdateValue?.toString().toLowerCase() == 'true') || false;
 
     // 文件大小处理
@@ -100,7 +113,7 @@ class UpdateInfo{
       versionKey,
       downloadUrlKey,
       changelogKey,
-      if(isForceUpdateKey != null) isForceUpdateKey,
+      if (isForceUpdateKey != null) isForceUpdateKey,
       if (publishDateKey != null) publishDateKey,
       if (fileSizeKey != null) fileSizeKey,
       if (md5Key != null) md5Key,
@@ -110,39 +123,65 @@ class UpdateInfo{
       ..removeWhere((key, _) => usedKeys.contains(key));
 
     return UpdateInfo(
-        newVersion: newVersion,
-        downloadUrl: downloadUrl,
-        changelog: changelog,
+      newVersion: newVersion,
+      downloadUrl: downloadUrl,
+      changelog: changelog,
       isForceUpdate: isForceUpdate,
-        publishDate: publishDate,
-        fileSize: fileSize,
-        md5: md5,
-        extraInfo: extraInfo.isNotEmpty ? extraInfo : null,
+      publishDate: publishDate,
+      fileSize: fileSize,
+      md5: md5,
+      extraInfo: extraInfo.isNotEmpty ? extraInfo : null,
     );
   }
 
-    /// 从JSON字符串创建 [UpdateInfo] 对象
-    factory UpdateInfo.fromJson(String jsonString, {
-      String versionKey = defaultVersionKey,
-      String downloadUrlKey = defaultDownloadUrlKey,
-      String? changelogKey = defaultChangelogKey,
-      String? isForceUpdateKey = defaultIsForceUpdateKey,
-      String? publishDateKey = defaultPublishDateKey,
-      String? fileSizeKey = defaultFileSizeKey,
-      String? md5Key = defaultMd5Key,
-    }) {
-      final Map<String, dynamic> data = jsonDecode(jsonString);
-      return UpdateInfo.fromMap(data,
-          versionKey: versionKey,
-          downloadUrlKey: downloadUrlKey,
-          changelogKey: changelogKey,
-          isForceUpdateKey: isForceUpdateKey,
-          publishDateKey: publishDateKey,
-          fileSizeKey: fileSizeKey,
-          md5Key: md5Key);
+  static String _requiredString(
+    Map<String, dynamic> data,
+    String key, {
+    required String fieldName,
+    bool allowNumber = false,
+  }) {
+    final value = data[key];
+    final parsed = switch (value) {
+      String value => value.trim(),
+      int value when allowNumber => value.toString(),
+      double value when allowNumber => value.toString(),
+      _ => '',
+    };
+
+    if (parsed.isEmpty) {
+      throw UpdateError(
+        code: 'INVALID_UPDATE_INFO',
+        message: '缺少或无效的更新字段: $fieldName',
+        exception: {'key': key, 'value': value},
+      );
     }
 
-/// 转换为 [Map]
+    return parsed;
+  }
+
+  /// 从JSON字符串创建 [UpdateInfo] 对象
+  factory UpdateInfo.fromJson(
+    String jsonString, {
+    String versionKey = defaultVersionKey,
+    String downloadUrlKey = defaultDownloadUrlKey,
+    String? changelogKey = defaultChangelogKey,
+    String? isForceUpdateKey = defaultIsForceUpdateKey,
+    String? publishDateKey = defaultPublishDateKey,
+    String? fileSizeKey = defaultFileSizeKey,
+    String? md5Key = defaultMd5Key,
+  }) {
+    final Map<String, dynamic> data = jsonDecode(jsonString);
+    return UpdateInfo.fromMap(data,
+        versionKey: versionKey,
+        downloadUrlKey: downloadUrlKey,
+        changelogKey: changelogKey,
+        isForceUpdateKey: isForceUpdateKey,
+        publishDateKey: publishDateKey,
+        fileSizeKey: fileSizeKey,
+        md5Key: md5Key);
+  }
+
+  /// 转换为 [Map]
   Map<String, dynamic> toMap({
     String versionKey = defaultVersionKey,
     String downloadUrlKey = defaultDownloadUrlKey,
@@ -157,7 +196,8 @@ class UpdateInfo{
       downloadUrlKey: downloadUrl,
       if (changelogKey != null) changelogKey: changelog,
       if (isForceUpdateKey != null) isForceUpdateKey: isForceUpdate,
-      if (publishDateKey != null) publishDateKey: publishDate?.toIso8601String(),
+      if (publishDateKey != null)
+        publishDateKey: publishDate?.toIso8601String(),
       if (fileSizeKey != null) fileSizeKey: fileSize,
       if (md5Key != null) md5Key: md5,
       if (extraInfo != null) ...extraInfo!,

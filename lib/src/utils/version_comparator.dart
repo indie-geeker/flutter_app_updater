@@ -25,7 +25,8 @@ class VersionComparator {
 
     // 比较主版本、次版本、修订版本
     // 使用max确保比较所有部分，不足部分视为0
-    final maxLength = current.length > newer.length ? current.length : newer.length;
+    final maxLength =
+        current.length > newer.length ? current.length : newer.length;
 
     for (int i = 0; i < maxLength; i++) {
       // 获取对应位置的版本号，不存在则为0
@@ -34,7 +35,7 @@ class VersionComparator {
 
       // 使用数值比较而不是字符串比较
       if (currentPart < newPart) return -1; // 新版本更大
-      if (currentPart > newPart) return 1;  // 当前版本更大
+      if (currentPart > newPart) return 1; // 当前版本更大
     }
 
     // 主要版本号相同，检查预发布版本
@@ -49,6 +50,20 @@ class VersionComparator {
   /// 如果新版本大于当前版本，返回 true
   static bool hasUpdate(String currentVersion, String newVersion) {
     return compare(currentVersion, newVersion) < 0;
+  }
+
+  /// 判断版本号是否为受支持的格式。
+  ///
+  /// 支持 `v1.2.3`、`1.2.3-beta.1`、`1.2.3+4` 和更多数字段。
+  static bool isValidVersion(String version) {
+    final normalized = version.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return RegExp(
+      r'^[vV]?\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$',
+    ).hasMatch(normalized);
   }
 
   /// 清理版本号字符串
@@ -100,9 +115,9 @@ class VersionComparator {
     // 1. 有预发布标识的版本比没有预发布标识的版本低
     // 2. 只有当两个版本都有预发布标识时才进行比较
 
-    if (!hasCurrent && !hasNew) return 0;   // 都没有预发布标识
-    if (!hasCurrent && hasNew) return 1;    // 新版本有预发布标识，当前没有
-    if (hasCurrent && !hasNew) return -1;   // 当前版本有预发布标识，新版本没有
+    if (!hasCurrent && !hasNew) return 0; // 都没有预发布标识
+    if (!hasCurrent && hasNew) return 1; // 新版本有预发布标识，当前没有
+    if (hasCurrent && !hasNew) return -1; // 当前版本有预发布标识，新版本没有
 
     // 两者都有预发布标识，比较预发布标识
     final currentPre = currentVersion.split('-')[1];

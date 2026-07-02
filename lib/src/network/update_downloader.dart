@@ -61,8 +61,6 @@ class UpdateDownloader {
   UpdateProgress _progress = UpdateProgress.unknown();
   UpdateProgress get progress => _progress;
 
-
-
   /// 计算下载速度的时间窗口（毫秒）
   static const _speedCalculationWindow = 3000;
 
@@ -75,7 +73,6 @@ class UpdateDownloader {
 
   /// 下载请求
   HttpClientRequest? _request;
-
 
   /// 输出文件流
   IOSink? _fileSink;
@@ -160,9 +157,7 @@ class UpdateDownloader {
         },
       );
     } catch (e) {
-      final error = e is UpdateError
-          ? e
-          : UpdateError.download(e);
+      final error = e is UpdateError ? e : UpdateError.download(e);
 
       _updateStatus(UpdateStatus.error);
       _errorController.add(error);
@@ -210,9 +205,7 @@ class UpdateDownloader {
       await _startDownload(downloadedBytes);
       return _downloadCompleter!.future;
     } catch (e) {
-      final error = e is UpdateError
-          ? e
-          : UpdateError.download(e);
+      final error = e is UpdateError ? e : UpdateError.download(e);
 
       _updateStatus(UpdateStatus.error);
       _errorController.add(error);
@@ -294,9 +287,7 @@ class UpdateDownloader {
           );
         }
         return;
-
       } catch (e) {
-
         // 检查是否被取消或暂停
         if (_cancelToken?.isCanceled == true || _isPaused) {
           UpdateLogger.debug('下载被取消或暂停，停止重试', tag: 'UpdateDownloader');
@@ -340,6 +331,7 @@ class UpdateDownloader {
   Future<void> _startDownload(int resumeFrom) async {
     _recentDownloadedBytes.clear();
     _recentTimestamps.clear();
+    _updateStatus(UpdateStatus.downloading);
 
     try {
       // 确保下载目录存在
@@ -392,7 +384,8 @@ class UpdateDownloader {
 
       if (response.statusCode == 206) {
         // 断点续传响应，从Content-Range中获取总大小
-        final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+        final contentRange =
+            response.headers.value(HttpHeaders.contentRangeHeader);
         if (contentRange != null && contentRange.contains('/')) {
           final totalSizeStr = contentRange.split('/').last;
           totalSize = int.tryParse(totalSizeStr) ?? expectedFileSize ?? 0;
@@ -415,7 +408,6 @@ class UpdateDownloader {
 
       // 接收数据
       await _receiveData(response, resumeFrom, totalSize);
-
     } catch (e) {
       await _closeConnection();
 
@@ -424,25 +416,17 @@ class UpdateDownloader {
         return;
       }
 
-      final error = e is UpdateError
-          ? e
-          : UpdateError.download(e);
+      final error = e is UpdateError ? e : UpdateError.download(e);
 
       _updateStatus(UpdateStatus.error);
       _errorController.add(error);
-
-      if (!_downloadCompleter!.isCompleted) {
-        _downloadCompleter!.completeError(error);
-      }
+      throw error;
     }
   }
 
   /// 接收并保存数据
   Future<void> _receiveData(
-      HttpClientResponse response,
-      int initialBytes,
-      int totalSize
-      ) async {
+      HttpClientResponse response, int initialBytes, int totalSize) async {
     int receivedBytes = initialBytes;
 
     await for (final List<int> chunk in response) {
@@ -483,12 +467,14 @@ class UpdateDownloader {
       if (_recentTimestamps.isNotEmpty) {
         final timeWindow = now - _recentTimestamps.first;
         if (timeWindow > 0) {
-          final totalBytes = _recentDownloadedBytes.fold<int>(0, (a, b) => a + b);
+          final totalBytes =
+              _recentDownloadedBytes.fold<int>(0, (a, b) => a + b);
           speed = (totalBytes * 1000 / timeWindow).round();
 
           // 计算剩余时间
           if (speed > 0 && totalSize > receivedBytes) {
-            estimatedTimeRemaining = ((totalSize - receivedBytes) / speed).round();
+            estimatedTimeRemaining =
+                ((totalSize - receivedBytes) / speed).round();
           }
         }
       }
@@ -564,9 +550,7 @@ class UpdateDownloader {
         _downloadCompleter!.complete(File(savePath));
       }
     } catch (e) {
-      final error = e is UpdateError
-          ? e
-          : UpdateError.file(e);
+      final error = e is UpdateError ? e : UpdateError.file(e);
 
       _updateStatus(UpdateStatus.error);
       _errorController.add(error);
@@ -591,7 +575,8 @@ class UpdateDownloader {
       if (!await directory.exists()) {
         UpdateLogger.debug('创建目录: ${directory.path}', tag: 'UpdateDownloader');
         await directory.create(recursive: true);
-        UpdateLogger.debug('目录创建成功: ${directory.path}', tag: 'UpdateDownloader');
+        UpdateLogger.debug('目录创建成功: ${directory.path}',
+            tag: 'UpdateDownloader');
       }
     } catch (e) {
       UpdateLogger.error(
@@ -615,9 +600,7 @@ class UpdateDownloader {
         return false;
       }
 
-      // 读取文件并计算MD5
-      final bytes = await file.readAsBytes();
-      final digest = crypto.md5.convert(bytes);
+      final digest = await crypto.md5.bind(file.openRead()).first;
       final actualMd5 = digest.toString();
 
       // 比较MD5（忽略大小写）
@@ -641,7 +624,7 @@ class UpdateDownloader {
       // 中止请求
       _request?.abort();
       _request = null;
-      
+
       // 关闭 HTTP 客户端
       _httpClient?.close();
       _httpClient = null;

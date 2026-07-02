@@ -1,2 +1,12 @@
 export 'src/updater.dart';
+export 'src/controller/update_controller.dart';
+export 'src/models/update_check_result.dart';
+export 'src/models/update_error.dart';
+export 'src/models/update_info.dart';
+export 'src/models/update_progress.dart';
+export 'src/models/update_status.dart';
+export 'src/network/update_downloader.dart' show CancelToken, UpdateDownloader;
+export 'src/ui/update_dialog.dart';
+export 'src/utils/retry_strategy.dart';
 export 'src/utils/update_logger.dart' show UpdateLogger, LogLevel;
+export 'src/utils/version_comparator.dart';

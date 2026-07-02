@@ -1,3 +1,15 @@
+## Unreleased
+
+* **Fix**: Removed Android plugin build dependency on a hard-coded Flutter engine jar path.
+* **Fix**: Use app version name/code for automatic current-version detection instead of platform OS version.
+* **Fix**: Distinguish update-check failures from "no update" with `UpdateCheckResult`.
+* **Fix**: Validate required update response fields and unsupported version formats.
+* **Fix**: Prevent retryable download failures from completing the download future too early.
+* **Improvement**: Stream MD5 verification to avoid loading large APK files fully into memory.
+* **Improvement**: Export documented public integration types from the main library.
+* **Improvement**: Add Android install permission error reporting for Android 8.0+.
+* **Documentation**: Reworked README with platform support, error codes, and copyable examples.
+
 ## 2.1.0
 
 * **Feature**: Added configurable retry strategy for downloads with exponential backoff

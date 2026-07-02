@@ -28,7 +28,8 @@ void main() {
         );
 
         expect(strategy.maxAttempts, equals(5));
-        expect(strategy.initialDelay, equals(const Duration(milliseconds: 500)));
+        expect(
+            strategy.initialDelay, equals(const Duration(milliseconds: 500)));
         expect(strategy.backoffFactor, equals(1.5));
         expect(strategy.maxDelay, equals(const Duration(seconds: 10)));
         expect(strategy.enableJitter, isFalse);
@@ -47,19 +48,22 @@ void main() {
 
       test('fast should have quick retries', () {
         expect(RetryStrategy.fast.maxAttempts, equals(5));
-        expect(RetryStrategy.fast.initialDelay, equals(const Duration(milliseconds: 500)));
+        expect(RetryStrategy.fast.initialDelay,
+            equals(const Duration(milliseconds: 500)));
         expect(RetryStrategy.fast.backoffFactor, equals(1.5));
       });
 
       test('standard should have balanced retries', () {
         expect(RetryStrategy.standard.maxAttempts, equals(3));
-        expect(RetryStrategy.standard.initialDelay, equals(const Duration(seconds: 1)));
+        expect(RetryStrategy.standard.initialDelay,
+            equals(const Duration(seconds: 1)));
         expect(RetryStrategy.standard.backoffFactor, equals(2.0));
       });
 
       test('conservative should have cautious retries', () {
         expect(RetryStrategy.conservative.maxAttempts, equals(2));
-        expect(RetryStrategy.conservative.initialDelay, equals(const Duration(seconds: 3)));
+        expect(RetryStrategy.conservative.initialDelay,
+            equals(const Duration(seconds: 3)));
         expect(RetryStrategy.conservative.backoffFactor, equals(3.0));
       });
     });
@@ -184,7 +188,7 @@ void main() {
 
       group('network errors', () {
         test('should retry on SocketException', () {
-          final error = SocketException('Connection failed');
+          const error = SocketException('Connection failed');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
@@ -194,60 +198,61 @@ void main() {
         });
 
         test('should retry on HandshakeException', () {
-          final error = HandshakeException('SSL handshake failed');
+          const error = HandshakeException('SSL handshake failed');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
       });
 
       group('HTTP errors', () {
         test('should retry on 500 server error', () {
-          final error = HttpException('HTTP 500: Internal Server Error');
+          const error = HttpException('HTTP 500: Internal Server Error');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
         test('should retry on 502 bad gateway', () {
-          final error = HttpException('HTTP 502: Bad Gateway');
+          const error = HttpException('HTTP 502: Bad Gateway');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
         test('should retry on 503 service unavailable', () {
-          final error = HttpException('HTTP 503: Service Unavailable');
+          const error = HttpException('HTTP 503: Service Unavailable');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
         test('should retry on 504 gateway timeout', () {
-          final error = HttpException('HTTP 504: Gateway Timeout');
+          const error = HttpException('HTTP 504: Gateway Timeout');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
         test('should not retry on 404 not found', () {
-          final error = HttpException('HTTP 404: Not Found');
+          const error = HttpException('HTTP 404: Not Found');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
 
         test('should not retry on other HTTP errors', () {
-          final error = HttpException('HTTP 400: Bad Request');
+          const error = HttpException('HTTP 400: Bad Request');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
       });
 
       group('file system errors', () {
         test('should not retry on FileSystemException', () {
-          final error = FileSystemException('Permission denied');
+          const error = FileSystemException('Permission denied');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
       });
 
       group('parse errors', () {
         test('should not retry on FormatException', () {
-          final error = FormatException('Invalid JSON');
+          const error = FormatException('Invalid JSON');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
       });
 
       group('UpdateError', () {
         test('should retry on NETWORK_ERROR', () {
-          const error = UpdateError(code: 'NETWORK_ERROR', message: 'Network error');
+          const error =
+              UpdateError(code: 'NETWORK_ERROR', message: 'Network error');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
@@ -257,12 +262,14 @@ void main() {
         });
 
         test('should retry on SERVER_ERROR', () {
-          const error = UpdateError(code: 'SERVER_ERROR', message: 'Server error');
+          const error =
+              UpdateError(code: 'SERVER_ERROR', message: 'Server error');
           expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
         test('should not retry on PARSE_ERROR', () {
-          const error = UpdateError(code: 'PARSE_ERROR', message: 'Parse error');
+          const error =
+              UpdateError(code: 'PARSE_ERROR', message: 'Parse error');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
 
@@ -272,17 +279,19 @@ void main() {
         });
 
         test('should not retry on MD5_MISMATCH', () {
-          const error = UpdateError(code: 'MD5_MISMATCH', message: 'MD5 mismatch');
+          const error =
+              UpdateError(code: 'MD5_MISMATCH', message: 'MD5 mismatch');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
 
         test('should not retry on MISSING_URL', () {
-          const error = UpdateError(code: 'MISSING_URL', message: 'Missing URL');
+          const error =
+              UpdateError(code: 'MISSING_URL', message: 'Missing URL');
           expect(strategy.shouldRetry(error, 0), isFalse);
         });
 
         test('should check wrapped exception for unknown error code', () {
-          final error = UpdateError(
+          const error = UpdateError(
             code: 'UNKNOWN_CODE',
             message: 'Unknown',
             exception: SocketException('Connection failed'),
@@ -298,7 +307,7 @@ void main() {
 
       group('attempt limit', () {
         test('should not retry when maxAttempts reached', () {
-          final error = SocketException('Connection failed');
+          const error = SocketException('Connection failed');
 
           // Should retry for attempts 0, 1, 2
           expect(strategy.shouldRetry(error, 0), isTrue);
@@ -311,7 +320,7 @@ void main() {
         });
 
         test('should never retry with disabled strategy', () {
-          final error = SocketException('Connection failed');
+          const error = SocketException('Connection failed');
           expect(RetryStrategy.disabled.shouldRetry(error, 0), isFalse);
         });
       });

@@ -5,9 +5,11 @@ import 'package:flutter_app_updater/src/utils/constants.dart';
 
 import 'channel/flutter_app_updater_platform_interface.dart';
 import 'controller/update_controller.dart';
+import 'models/update_check_result.dart';
 import 'models/update_info.dart';
+import 'models/update_status.dart';
 import 'ui/update_dialog.dart';
-
+import 'utils/update_logger.dart';
 
 /// 应用更新服务
 ///
@@ -35,7 +37,7 @@ class FlutterAppUpdater {
   FlutterAppUpdater({
     UpdateController? controller,
     String? updateUrl,
-    Function? onCheckUpdate,
+    Future<Map<String, dynamic>> Function()? onCheckUpdate,
     String? currentVersion,
     Map<String, String>? headers,
     String versionKey = defaultVersionKey,
@@ -45,19 +47,20 @@ class FlutterAppUpdater {
     String? publishDateKey = defaultPublishDateKey,
     String? fileSizeKey = defaultFileSizeKey,
     String? md5Key = defaultMd5Key,
-  }) : _controller = controller ?? UpdateController(
-    updateUrl: updateUrl,
-    onCheckUpdate: onCheckUpdate as dynamic,
-    currentVersion: currentVersion, // 可以为空，初始化时会获取
-    headers: headers,
-    versionKey: versionKey,
-    downloadUrlKey: downloadUrlKey,
-    changeLogKey: changeLogKey,
-    isForceUpdateKey: isForceUpdateKey,
-    publishDateKey: publishDateKey,
-    fileSizeKey: fileSizeKey,
-    md5Key: md5Key,
-  );
+  }) : _controller = controller ??
+            UpdateController(
+              updateUrl: updateUrl,
+              onCheckUpdate: onCheckUpdate,
+              currentVersion: currentVersion, // 可以为空，初始化时会获取
+              headers: headers,
+              versionKey: versionKey,
+              downloadUrlKey: downloadUrlKey,
+              changeLogKey: changeLogKey,
+              isForceUpdateKey: isForceUpdateKey,
+              publishDateKey: publishDateKey,
+              fileSizeKey: fileSizeKey,
+              md5Key: md5Key,
+            );
 
   /// 初始化服务
   ///
@@ -70,8 +73,9 @@ class FlutterAppUpdater {
     if (_initialized) return this;
 
     // 如果没有设置版本号，自动获取
-    if (_controller.currentVersion == null || _controller.currentVersion!.isEmpty) {
-      final version = await getPlatformVersion();
+    if (_controller.currentVersion == null ||
+        _controller.currentVersion!.isEmpty) {
+      final version = await _resolveCurrentAppVersion();
       if (version != null && version.isNotEmpty) {
         _controller.currentVersion = version;
       }
@@ -86,7 +90,7 @@ class FlutterAppUpdater {
       _checkTimer?.cancel();
       _checkTimer = Timer.periodic(
         Duration(hours: checkInterval),
-            (_) => checkForUpdate(showDialogIfAvailable: true),
+        (_) => checkForUpdate(showDialogIfAvailable: true),
       );
     }
 
@@ -106,6 +110,25 @@ class FlutterAppUpdater {
     BuildContext? context,
     Widget Function(BuildContext, UpdateInfo)? dialogBuilder,
   }) async {
+    final result = await checkForUpdateResult(
+      showDialogIfAvailable: showDialogIfAvailable,
+      forceCheck: forceCheck,
+      context: context,
+      dialogBuilder: dialogBuilder,
+    );
+
+    return result.updateInfo;
+  }
+
+  /// 检查更新并返回结构化结果。
+  ///
+  /// 推荐新项目使用此方法，避免把“无更新”和“检查失败”都当成 null。
+  Future<UpdateCheckResult> checkForUpdateResult({
+    bool showDialogIfAvailable = false,
+    bool forceCheck = false,
+    BuildContext? context,
+    Widget Function(BuildContext, UpdateInfo)? dialogBuilder,
+  }) async {
     // 检查是否在冷却期内
     if (!forceCheck && _lastCheckTime != null) {
       final now = DateTime.now();
@@ -113,25 +136,33 @@ class FlutterAppUpdater {
 
       // 默认冷却时间为1小时
       if (diff.inHours < 1) {
-        return _controller.updateInfo;
+        final cachedUpdate = _controller.updateInfo;
+        if (cachedUpdate != null) {
+          return UpdateCheckResult.available(cachedUpdate);
+        }
+        final error = _controller.error;
+        if (error != null && _controller.status == UpdateStatus.error) {
+          return UpdateCheckResult.failed(error);
+        }
+        return const UpdateCheckResult.notAvailable();
       }
     }
 
-    final updateInfo = await _controller.checkForUpdate();
+    final result = await _controller.checkForUpdateResult();
     _lastCheckTime = DateTime.now();
 
-    if (updateInfo != null && showDialogIfAvailable && context != null) {
+    if (result.updateInfo != null && showDialogIfAvailable && context != null) {
       // 显示更新对话框
       if (context.mounted) {
         showUpdateDialog(
           context: context,
-          updateInfo: updateInfo,
+          updateInfo: result.updateInfo!,
           dialogBuilder: dialogBuilder,
         );
       }
     }
 
-    return updateInfo;
+    return result;
   }
 
   /// 显示更新对话框
@@ -148,9 +179,9 @@ class FlutterAppUpdater {
     final dialog = dialogBuilder != null
         ? dialogBuilder(context, updateInfo)
         : UpdateDialog(
-      updateInfo: updateInfo,
-      controller: _controller,
-    );
+            updateInfo: updateInfo,
+            controller: _controller,
+          );
 
     // 强制更新时使用不可取消的对话框
     if (updateInfo.isForceUpdate) {
@@ -222,5 +253,27 @@ class FlutterAppUpdater {
 
   Future<String?> getAppVersionName() {
     return FlutterAppUpdaterPlatform.instance.getAppVersionName();
+  }
+
+  Future<String?> _resolveCurrentAppVersion() async {
+    try {
+      final versionName = await getAppVersionName();
+      if (versionName != null && versionName.isNotEmpty) {
+        return versionName;
+      }
+    } catch (e) {
+      UpdateLogger.warning('获取应用版本名称失败: $e', tag: 'FlutterAppUpdater');
+    }
+
+    try {
+      final versionCode = await getAppVersionCode();
+      if (versionCode != null && versionCode.isNotEmpty) {
+        return versionCode;
+      }
+    } catch (e) {
+      UpdateLogger.warning('获取应用版本号失败: $e', tag: 'FlutterAppUpdater');
+    }
+
+    return null;
   }
 }

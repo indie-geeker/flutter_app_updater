@@ -32,6 +32,8 @@ export default class FlutterAppUpdaterPlugin implements FlutterPlugin, MethodCal
   onMethodCall(call: MethodCall, result: MethodResult): void {
     if (call.method == "getPlatformVersion") {
       result.success("OpenHarmony ^ ^ ")
+    } else if (call.method == "getAppVersionName" || call.method == "getAppVersionCode" || call.method == "getDownloadPath") {
+      result.success(null)
     } else {
       result.notImplemented()
     }

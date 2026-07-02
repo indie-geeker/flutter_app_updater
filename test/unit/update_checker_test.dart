@@ -5,10 +5,10 @@ import 'package:flutter_app_updater/src/models/update_error.dart';
 void main() {
   group('UpdateChecker', () {
     group('constructor validation', () {
-      test('should require either updateUrl or onCheckUpdate', () {
+      test('should allow construction before update source is configured', () {
         expect(
           () => UpdateChecker(currentVersion: '1.0.0'),
-          throwsA(isA<AssertionError>()),
+          returnsNormally,
         );
       });
 
@@ -26,7 +26,10 @@ void main() {
         expect(
           () => UpdateChecker(
             currentVersion: '1.0.0',
-            onCheckUpdate: () async => {'version': '2.0.0', 'downloadUrl': 'https://example.com/app.apk'},
+            onCheckUpdate: () async => {
+              'version': '2.0.0',
+              'downloadUrl': 'https://example.com/app.apk'
+            },
           ),
           returnsNormally,
         );
@@ -362,9 +365,7 @@ void main() {
         expect(
           () => checker.checkForUpdate(),
           throwsA(
-            predicate((e) =>
-                e is UpdateError &&
-                e.code == 'PARSE_ERROR'),
+            predicate((e) => e is UpdateError && e.code == 'PARSE_ERROR'),
           ),
         );
       });
@@ -383,9 +384,7 @@ void main() {
         expect(
           () => checker.checkForUpdate(),
           throwsA(
-            predicate((e) =>
-                e is UpdateError &&
-                e.code == 'PARSE_ERROR'),
+            predicate((e) => e is UpdateError && e.code == 'CUSTOM_ERROR'),
           ),
         );
       });
@@ -399,26 +398,31 @@ void main() {
           },
         );
 
-        final updateInfo = await checker.checkForUpdate();
-
-        // Should still work, just with empty downloadUrl
-        expect(updateInfo, isNotNull);
-        expect(updateInfo!.downloadUrl, isEmpty);
+        expect(
+          () => checker.checkForUpdate(),
+          throwsA(
+            predicate(
+              (e) => e is UpdateError && e.code == 'INVALID_UPDATE_INFO',
+            ),
+          ),
+        );
       });
 
       test('should handle invalid version format', () async {
         final checker = UpdateChecker(
           currentVersion: '1.0.0',
           onCheckUpdate: () async => {
-            'version': null,
+            'version': 'invalid version',
             'downloadUrl': 'https://example.com/app.apk',
           },
         );
 
-        final updateInfo = await checker.checkForUpdate();
-
-        // Should handle null version gracefully
-        expect(updateInfo, isNotNull);
+        expect(
+          () => checker.checkForUpdate(),
+          throwsA(
+            predicate((e) => e is UpdateError && e.code == 'INVALID_VERSION'),
+          ),
+        );
       });
     });
 
@@ -429,7 +433,8 @@ void main() {
           onCheckUpdate: () async => {
             'version': '1.6.0',
             'downloadUrl': 'https://cdn.example.com/app-1.6.0.apk',
-            'changelog': '- Bug fixes\n- Performance improvements\n- New features',
+            'changelog':
+                '- Bug fixes\n- Performance improvements\n- New features',
             'isForceUpdate': false,
             'fileSize': 25600000, // 25.6 MB
             'md5': 'a1b2c3d4e5f6',

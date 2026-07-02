@@ -12,6 +12,10 @@ public class FlutterAppUpdaterPlugin: NSObject, FlutterPlugin {
     switch call.method {
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
+    case "getAppVersionName":
+      result(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
+    case "getAppVersionCode":
+      result(Bundle.main.infoDictionary?["CFBundleVersion"] as? String)
     default:
       result(FlutterMethodNotImplemented)
     }

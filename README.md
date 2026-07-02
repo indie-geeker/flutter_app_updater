@@ -1,113 +1,155 @@
 # Flutter App Updater
 
-轻量级的Flutter应用内更新框架，专为不同项目需求设计，支持完全自定义UI和下载功能。
+轻量级 Flutter 应用更新基础库，适合独立开发者在自有分发场景中接入版本检查、更新提示、文件下载和 Android APK 安装。
 
-## 特点
+## 能力范围
 
-- **轻量级**：不依赖第三方库，完全使用Flutter原生功能
-- **模块化**：各个功能模块分离，易于维护和扩展
-- **可定制**：更新对话框UI可以完全自定义
-- **功能完整**：
-  - 支持强制更新和可选更新
-  - 下载进度显示
-  - 适应不同API响应格式
+- 自定义更新接口字段映射
+- 结构化区分“有更新 / 无更新 / 检查失败”
+- 默认更新弹窗，也支持完全自定义 UI
+- 下载进度、暂停、恢复、取消
+- Range 断点续传、重试策略、MD5 校验
+- Android APK 安装
+- Android / iOS / macOS 应用版本读取
+
+## 平台支持
+
+| 平台 | 检查更新 | 下载文件 | 自动读取应用版本 | 安装更新 |
+| --- | --- | --- | --- | --- |
+| Android | 支持 | 支持 | 支持 | 支持 APK |
+| iOS | 支持 | 支持 | 支持 | 不支持应用内安装 |
+| macOS | 支持 | 支持 | 支持 | 不支持 |
+| Windows | 支持 | 支持 | 需传 `currentVersion` | 不支持 |
+| OpenHarmony | 支持 | 支持 | 需传 `currentVersion` | 不支持 |
+
+> iOS 应用更新通常应跳转 App Store、TestFlight 或你的企业分发页面，本库不会绕过系统安装策略。
 
 ## 安装
-
-在`pubspec.yaml`文件中添加依赖：
 
 ```yaml
 dependencies:
   flutter_app_updater: ^2.1.0
 ```
 
-然后运行：
-
 ```bash
 flutter pub get
 ```
 
-## 基本使用
+## 服务端响应示例
 
-```dart
-import 'package:flutter_app_updater/flutter_app_updater.dart';
+默认字段：
 
-// 创建更新服务
-final updater = FlutterAppUpdater(
-  updateUrl: "https://your-api.com/update.json",
-  versionKey: "newVersionCode",        // 版本号字段
-  downloadUrlKey: "apkUrl",            // 下载链接字段
-  changeLogKey: "updateMessage",       // 更新日志字段
-  isForceUpdateKey: "forceUpdate"      // 是否强制更新字段
-);
-
-// 初始化
-avoid main() {
-  updater.init();
-  // ...
-}
-
-// 检查更新
-void checkUpdate() async {
-  try {
-    // 检查更新，设置showDialogIfAvailable为false，手动控制对话框显示
-    final updateInfo = await updater.checkForUpdate(
-      showDialogIfAvailable: false,
-    );
-
-    if (updateInfo != null) {
-      print('新版本: ${updateInfo.newVersion}');
-      print('下载链接: ${updateInfo.downloadUrl}');
-      print('更新日志: ${updateInfo.changelog}');
-      
-      // 显示更新对话框
-      await updater.showUpdateDialog(
-        context: context,
-        updateInfo: updateInfo,
-      );
-    } else {
-      print('已经是最新版本');
-    }
-  } catch (e) {
-    print('检查更新错误: $e');
-  }
+```json
+{
+  "version": "2.0.0",
+  "downloadUrl": "https://example.com/app-2.0.0.apk",
+  "changelog": "Bug fixes and performance improvements",
+  "isForceUpdate": false,
+  "fileSize": 25600000,
+  "md5": "8b1a9953c4611296a827abf8c47804d7",
+  "publishDate": "2026-07-02T10:00:00Z"
 }
 ```
 
-## 自定义更新对话框
+`version` 和 `downloadUrl` 是必填字段。缺失或为空会返回 `INVALID_UPDATE_INFO` 错误。
 
-您可以完全自定义更新对话框的UI：
+## 基本使用
 
 ```dart
-updater.showUpdateDialog(
+import 'package:flutter/material.dart';
+import 'package:flutter_app_updater/flutter_app_updater.dart';
+
+final updater = FlutterAppUpdater(
+  updateUrl: 'https://your-api.com/update.json',
+);
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await updater.init();
+  runApp(const MyApp());
+}
+
+Future<void> checkUpdate(BuildContext context) async {
+  final result = await updater.checkForUpdateResult(forceCheck: true);
+
+  if (result.isAvailable) {
+    await updater.showUpdateDialog(
+      context: context,
+      updateInfo: result.updateInfo!,
+    );
+    return;
+  }
+
+  if (result.isFailed) {
+    debugPrint('检查更新失败: ${result.error}');
+    return;
+  }
+
+  debugPrint('已经是最新版本');
+}
+```
+
+如果只需要旧式返回值，也可以继续使用：
+
+```dart
+final updateInfo = await updater.checkForUpdate();
+```
+
+这个方法在“无更新”和“检查失败”时都会返回 `null`。新项目建议使用 `checkForUpdateResult()`。
+
+## 自定义字段
+
+```dart
+final updater = FlutterAppUpdater(
+  updateUrl: 'https://your-api.com/update.json',
+  versionKey: 'newVersionCode',
+  downloadUrlKey: 'apkUrl',
+  changeLogKey: 'updateMessage',
+  isForceUpdateKey: 'forceUpdate',
+);
+```
+
+## 自定义检查逻辑
+
+`onCheckUpdate` 返回一个 `Map<String, dynamic>`，之后仍会复用字段解析、版本比较和校验逻辑。
+
+```dart
+final updater = FlutterAppUpdater(
+  currentVersion: '1.0.0',
+  onCheckUpdate: () async {
+    final response = await customApiCall();
+    return {
+      'version': response.version,
+      'downloadUrl': response.apkUrl,
+      'changelog': response.releaseNotes,
+      'isForceUpdate': response.mandatory,
+    };
+  },
+);
+```
+
+## 自定义更新弹窗
+
+```dart
+await updater.showUpdateDialog(
   context: context,
   updateInfo: updateInfo,
   dialogBuilder: (context, updateInfo) {
     return AlertDialog(
       title: Text('发现新版本 ${updateInfo.newVersion}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('更新内容：'),
-          Text(updateInfo.changelog),
-        ],
-      ),
+      content: Text(updateInfo.changelog),
       actions: [
         if (!updateInfo.isForceUpdate)
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('稍后再说'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('稍后再说'),
           ),
         TextButton(
           onPressed: () async {
-            Navigator.pop(context);
-            // 开始下载更新
-            final file = await updater.downloadUpdate(
-              autoInstall: true,  // 下载完成后自动安装
-            );
+            Navigator.pop(context, true);
+            await updater.downloadUpdate(autoInstall: true);
           },
-          child: Text('立即更新'),
+          child: const Text('立即更新'),
         ),
       ],
     );
@@ -115,154 +157,78 @@ updater.showUpdateDialog(
 );
 ```
 
-## 高级配置
-
-
-### 配置重试策略
-
-配置下载失败时的重试行为：
-
-```dart
-import 'package:flutter_app_updater/flutter_app_updater.dart';
-
-// 使用预定义策略
-final controller = UpdateController(
-  updateUrl: 'https://api.example.com/update.json',
-);
-
-final downloader = UpdateDownloader(
-  url: 'https://example.com/app.apk',
-  savePath: '/path/to/save/app.apk',
-  // 使用快速重试策略（5次，0.5秒起始延迟）
-  retryStrategy: RetryStrategy.fast,
-);
-
-// 自定义重试策略
-final customDownloader = UpdateDownloader(
-  url: 'https://example.com/app.apk',
-  savePath: '/path/to/save/app.apk',
-  retryStrategy: const RetryStrategy(
-    maxAttempts: 5,              // 最多重试5次
-    initialDelay: Duration(seconds: 2),  // 首次重试延迟2秒
-    backoffFactor: 2.0,          // 指数退避因子
-    maxDelay: Duration(minutes: 1),      // 最大延迟1分钟
-    enableJitter: true,          // 启用抖动避免同时重试
-  ),
-);
-
-// 禁用重试
-final noRetryDownloader = UpdateDownloader(
-  url: 'https://example.com/app.apk',
-  savePath: '/path/to/save/app.apk',
-  retryStrategy: RetryStrategy.disabled,
-);
-```
-
-### 配置日志级别
-
-控制日志输出级别：
-
-```dart
-import 'package:flutter_app_updater/flutter_app_updater.dart';
-
-void main() {
-  // 设置日志级别
-  // none - 不输出任何日志
-  // error - 仅输出错误
-  // warning - 输出警告和错误
-  // info - 输出信息、警告和错误（推荐）
-  // debug - 输出所有日志（用于调试）
-
-  // 生产环境：仅错误
-  UpdateLogger.setLogLevel(LogLevel.error);
-
-  // 开发环境：详细调试
-  UpdateLogger.setLogLevel(LogLevel.debug);
-
-  runApp(MyApp());
-}
-
-// 也可以在代码中手动记录日志
-void customLogging() {
-  UpdateLogger.debug('调试信息', tag: 'MyApp');
-  UpdateLogger.info('普通信息', tag: 'MyApp');
-  UpdateLogger.warning('警告信息', tag: 'MyApp');
-  UpdateLogger.error('错误信息', error: Exception('Something went wrong'), tag: 'MyApp');
-}
-```
-
-
-### 初始化参数
-
-```dart
-// 初始化时可配置自动检查
-await updater.init(
-  checkOnInit: true,        // 初始化时检查更新
-  checkInterval: 24,        // 每24小时自动检查一次（设为null禁用自动检查）
-);
-```
-
-### 下载更新
+## 下载与安装
 
 ```dart
 final file = await updater.downloadUpdate(
-  savePath: "/storage/download/",  // 保存路径
-  autoInstall: true,              // 下载后自动安装
-  showNotification: true,         // 显示下载通知
+  autoInstall: true,
 );
 ```
 
-### 手动安装
+Android 下载完成后可以调用：
 
 ```dart
-await updater.installUpdate();
+final installed = await updater.installUpdate();
 ```
 
-### 获取版本信息
+Android 8.0+ 需要用户授权“安装未知来源应用”。如果未授权，安装会失败并返回 `INSTALL_PERMISSION_REQUIRED`。
+
+## 重试策略
 
 ```dart
-String? platformVersion = await updater.getPlatformVersion();
-String? appVersionCode = await updater.getAppVersionCode();
-String? appVersionName = await updater.getAppVersionName();
-```
+final downloader = UpdateDownloader(
+  url: 'https://example.com/app.apk',
+  savePath: '/path/to/app.apk',
+  retryStrategy: RetryStrategy.fast,
+);
 
-### 资源释放
-
-```dart
-@override
-void dispose() {
-  updater.dispose();  // 释放资源（定时器等）
-  super.dispose();
-}
-```
-
-## 自定义API处理
-
-您可以在FlutterAppUpdater构造函数中传入自定义的onCheckUpdate函数来覆盖默认的更新检查逻辑：
-
-```dart
-final updater = FlutterAppUpdater(
-  onCheckUpdate: () async {
-    // 自定义更新检查逻辑
-    final response = await customApiCall();
-    return UpdateInfo(
-      newVersion: response['version'],
-      downloadUrl: response['downloadUrl'],
-      changelog: response['releaseNotes'],
-      isForceUpdate: response['mandatory'] ?? false,
-    );
-  },
+final customDownloader = UpdateDownloader(
+  url: 'https://example.com/app.apk',
+  savePath: '/path/to/app.apk',
+  retryStrategy: const RetryStrategy(
+    maxAttempts: 5,
+    initialDelay: Duration(seconds: 2),
+    backoffFactor: 2.0,
+    maxDelay: Duration(minutes: 1),
+    enableJitter: true,
+  ),
 );
 ```
 
-## 示例项目
+## 日志
 
-查看[example](./example)目录获取完整的示例应用。
+```dart
+UpdateLogger.setLogLevel(LogLevel.error);
+UpdateLogger.setLogLevel(LogLevel.debug);
+```
 
-## 贡献
+## 错误码
 
-欢迎提交问题和拉取请求，我们将尽快回应。
+常见错误：
+
+- `MISSING_VERSION`：未传入当前应用版本，且平台无法自动读取
+- `MISSING_URL`：未配置 `updateUrl` 或 `onCheckUpdate`
+- `INVALID_UPDATE_INFO`：服务端响应缺少必填字段
+- `INVALID_VERSION`：版本号格式不受支持
+- `NETWORK_ERROR`：网络连接失败
+- `SERVER_ERROR`：服务端响应异常
+- `DOWNLOAD_ERROR`：下载失败
+- `MD5_MISMATCH`：文件校验失败
+- `INSTALL_PERMISSION_REQUIRED`：Android 未授权安装 APK
+- `PLATFORM_NOT_SUPPORTED`：当前平台不支持安装
+
+## 验证命令
+
+维护者发布前应至少运行：
+
+```bash
+flutter analyze
+flutter test
+flutter analyze example
+(cd example && flutter build apk --debug)
+flutter pub publish --dry-run
+```
 
 ## 许可
 
-MIT License
+Apache-2.0

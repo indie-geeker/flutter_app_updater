@@ -48,8 +48,7 @@ class UpdateChecker {
     this.publishDateKey = defaultPublishDateKey,
     this.fileSizeKey = defaultFileSizeKey,
     this.md5Key = defaultMd5Key,
-  }) : assert(updateUrl != null || onCheckUpdate != null,
-  '必须提供 updateUrl 或 onCheckUpdate 其中之一');
+  });
 
   /// 检查更新
   ///
@@ -80,23 +79,45 @@ class UpdateChecker {
 
       // 打印版本信息以便调试
       UpdateLogger.info('当前应用版本: $currentVersion', tag: 'UpdateChecker');
-      UpdateLogger.info('服务器返回版本: ${updateInfo.newVersion}', tag: 'UpdateChecker');
+      UpdateLogger.info('服务器返回版本: ${updateInfo.newVersion}',
+          tag: 'UpdateChecker');
+
+      _validateVersion(currentVersion, fieldName: 'currentVersion');
+      _validateVersion(updateInfo.newVersion, fieldName: 'newVersion');
 
       // 比较版本判断是否需要更新
-      final hasUpdate = VersionComparator.hasUpdate(currentVersion, updateInfo.newVersion);
-      final compareResult = VersionComparator.compare(currentVersion, updateInfo.newVersion);
-      UpdateLogger.debug('版本比较结果: $compareResult (负数表示有更新，0表示相同，正数表示无需更新)', tag: 'UpdateChecker');
+      final hasUpdate =
+          VersionComparator.hasUpdate(currentVersion, updateInfo.newVersion);
+      final compareResult =
+          VersionComparator.compare(currentVersion, updateInfo.newVersion);
+      UpdateLogger.debug('版本比较结果: $compareResult (负数表示有更新，0表示相同，正数表示无需更新)',
+          tag: 'UpdateChecker');
       UpdateLogger.info('是否有可用更新: $hasUpdate', tag: 'UpdateChecker');
-      
+
       if (hasUpdate) {
         return updateInfo;
       }
 
       // 没有可用更新
-      UpdateLogger.info('无可用更新: 当前版本($currentVersion)不低于服务器版本(${updateInfo.newVersion})', tag: 'UpdateChecker');
+      UpdateLogger.info(
+          '无可用更新: 当前版本($currentVersion)不低于服务器版本(${updateInfo.newVersion})',
+          tag: 'UpdateChecker');
       return null;
-    } catch (e) {
-      throw UpdateError.parse(e);
+    } catch (e, stackTrace) {
+      if (e is UpdateError) {
+        rethrow;
+      }
+      throw UpdateError.parse(e, stackTrace);
+    }
+  }
+
+  void _validateVersion(String version, {required String fieldName}) {
+    if (!VersionComparator.isValidVersion(version)) {
+      throw UpdateError(
+        code: 'INVALID_VERSION',
+        message: '无效的版本号格式: $fieldName',
+        exception: version,
+      );
     }
   }
 
@@ -108,7 +129,7 @@ class UpdateChecker {
         message: '没有提供更新检查URL',
       );
     }
-    
+
     try {
       // 使用HttpClientManager执行GET请求
       return await HttpClientManager().get(

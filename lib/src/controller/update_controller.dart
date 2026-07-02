@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app_updater/src/utils/constants.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 
+import '../models/update_check_result.dart';
 import '../models/update_error.dart';
 import '../models/update_info.dart';
 import '../models/update_progress.dart';
@@ -96,20 +97,20 @@ class UpdateController extends ChangeNotifier {
     String? publishDateKey = defaultPublishDateKey,
     String? fileSizeKey = defaultFileSizeKey,
     String? md5Key = defaultMd5Key,
-  }) : _currentVersion = currentVersion,
-      _checker = UpdateChecker(
-    onCheckUpdate: onCheckUpdate,
-    updateUrl: updateUrl,
-    currentVersion: currentVersion ?? '',  // 临时传空字符串，后续会更新
-    headers: headers,
-    versionKey: versionKey,
-    downloadUrlKey: downloadUrlKey,
-    changelogKey: changeLogKey,
-    isForceUpdateKey: isForceUpdateKey,
-    publishDateKey: publishDateKey,
-    fileSizeKey: fileSizeKey,
-    md5Key: md5Key,
-  );
+  })  : _currentVersion = currentVersion,
+        _checker = UpdateChecker(
+          onCheckUpdate: onCheckUpdate,
+          updateUrl: updateUrl,
+          currentVersion: currentVersion ?? '', // 临时传空字符串，后续会更新
+          headers: headers,
+          versionKey: versionKey,
+          downloadUrlKey: downloadUrlKey,
+          changelogKey: changeLogKey,
+          isForceUpdateKey: isForceUpdateKey,
+          publishDateKey: publishDateKey,
+          fileSizeKey: fileSizeKey,
+          md5Key: md5Key,
+        );
 
   /// 获取当前版本号
   String? get currentVersion => _currentVersion;
@@ -144,10 +145,10 @@ class UpdateController extends ChangeNotifier {
     _checker = newChecker;
   }
 
-  /// 检查更新
+  /// 检查更新并返回结构化结果。
   ///
-  /// 返回更新信息，如果没有可用更新则返回null
-  Future<UpdateInfo?> checkForUpdate() async {
+  /// 用于区分“无更新”和“检查失败”。旧 API [checkForUpdate] 仍保留。
+  Future<UpdateCheckResult> checkForUpdateResult() async {
     try {
       // 检查是否设置了版本号
       if (_currentVersion == null || _currentVersion!.isEmpty) {
@@ -156,7 +157,7 @@ class UpdateController extends ChangeNotifier {
           message: '未设置当前应用版本号',
         );
       }
-      
+
       _updateStatus(UpdateStatus.checking);
 
       final updateInfo = await _checker.checkForUpdate();
@@ -167,17 +168,30 @@ class UpdateController extends ChangeNotifier {
           updateInfo: updateInfo,
           clearError: true,
         );
+        return UpdateCheckResult.available(updateInfo);
       } else {
-        _updateState(status: UpdateStatus.notAvailable, clearError: true);
+        _updateState(
+          status: UpdateStatus.notAvailable,
+          clearError: true,
+          clearUpdateInfo: true,
+        );
+        return const UpdateCheckResult.notAvailable();
       }
-
-      return updateInfo;
-    } catch (e) {
-      final error = e is UpdateError ? e : UpdateError.server(e);
+    } catch (e, stackTrace) {
+      final error = e is UpdateError ? e : UpdateError.server(e, stackTrace);
       _setError(error);
       _updateStatus(UpdateStatus.error);
-      return null;
+      return UpdateCheckResult.failed(error);
     }
+  }
+
+  /// 检查更新。
+  ///
+  /// 返回更新信息，如果没有可用更新或检查失败则返回null。需要区分失败原因时
+  /// 使用 [checkForUpdateResult]。
+  Future<UpdateInfo?> checkForUpdate() async {
+    final result = await checkForUpdateResult();
+    return result.updateInfo;
   }
 
   /// 开始下载更新
@@ -358,6 +372,7 @@ class UpdateController extends ChangeNotifier {
     UpdateError? error,
     UpdateInfo? updateInfo,
     bool clearError = false,
+    bool clearUpdateInfo = false,
   }) {
     bool hasChanges = false;
 
@@ -374,7 +389,8 @@ class UpdateController extends ChangeNotifier {
       _error = error;
       _errorController.add(error);
       hasChanges = true;
-      UpdateLogger.error('错误发生: ${error.message}', tag: 'UpdateController', error: error);
+      UpdateLogger.error('错误发生: ${error.message}',
+          tag: 'UpdateController', error: error);
     } else if (clearError && _error != null) {
       _error = null;
       hasChanges = true;
@@ -384,7 +400,11 @@ class UpdateController extends ChangeNotifier {
     if (updateInfo != null) {
       _updateInfo = updateInfo;
       hasChanges = true;
-      UpdateLogger.info('更新信息已设置: 版本 ${updateInfo.newVersion}', tag: 'UpdateController');
+      UpdateLogger.info('更新信息已设置: 版本 ${updateInfo.newVersion}',
+          tag: 'UpdateController');
+    } else if (clearUpdateInfo && _updateInfo != null) {
+      _updateInfo = null;
+      hasChanges = true;
     }
 
     // 仅在有变化时通知监听者
@@ -416,7 +436,8 @@ class UpdateController extends ChangeNotifier {
       // 在Android上，通过platform channel获取合适的下载目录
       // 优先使用应用专属外部存储（Android 10+无需权限）
       try {
-        final downloadDir = await FlutterAppUpdaterPlatform.instance.getDownloadPath();
+        final downloadDir =
+            await FlutterAppUpdaterPlatform.instance.getDownloadPath();
         if (downloadDir != null && downloadDir.isNotEmpty) {
           return '$downloadDir/app_update_$timestamp.apk';
         }

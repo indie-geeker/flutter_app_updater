@@ -51,6 +51,10 @@ void FlutterAppUpdaterPlugin::HandleMethodCall(
       version_stream << "7";
     }
     result->Success(flutter::EncodableValue(version_stream.str()));
+  } else if (method_call.method_name().compare("getAppVersionName") == 0 ||
+             method_call.method_name().compare("getAppVersionCode") == 0 ||
+             method_call.method_name().compare("getDownloadPath") == 0) {
+    result->Success(flutter::EncodableValue());
   } else {
     result->NotImplemented();
   }

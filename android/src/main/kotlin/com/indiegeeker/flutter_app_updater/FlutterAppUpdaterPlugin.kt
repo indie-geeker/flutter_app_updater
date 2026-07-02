@@ -35,7 +35,14 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
       "getAppVersionCode" -> getAppVersionCode(result)
       "getAppVersionName" -> getAppVersionName(result)
-      "installApp" -> installApp(call.arguments as String, result)
+      "installApp" -> {
+        val filePath = call.arguments as? String
+        if (filePath.isNullOrBlank()) {
+          result.error("INVALID_ARGUMENT", "安装路径不能为空", null)
+          return
+        }
+        installApp(filePath, result)
+      }
       "getDownloadPath" -> getDownloadPath(result)
       else -> result.notImplemented()
     }
@@ -69,6 +76,16 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       val file = File(filePath)
       if (!file.exists()) {
         result.error("FILE_NOT_FOUND", "安装文件不存在", null)
+        return
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+          !applicationContext.packageManager.canRequestPackageInstalls()) {
+        result.error(
+          "INSTALL_PERMISSION_REQUIRED",
+          "未授权安装未知来源应用，请在系统设置中允许当前应用安装APK",
+          null
+        )
         return
       }
 
