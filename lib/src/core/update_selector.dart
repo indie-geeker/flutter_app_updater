@@ -23,7 +23,7 @@ class UpdateSelector {
 
   UpdateCheckResult select(List<UpdateCandidate> releases) {
     final candidates = releases.where(_matchesTarget).where((release) {
-      return VersionComparator.hasUpdate(installedVersion, release.version);
+      return _isNewer(release);
     }).toList();
 
     if (candidates.isEmpty) {
@@ -31,7 +31,12 @@ class UpdateSelector {
     }
 
     candidates.sort((left, right) {
-      return VersionComparator.compare(right.version, left.version);
+      final versionCompare =
+          VersionComparator.compare(right.version, left.version);
+      if (versionCompare != 0) {
+        return versionCompare;
+      }
+      return _buildNumberForSort(right).compareTo(_buildNumberForSort(left));
     });
 
     final candidate = candidates.first;
@@ -61,6 +66,28 @@ class UpdateSelector {
       return true;
     }
     return releaseArchitecture == architecture;
+  }
+
+  bool _isNewer(UpdateCandidate release) {
+    final versionCompare =
+        VersionComparator.compare(installedVersion, release.version);
+    if (versionCompare < 0) {
+      return true;
+    }
+    if (versionCompare > 0) {
+      return false;
+    }
+
+    final installedBuild = int.tryParse(installedBuildNumber ?? '');
+    final releaseBuild = int.tryParse(release.buildNumber ?? '');
+    if (installedBuild == null || releaseBuild == null) {
+      return false;
+    }
+    return releaseBuild > installedBuild;
+  }
+
+  int _buildNumberForSort(UpdateCandidate release) {
+    return int.tryParse(release.buildNumber ?? '') ?? -1;
   }
 
   UpdateAction? _recommendedAction(UpdateCandidate candidate) {

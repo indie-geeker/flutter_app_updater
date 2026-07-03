@@ -60,6 +60,43 @@ void main() {
       expect(result, isA<UpdateNotAvailable>());
     });
 
+    test('selects same version release with higher build number', () {
+      final result = _selector(
+        installedVersion: '2.0.0',
+        installedBuildNumber: '41',
+      ).select([
+        _candidate(version: '2.0.0', buildNumber: '42'),
+        _candidate(version: '2.0.0', buildNumber: '40'),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).candidate.buildNumber, '42');
+    });
+
+    test('returns no update for same version with equal build number', () {
+      final result = _selector(
+        installedVersion: '2.0.0',
+        installedBuildNumber: '42',
+      ).select([
+        _candidate(version: '2.0.0', buildNumber: '42'),
+      ]);
+
+      expect(result, isA<UpdateNotAvailable>());
+    });
+
+    test('ignores same version build updates when build numbers are invalid',
+        () {
+      final result = _selector(
+        installedVersion: '2.0.0',
+        installedBuildNumber: 'not-a-build',
+      ).select([
+        _candidate(version: '2.0.0', buildNumber: '42'),
+        _candidate(version: '2.0.0'),
+      ]);
+
+      expect(result, isA<UpdateNotAvailable>());
+    });
+
     test('prioritizes direct actions for required updates', () {
       final packageAction = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
@@ -126,6 +163,7 @@ UpdateSelector _selector({
 
 UpdateCandidate _candidate({
   required String version,
+  String? buildNumber,
   TargetPlatform platform = TargetPlatform.android,
   String? architecture = 'arm64',
   String channel = 'stable',
@@ -134,6 +172,7 @@ UpdateCandidate _candidate({
 }) {
   return UpdateCandidate(
     version: version,
+    buildNumber: buildNumber,
     channel: channel,
     platform: platform,
     architecture: architecture,
