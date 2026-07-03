@@ -3,35 +3,7 @@ import 'package:flutter/services.dart';
 import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../models/update_error_code.dart';
-
-abstract class UpdateActionExecutor {
-  bool supports(UpdateAction action);
-
-  Future<UpdateActionResult> perform(UpdateAction action);
-}
-
-class UpdateActionResult {
-  final bool isSuccess;
-  final UpdateErrorCode? code;
-  final String? message;
-
-  const UpdateActionResult._({
-    required this.isSuccess,
-    this.code,
-    this.message,
-  });
-
-  const UpdateActionResult.success() : this._(isSuccess: true);
-
-  const UpdateActionResult.failure({
-    required UpdateErrorCode code,
-    required String message,
-  }) : this._(
-          isSuccess: false,
-          code: code,
-          message: message,
-        );
-}
+import 'update_action_executor.dart';
 
 class StoreUpdateExecutor implements UpdateActionExecutor {
   final FlutterAppUpdaterPlatform platform;

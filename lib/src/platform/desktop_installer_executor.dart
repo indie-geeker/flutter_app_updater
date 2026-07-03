@@ -6,7 +6,7 @@ import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
-import 'store_update_executor.dart';
+import 'update_action_executor.dart';
 
 class DesktopInstallerExecutor implements UpdateActionExecutor {
   final TargetPlatform platform;
