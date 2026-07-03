@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 3,
+  "appId": "com.example.app",
+  "channel": "stable",
+  "releases": [
+    {
+      "version": "2.0.0",
+      "buildNumber": "42",
+      "platform": "android",
+      "architecture": "arm64",
+      "releaseNotes": "Bug fixes",
+      "releasedAt": "2026-07-03T10:00:00Z",
+      "policy": {
+        "level": "recommended",
+        "minSupportedVersion": "1.5.0"
+      },
+      "actions": [
+        {
+          "type": "downloadPackage",
+          "packageUrl": "https://example.com/app.apk",
+          "packageType": "apk",
+          "packageSizeBytes": 25600000,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ]
+}
