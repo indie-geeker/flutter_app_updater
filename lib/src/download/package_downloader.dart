@@ -19,7 +19,7 @@ abstract class PackageDownloadClient {
 class PackageDownloadResponse {
   final int statusCode;
   final Map<String, String> headers;
-  final List<int> bytes;
+  final Stream<List<int>> bytes;
 
   const PackageDownloadResponse({
     required this.statusCode,
@@ -47,10 +47,6 @@ class IoPackageDownloadClient implements PackageDownloadClient {
       final request = await client.getUrl(url);
       headers.forEach(request.headers.set);
       final response = await request.close();
-      final bytes = <int>[];
-      await for (final chunk in response) {
-        bytes.addAll(chunk);
-      }
 
       final responseHeaders = <String, String>{};
       response.headers.forEach((name, values) {
@@ -62,8 +58,22 @@ class IoPackageDownloadClient implements PackageDownloadClient {
       return PackageDownloadResponse(
         statusCode: response.statusCode,
         headers: responseHeaders,
-        bytes: bytes,
+        bytes: _responseBytes(response, client),
       );
+    } catch (_) {
+      client.close(force: true);
+      rethrow;
+    }
+  }
+
+  Stream<List<int>> _responseBytes(
+    HttpClientResponse response,
+    HttpClient client,
+  ) async* {
+    try {
+      await for (final chunk in response) {
+        yield chunk;
+      }
     } finally {
       client.close();
     }
@@ -124,9 +134,12 @@ class PackageDownloader {
       final sink = partialFile.openWrite(
         mode: isResumeResponse ? FileMode.append : FileMode.write,
       );
-      sink.add(response.bytes);
-      await sink.flush();
-      await sink.close();
+      try {
+        await sink.addStream(response.bytes);
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
 
       await _writeResumeMetadata(
         action: action,
@@ -168,6 +181,11 @@ class PackageDownloader {
       return PackageDownloadResult.failure(
         code: UpdateErrorCode.packageDownloadFailed,
         message: error.message,
+      );
+    } on Exception catch (error) {
+      return PackageDownloadResult.failure(
+        code: UpdateErrorCode.packageDownloadFailed,
+        message: error.toString(),
       );
     }
   }

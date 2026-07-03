@@ -31,7 +31,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 200,
           headers: {'etag': '"v1"'},
-          bytes: bytes,
+          bytes: Stream.value(bytes),
         ),
       );
 
@@ -67,7 +67,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 200,
           headers: const {},
-          bytes: utf8.encode('tampered'),
+          bytes: Stream.value(utf8.encode('tampered')),
         ),
       );
 
@@ -93,7 +93,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 206,
           headers: {'etag': '"v1"'},
-          bytes: utf8.encode(' world'),
+          bytes: Stream.value(utf8.encode(' world')),
         ),
       );
 
@@ -121,7 +121,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 200,
           headers: const {},
-          bytes: bytes,
+          bytes: Stream.value(bytes),
         ),
       );
 
@@ -151,7 +151,7 @@ void main() {
           headers: {
             'last-modified': 'Fri, 03 Jul 2026 10:00:00 GMT',
           },
-          bytes: bytes,
+          bytes: Stream.value(bytes),
         ),
       );
 
@@ -163,6 +163,54 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(result.file?.readAsStringSync(), 'fresh-package');
       expect(client.requests.single.headers['range'], 'bytes=7-');
+    });
+
+    test('maps SocketException to package download failure', () async {
+      client.enqueueError(const SocketException('offline'));
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(),
+        savePath: _path('app.apk'),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageDownloadFailed);
+    });
+
+    test('maps HandshakeException to package download failure', () async {
+      client.enqueueError(const HandshakeException('bad certificate'));
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(),
+        savePath: _path('app.apk'),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageDownloadFailed);
+    });
+
+    test('writes response chunks from a stream', () async {
+      final chunks = [
+        utf8.encode('large-'),
+        utf8.encode('package-'),
+        utf8.encode('bytes'),
+      ];
+      final bytes = chunks.expand((chunk) => chunk).toList();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream<List<int>>.fromIterable(chunks),
+        ),
+      );
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(sha256: _sha256(bytes)),
+        savePath: _path('app.apk'),
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.file?.readAsStringSync(), 'large-package-bytes');
     });
   });
 }
@@ -184,10 +232,14 @@ String _path(String name) => '${_tempDir.path}/$name';
 
 class _FakePackageDownloadClient implements PackageDownloadClient {
   final requests = <_DownloadRequest>[];
-  final _responses = <PackageDownloadResponse>[];
+  final _responses = <Object>[];
 
   void enqueue(PackageDownloadResponse response) {
     _responses.add(response);
+  }
+
+  void enqueueError(Exception error) {
+    _responses.add(error);
   }
 
   @override
@@ -199,7 +251,11 @@ class _FakePackageDownloadClient implements PackageDownloadClient {
     if (_responses.isEmpty) {
       throw StateError('No response queued.');
     }
-    return _responses.removeAt(0);
+    final response = _responses.removeAt(0);
+    if (response is Exception) {
+      throw response;
+    }
+    return response as PackageDownloadResponse;
   }
 }
 

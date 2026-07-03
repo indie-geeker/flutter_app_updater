@@ -36,7 +36,7 @@ void main() {
             PackageDownloadResponse(
               statusCode: 200,
               headers: const {},
-              bytes: bytes,
+              bytes: Stream.value(bytes),
             ),
           ),
         ),
@@ -65,7 +65,7 @@ void main() {
             const PackageDownloadResponse(
               statusCode: 500,
               headers: {},
-              bytes: [],
+              bytes: Stream<List<int>>.empty(),
             ),
           ),
         ),

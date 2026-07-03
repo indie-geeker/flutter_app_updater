@@ -40,7 +40,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 200,
           headers: const {},
-          bytes: bytes,
+          bytes: Stream.value(bytes),
         ),
       );
       final action = _installer(
@@ -67,7 +67,7 @@ void main() {
         PackageDownloadResponse(
           statusCode: 200,
           headers: const {},
-          bytes: bytes,
+          bytes: Stream.value(bytes),
         ),
       );
       final action = _installer(
@@ -141,7 +141,7 @@ void main() {
           PackageDownloadResponse(
             statusCode: 200,
             headers: const {},
-            bytes: bytes,
+            bytes: Stream.value(bytes),
           ),
         );
 
