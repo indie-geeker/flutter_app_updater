@@ -40,6 +40,11 @@ void main() {
           targetPackageName: 'com.example.app',
         ),
         action,
+        const InstallPackageAction(packagePath: '/tmp/app.apk'),
+        DownloadAndInstallPackageAction(
+          packageUrl: Uri.parse('https://example.com/app.apk'),
+          packageType: PackageType.apk,
+        ),
         OpenInstallerAction(
           installerUrl: Uri.parse('https://example.com/app.msi'),
           installerType: InstallerType.msi,
@@ -56,7 +61,7 @@ void main() {
 
     expect(updater.source, isA<ManifestUpdateSource>());
     expect(manifest.releases.single, same(candidate));
-    expect(candidate.actions, hasLength(4));
+    expect(candidate.actions, hasLength(6));
     expect(candidate.policy.level, UpdatePolicyLevel.required);
     expect(action.packageUrl.path, '/app.apk');
   });

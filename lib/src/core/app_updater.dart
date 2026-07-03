@@ -1,8 +1,17 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import '../actions/update_action.dart';
-import '../models/update_error_code.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
 import '../platform/android_market_executor.dart';
+import '../models/update_candidate.dart';
+import '../models/update_error_code.dart';
+import '../platform/desktop_installer_executor.dart';
+import '../platform/download_and_install_package_executor.dart';
+import '../platform/download_package_executor.dart';
+import '../platform/install_package_executor.dart';
 import '../platform/store_update_executor.dart';
 import '../platform/update_action_executor.dart';
 import 'update_selector.dart';
@@ -13,13 +22,48 @@ class AppUpdater {
   final UpdateSelector? selector;
   final ManifestFetcher manifestFetcher;
   final List<UpdateActionExecutor>? executors;
+  final String? downloadDirectory;
+  final TargetPlatform? platform;
 
   const AppUpdater({
     required this.source,
     this.selector,
     this.manifestFetcher = const IoManifestFetcher(),
     this.executors,
+    this.downloadDirectory,
+    this.platform,
   });
+
+  factory AppUpdater.manifest({
+    required Uri manifestUrl,
+    Map<String, String>? headers,
+    required String installedVersion,
+    String? installedBuildNumber,
+    required TargetPlatform platform,
+    String? architecture,
+    required String channel,
+    String? downloadDirectory,
+    ManifestFetcher manifestFetcher = const IoManifestFetcher(),
+    List<UpdateActionExecutor>? executors,
+  }) {
+    return AppUpdater(
+      source: UpdateSource.manifest(
+        manifestUrl: manifestUrl,
+        headers: headers,
+      ),
+      selector: UpdateSelector(
+        installedVersion: installedVersion,
+        installedBuildNumber: installedBuildNumber,
+        platform: platform,
+        architecture: architecture,
+        channel: channel,
+      ),
+      manifestFetcher: manifestFetcher,
+      executors: executors,
+      downloadDirectory: downloadDirectory,
+      platform: platform,
+    );
+  }
 
   Future<UpdateCheckResult> check({
     UpdateSelector? selector,
@@ -37,6 +81,28 @@ class AppUpdater {
         effectiveSelector.select(manifest.releases),
       ManifestUpdateSource manifestSource =>
         _checkRemoteManifest(manifestSource, effectiveSelector),
+    };
+  }
+
+  Future<UpdateFlowResult> checkAndPrepare({
+    UpdateSelector? selector,
+  }) async {
+    final result = await check(selector: selector);
+    return switch (result) {
+      UpdateAvailable(
+        :final candidate,
+        :final recommendedAction,
+        :final isRequired,
+      ) =>
+        PreparedUpdateAvailable(
+          candidate: candidate,
+          recommendedAction: recommendedAction,
+          actions: candidate.actions,
+          isRequired: isRequired,
+        ),
+      UpdateNotAvailable() => const PreparedUpdateNotAvailable(),
+      UpdateCheckFailed(:final code, :final message) =>
+        PreparedUpdateCheckFailed(code: code, message: message),
     };
   }
 
@@ -84,10 +150,63 @@ class AppUpdater {
     );
   }
 
+  Future<UpdateActionResult> performRecommended(
+    PreparedUpdateAvailable update,
+  ) {
+    return perform(update.recommendedAction);
+  }
+
   List<UpdateActionExecutor> _defaultExecutors() {
+    final effectiveDownloadDirectory =
+        downloadDirectory ?? Directory.systemTemp.path;
+    final effectivePlatform =
+        platform ?? selector?.platform ?? defaultTargetPlatform;
     return [
       StoreUpdateExecutor(),
       AndroidMarketExecutor(),
+      DownloadPackageExecutor(
+        downloadDirectory: effectiveDownloadDirectory,
+      ),
+      InstallPackageExecutor(),
+      DownloadAndInstallPackageExecutor(
+        downloadDirectory: effectiveDownloadDirectory,
+      ),
+      DesktopInstallerExecutor(
+        platform: effectivePlatform,
+        downloadDirectory: Directory(effectiveDownloadDirectory),
+      ),
     ];
   }
+}
+
+sealed class UpdateFlowResult {
+  const UpdateFlowResult();
+}
+
+class PreparedUpdateAvailable extends UpdateFlowResult {
+  final UpdateCandidate candidate;
+  final UpdateAction recommendedAction;
+  final List<UpdateAction> actions;
+  final bool isRequired;
+
+  const PreparedUpdateAvailable({
+    required this.candidate,
+    required this.recommendedAction,
+    required this.actions,
+    required this.isRequired,
+  });
+}
+
+class PreparedUpdateNotAvailable extends UpdateFlowResult {
+  const PreparedUpdateNotAvailable();
+}
+
+class PreparedUpdateCheckFailed extends UpdateFlowResult {
+  final UpdateErrorCode code;
+  final String message;
+
+  const PreparedUpdateCheckFailed({
+    required this.code,
+    required this.message,
+  });
 }

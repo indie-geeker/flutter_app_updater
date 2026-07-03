@@ -35,14 +35,6 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
       );
     }
 
-    final sha256 = action.sha256?.trim();
-    if (sha256 == null || sha256.isEmpty) {
-      return const UpdateActionResult.failure(
-        code: UpdateErrorCode.missingRequiredField,
-        message: 'sha256 is required before opening installers.',
-      );
-    }
-
     if (!_supportsPlatform(platform) ||
         !_supportsInstallerType(platform, action.installerType)) {
       return const UpdateActionResult.failure(
