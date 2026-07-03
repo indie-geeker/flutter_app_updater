@@ -104,12 +104,43 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
 
   String _installerPath(OpenInstallerAction action) {
     final extension = _extensionFor(action.installerType);
-    final fileName = action.installerUrl.pathSegments.isNotEmpty
-        ? action.installerUrl.pathSegments.last
-        : 'installer.$extension';
-    final normalizedFileName =
-        fileName.contains('.') ? fileName : '$fileName.$extension';
-    return '${downloadDirectory.path}/$normalizedFileName';
+    final fileName = _safeInstallerFileName(action, extension);
+    final separator = Platform.pathSeparator;
+    final directory = downloadDirectory.path.endsWith(separator)
+        ? downloadDirectory.path.substring(
+            0,
+            downloadDirectory.path.length - 1,
+          )
+        : downloadDirectory.path;
+    return '$directory$separator$fileName';
+  }
+
+  String _safeInstallerFileName(
+    OpenInstallerAction action,
+    String extension,
+  ) {
+    final pathSegments = action.installerUrl.pathSegments;
+    final decodedFileName = pathSegments.isEmpty ? '' : pathSegments.last;
+    if (_isSafeFileName(decodedFileName)) {
+      return decodedFileName.contains('.')
+          ? decodedFileName
+          : '$decodedFileName.$extension';
+    }
+
+    final normalizedSha256 = action.sha256.toLowerCase().trim();
+    final prefix = normalizedSha256.length >= 12
+        ? normalizedSha256.substring(0, 12)
+        : normalizedSha256;
+    return 'installer-$prefix.$extension';
+  }
+
+  bool _isSafeFileName(String value) {
+    if (value.isEmpty || value == '.' || value == '..') {
+      return false;
+    }
+    return !value.contains('/') &&
+        !value.contains(r'\') &&
+        !value.contains(RegExp(r'[\x00-\x1F\x7F]'));
   }
 
   String _extensionFor(InstallerType installerType) {

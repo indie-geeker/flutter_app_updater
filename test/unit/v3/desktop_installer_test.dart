@@ -23,6 +23,10 @@ void main() {
   });
 
   tearDown(() async {
+    final escapedFile = File('${tempDir.parent.path}/evil.dmg');
+    if (await escapedFile.exists()) {
+      await escapedFile.delete();
+    }
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
@@ -121,6 +125,52 @@ void main() {
 
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.platformNotSupported);
+    });
+
+    test('sanitizes unsafe decoded installer URL file names', () async {
+      final bytes = utf8.encode('mac-installer');
+      final sha256 = _sha256(bytes);
+      final cases = [
+        Uri.parse('https://example.com/..%2Fevil.dmg'),
+        Uri.parse('https://example.com/%2Ftmp%2Fevil.dmg'),
+        Uri.parse('https://example.com/a%2Fb.dmg'),
+      ];
+
+      for (final installerUrl in cases) {
+        client.enqueue(
+          PackageDownloadResponse(
+            statusCode: 200,
+            headers: const {},
+            bytes: bytes,
+          ),
+        );
+
+        final result = await DesktopInstallerExecutor(
+          platform: TargetPlatform.macOS,
+          platformChannel: platform,
+          client: client,
+          downloadDirectory: tempDir,
+        ).perform(
+          _installer(
+            installerUrl: installerUrl,
+            installerType: InstallerType.dmg,
+            sha256: sha256,
+          ),
+        );
+
+        final openedInstaller = platform.openedInstallers.removeLast();
+
+        expect(result.isSuccess, isTrue);
+        expect(
+          openedInstaller,
+          '${tempDir.path}${Platform.pathSeparator}'
+          'installer-${sha256.substring(0, 12)}.dmg',
+        );
+        expect(
+          File(openedInstaller).absolute.path,
+          startsWith('${tempDir.absolute.path}${Platform.pathSeparator}'),
+        );
+      }
     });
   });
 }
