@@ -22,7 +22,7 @@ class PackageDownloadResult {
   const PackageDownloadResult.success({
     required File file,
     required int downloadedBytes,
-    required String sha256,
+    String? sha256,
   }) : this._(
           isSuccess: true,
           file: file,

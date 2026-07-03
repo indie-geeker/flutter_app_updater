@@ -76,6 +76,35 @@ void main() {
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
     });
+
+    test('downloads package actions without SHA-256', () async {
+      final bytes = utf8.encode('package bytes');
+      final action = DownloadPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final executor = DownloadPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(
+          client: _FakePackageClient(
+            PackageDownloadResponse(
+              statusCode: 200,
+              headers: const {},
+              bytes: Stream.value(bytes),
+            ),
+          ),
+        ),
+      );
+
+      final result = await executor.perform(action);
+
+      expect(result.isSuccess, isTrue);
+      expect(result.file, isNotNull);
+      expect(result.file!.path, endsWith('${Platform.pathSeparator}app.apk'));
+      expect(await result.file!.readAsBytes(), bytes);
+      expect(result.downloadedBytes, bytes.length);
+      expect(result.sha256, isNull);
+    });
   });
 }
 

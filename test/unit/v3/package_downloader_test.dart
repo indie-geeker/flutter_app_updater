@@ -51,18 +51,31 @@ void main() {
       );
     });
 
-    test('rejects missing SHA-256', () async {
+    test('downloads packages without SHA-256', () async {
+      final bytes = utf8.encode('package-without-hash');
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream.value(bytes),
+        ),
+      );
+
       final result = await PackageDownloader(client: client).download(
-        action: _action(sha256: ''),
+        action: DownloadPackageAction(
+          packageUrl: Uri.parse('https://example.com/app.apk'),
+          packageType: PackageType.apk,
+        ),
         savePath: _path('app.apk'),
       );
 
-      expect(result.isSuccess, isFalse);
-      expect(result.code, UpdateErrorCode.missingRequiredField);
-      expect(client.requests, isEmpty);
+      expect(result.isSuccess, isTrue);
+      expect(result.file?.readAsStringSync(), 'package-without-hash');
+      expect(result.sha256, isNull);
+      expect(client.requests.single.url, Uri.parse('https://example.com/app.apk'));
     });
 
-    test('rejects hash mismatch', () async {
+    test('rejects hash mismatch only when SHA-256 is provided', () async {
       client.enqueue(
         PackageDownloadResponse(
           statusCode: 200,

@@ -91,13 +91,7 @@ class PackageDownloader {
     required DownloadPackageAction action,
     required String savePath,
   }) async {
-    final expectedSha256 = action.sha256?.trim().toLowerCase();
-    if (expectedSha256 == null || expectedSha256.isEmpty) {
-      return const PackageDownloadResult.failure(
-        code: UpdateErrorCode.missingRequiredField,
-        message: 'sha256 is required for package downloads.',
-      );
-    }
+    final expectedSha256 = _normalizedSha256(action.sha256);
 
     final targetFile = File(savePath);
     final partialFile = File('$savePath.download');
@@ -149,15 +143,18 @@ class PackageDownloader {
         metadataFile: metadataFile,
       );
 
-      final actualSha256 = await _sha256Of(partialFile);
-      if (actualSha256 != expectedSha256) {
-        if (await partialFile.exists()) {
-          await partialFile.delete();
+      String? actualSha256;
+      if (expectedSha256 != null) {
+        actualSha256 = await _sha256Of(partialFile);
+        if (actualSha256 != expectedSha256) {
+          if (await partialFile.exists()) {
+            await partialFile.delete();
+          }
+          return const PackageDownloadResult.failure(
+            code: UpdateErrorCode.packageHashMismatch,
+            message: 'Package SHA-256 does not match.',
+          );
         }
-        return const PackageDownloadResult.failure(
-          code: UpdateErrorCode.packageHashMismatch,
-          message: 'Package SHA-256 does not match.',
-        );
       }
 
       if (await targetFile.exists()) {
@@ -248,6 +245,14 @@ class PackageDownloader {
     return crypto.sha256.bind(file.openRead()).first.then((digest) {
       return digest.toString().toLowerCase();
     });
+  }
+
+  String? _normalizedSha256(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
   }
 }
 
