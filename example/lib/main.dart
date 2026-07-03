@@ -3,7 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_app_updater/flutter_app_updater.dart';
+// ignore: implementation_imports
+import 'package:flutter_app_updater/src/updater.dart';
 
 void main() {
   runApp(const MyApp());

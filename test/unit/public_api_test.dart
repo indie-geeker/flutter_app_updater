@@ -1,24 +1,59 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('public library exports documented integration types', () {
-    final updater = FlutterAppUpdater(currentVersion: '1.0.0');
-    final updateInfo = UpdateInfo(
-      newVersion: '2.0.0',
-      downloadUrl: 'https://example.com/app.apk',
-      changelog: 'Bug fixes',
+  test('public library exports v3 core model types', () {
+    final source = UpdateSource.manifest(
+      manifestUrl: Uri.parse('https://example.com/app-updates.json'),
     );
-    const error = UpdateError(code: 'TEST', message: 'test');
-    const progress = UpdateProgress(downloaded: 1, total: 2);
-    const retryStrategy = RetryStrategy.disabled;
+    final updater = AppUpdater(source: source);
+    const policy = UpdatePolicy(
+      level: UpdatePolicyLevel.recommended,
+      minSupportedVersion: '1.5.0',
+    );
+    final storeAction = OpenStoreAction(
+      store: StoreKind.googlePlay,
+      storeUrl: Uri.parse(
+        'https://play.google.com/store/apps/details?id=com.example.app',
+      ),
+    );
+    final marketAction = OpenAndroidMarketAction(
+      market: AndroidMarketKind.huawei,
+      targetPackageName: 'com.example.app',
+      fallbackUrl: Uri.parse('https://appgallery.huawei.com/app/example'),
+    );
+    final packageAction = DownloadPackageAction(
+      packageUrl: Uri.parse('https://example.com/app.apk'),
+      packageType: PackageType.apk,
+      sha256: 'a' * 64,
+    );
+    final installerAction = OpenInstallerAction(
+      installerUrl: Uri.parse('https://example.com/app.msi'),
+      installerType: InstallerType.msi,
+      sha256: 'b' * 64,
+    );
+    final candidate = UpdateCandidate(
+      version: '2.0.0',
+      channel: 'stable',
+      platform: TargetPlatform.android,
+      releaseNotes: 'Bug fixes',
+      policy: policy,
+      actions: [
+        storeAction,
+        marketAction,
+        packageAction,
+        installerAction,
+      ],
+    );
 
-    expect(updater.controller, isA<UpdateController>());
-    expect(updateInfo.newVersion, '2.0.0');
-    expect(error.code, 'TEST');
-    expect(progress.progressPercentage, 50);
-    expect(retryStrategy.maxAttempts, 0);
-    expect(UpdateStatus.idle.name, 'idle');
-    expect(VersionComparator.hasUpdate('1.0.0', '2.0.0'), isTrue);
+    expect(updater.source, same(source));
+    expect(candidate.policy, same(policy));
+    expect(candidate.actions, [
+      storeAction,
+      marketAction,
+      packageAction,
+      installerAction,
+    ]);
   });
 }
