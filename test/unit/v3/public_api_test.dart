@@ -76,24 +76,37 @@ void main() {
   test('README documents v3 without legacy fields', () {
     final readme = File('README.md').readAsStringSync();
 
-    expect(readme, contains('v3 is a breaking update'));
-    expect(readme, contains('await updater.perform(recommendedAction)'));
+    expect(readme, contains('AppUpdater.manifest'));
+    expect(readme, contains('checkAndPrepare'));
+    expect(readme, contains('performRecommended'));
+    expect(readme, contains('downloadAndInstallPackage'));
+    expect(readme, contains('Play In-App Updates'));
+    expect(readme, contains('Planned'));
     expect(
         readme, isNot(contains('Remote manifest fetching is not implemented')));
     expect(readme, contains('storeUrl'));
     expect(readme, contains('packageUrl'));
     expect(readme, contains('installerUrl'));
+    expect(readme, isNot(contains('required SHA-256')));
+    expect(readme, isNot(contains('signature')));
     expect(readme, isNot(contains('downloadUrl')));
     expect(readme, isNot(contains('artifactUri')));
     expect(readme.toLowerCase(), isNot(contains('md5')));
   });
 
-  test('example demonstrates check and perform through the public API', () {
+  test('example demonstrates the convenience flow through the public API', () {
     final example = File('example/lib/main.dart').readAsStringSync();
 
     expect(example, contains('UpdateSource.staticManifest'));
-    expect(example, contains('await _updater.check()'));
-    expect(example, contains('await _updater.perform(recommendedAction)'));
-    expect(example, contains('DownloadPackageExecutor'));
+    expect(example, contains('await _updater.checkAndPrepare()'));
+    expect(example, contains('await _updater.performRecommended'));
+    expect(example, contains('DownloadAndInstallPackageAction'));
+  });
+
+  test('publish archive excludes internal implementation plans', () {
+    final pubignore = File('.pubignore').readAsStringSync();
+
+    expect(pubignore, contains('doc/plans/'));
+    expect(pubignore, contains('docs/plans/'));
   });
 }

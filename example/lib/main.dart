@@ -27,11 +27,7 @@ class _MyAppState extends State<MyApp> {
       architecture: 'arm64',
       channel: 'stable',
     ),
-    executors: [
-      StoreUpdateExecutor(),
-      AndroidMarketExecutor(),
-      DownloadPackageExecutor(downloadDirectory: Directory.systemTemp.path),
-    ],
+    downloadDirectory: Directory.systemTemp.path,
   );
 
   late final UpdateManifest _previewManifest = UpdateManifest(
@@ -51,6 +47,11 @@ class _MyAppState extends State<MyApp> {
     releasedAt: DateTime.utc(2026, 7, 3, 10),
     policy: const UpdatePolicy(level: UpdatePolicyLevel.recommended),
     actions: [
+      DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+        packageSizeBytes: 25600000,
+      ),
       OpenStoreAction(
         store: StoreKind.googlePlay,
         storeUrl: Uri.parse(
@@ -62,39 +63,33 @@ class _MyAppState extends State<MyApp> {
         targetPackageName: 'com.example.app',
         fallbackUrl: Uri.parse('https://app.mi.com/details?id=com.example.app'),
       ),
-      DownloadPackageAction(
-        packageUrl: Uri.parse('https://example.com/app.apk'),
-        packageType: PackageType.apk,
-        packageSizeBytes: 25600000,
-        sha256: 'a' * 64,
-      ),
     ],
   );
 
   String _status = 'Ready';
-  UpdateCheckResult? _result;
+  UpdateFlowResult? _result;
 
   Future<void> _checkForUpdate() async {
     setState(() {
       _status = 'Checking for updates';
     });
 
-    final result = await _updater.check();
+    final result = await _updater.checkAndPrepare();
 
     setState(() {
       _result = result;
       _status = switch (result) {
-        UpdateAvailable(:final candidate, :final recommendedAction) =>
+        PreparedUpdateAvailable(:final candidate, :final recommendedAction) =>
           'Update ${candidate.version}: ${_labelFor(recommendedAction)}',
-        UpdateNotAvailable() => 'Already current',
-        UpdateCheckFailed(:final code) => 'Failed: ${code.value}',
+        PreparedUpdateNotAvailable() => 'Already current',
+        PreparedUpdateCheckFailed(:final code) => 'Failed: ${code.value}',
       };
     });
   }
 
   Future<void> _performRecommendedAction() async {
     final result = _result;
-    if (result is! UpdateAvailable) {
+    if (result is! PreparedUpdateAvailable) {
       return;
     }
 
@@ -103,7 +98,7 @@ class _MyAppState extends State<MyApp> {
       _status = 'Running ${_labelFor(recommendedAction)}';
     });
 
-    final actionResult = await _updater.perform(recommendedAction);
+    final actionResult = await _updater.performRecommended(result);
 
     setState(() {
       _status = actionResult.isSuccess
@@ -131,7 +126,7 @@ class _MyAppState extends State<MyApp> {
               onPressed: _checkForUpdate,
               child: const Text('Check for updates'),
             ),
-            if (_result case UpdateAvailable()) ...[
+            if (_result case PreparedUpdateAvailable()) ...[
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: _performRecommendedAction,
@@ -148,7 +143,8 @@ class _MyAppState extends State<MyApp> {
                 title: Text(_labelFor(action)),
                 subtitle: Text(_descriptionFor(action)),
               ),
-            if (_result case UpdateAvailable(:final recommendedAction)) ...[
+            if (_result
+                case PreparedUpdateAvailable(:final recommendedAction)) ...[
               const Divider(),
               ListTile(
                 title: const Text('Recommended action'),
@@ -168,6 +164,9 @@ class _MyAppState extends State<MyApp> {
       OpenAndroidMarketAction(:final market) => 'Open ${market.name}',
       DownloadPackageAction(:final packageType) =>
         'Download ${packageType.name}',
+      InstallPackageAction(:final packageType) => 'Install ${packageType.name}',
+      DownloadAndInstallPackageAction(:final packageType) =>
+        'Download and install ${packageType.name}',
       OpenInstallerAction(:final installerType) =>
         'Open ${installerType.name} installer',
     };
@@ -180,6 +179,12 @@ class _MyAppState extends State<MyApp> {
       OpenAndroidMarketAction(:final targetPackageName, :final fallbackUrl) =>
         '$targetPackageName ${fallbackUrl ?? ''}',
       DownloadPackageAction(:final packageUrl, :final packageSizeBytes) =>
+        '$packageUrl ${packageSizeBytes ?? ''} bytes',
+      InstallPackageAction(:final packagePath) => packagePath,
+      DownloadAndInstallPackageAction(
+        :final packageUrl,
+        :final packageSizeBytes,
+      ) =>
         '$packageUrl ${packageSizeBytes ?? ''} bytes',
       OpenInstallerAction(:final installerUrl, :final installerSizeBytes) =>
         '$installerUrl ${installerSizeBytes ?? ''} bytes',

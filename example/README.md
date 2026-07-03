@@ -1,16 +1,18 @@
-# flutter_app_updater_example
+# Flutter App Updater Example
 
-Demonstrates how to use the flutter_app_updater plugin.
+This example demonstrates the v3 UI-free update flow:
 
-## Getting Started
+- build an `AppUpdater` with a static preview manifest
+- call `checkAndPrepare()`
+- show the recommended action
+- call `performRecommended()` from app UI
+- list all actions in the candidate release
 
-This project is a starting point for a Flutter application.
+Run it from the package root:
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+cd example
+flutter run
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The preview manifest is in `lib/main.dart`. Replace the static manifest with `AppUpdater.manifest(...)` when testing against your own remote manifest.

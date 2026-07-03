@@ -1,16 +1,15 @@
 # Flutter App Updater
 
-Flutter App Updater v3 is a breaking update for modeling application updates as explicit actions.
+Flutter App Updater is a UI-free v3 update foundation for commercial Flutter apps. It checks a manifest, selects the right release for the current app, and performs explicit update actions.
 
-The package is centered on:
+Stable v3 scope:
 
-- `AppUpdater`
-- `UpdateSource`
-- `UpdateCandidate`
-- `UpdatePolicy`
-- `UpdateAction`
+- Android: Google Play URL, Chinese Android markets, APK download, APK install, and download then install.
+- iOS: App Store URL.
+- macOS: Mac App Store URL, DMG and ZIP installer download then open.
+- Windows: MSIX, MSI, and EXE installer download then open.
 
-v3 describes what the app should do next: open an official store, open a Chinese Android market, download a self-hosted package, or open a desktop installer.
+Planned scope: Play In-App Updates, OHOS, and Linux installer flows.
 
 ## Install
 
@@ -21,37 +20,34 @@ dependencies:
 
 ## Quick Start
 
+Use `AppUpdater.manifest` for the default integration path:
+
 ```dart
-final updater = AppUpdater(
-  source: UpdateSource.manifest(
-    manifestUrl: Uri.parse('https://example.com/app-updates.json'),
-  ),
-  selector: const UpdateSelector(
-    installedVersion: '1.0.0',
-    platform: TargetPlatform.android,
-    architecture: 'arm64',
-    channel: 'stable',
-  ),
+final updater = AppUpdater.manifest(
+  manifestUrl: Uri.parse('https://example.com/app-updates.json'),
+  installedVersion: '1.0.0',
+  platform: defaultTargetPlatform,
+  architecture: 'arm64',
+  channel: 'stable',
+  downloadDirectory: downloadDirectory,
 );
-```
 
-`check()` always returns a structured result:
-
-```dart
-final result = await updater.check();
+final result = await updater.checkAndPrepare();
 
 switch (result) {
-  case UpdateAvailable(:final recommendedAction):
-    final actionResult = await updater.perform(recommendedAction);
+  case PreparedUpdateAvailable():
+    final actionResult = await updater.performRecommended(result);
     if (!actionResult.isSuccess) {
       debugPrint('${actionResult.code}: ${actionResult.message}');
     }
-  case UpdateNotAvailable():
+  case PreparedUpdateNotAvailable():
     debugPrint('Already current');
-  case UpdateCheckFailed(:final code, :final message):
+  case PreparedUpdateCheckFailed(:final code, :final message):
     debugPrint('$code: $message');
 }
 ```
+
+The package does not show UI. Use the prepared result to drive your own dialog, sheet, page, or silent policy.
 
 ## Manifest v3
 
@@ -69,16 +65,15 @@ switch (result) {
       "releaseNotes": "Bug fixes",
       "releasedAt": "2026-07-03T10:00:00Z",
       "policy": {
-        "level": "required",
+        "level": "recommended",
         "minSupportedVersion": "1.5.0"
       },
       "actions": [
         {
-          "type": "downloadPackage",
+          "type": "downloadAndInstallPackage",
           "packageUrl": "https://example.com/app.apk",
           "packageType": "apk",
-          "packageSizeBytes": 25600000,
-          "sha256": "..."
+          "packageSizeBytes": 25600000
         }
       ]
     }
@@ -86,7 +81,7 @@ switch (result) {
 }
 ```
 
-Use direct field names:
+Direct field names:
 
 - `storeUrl`
 - `packageUrl`
@@ -97,9 +92,11 @@ Use direct field names:
 - `releasedAt`
 - `sha256`
 
-## Official Store Updates
+`sha256` is optional. When it is present, the downloaded file is checked before the action continues. When it is absent, the package still downloads and installs.
 
-Use `OpenStoreAction` for App Store, Mac App Store, or Google Play fallback pages.
+## Recipes
+
+### Official Store
 
 ```json
 {
@@ -109,18 +106,9 @@ Use `OpenStoreAction` for App Store, Mac App Store, or Google Play fallback page
 }
 ```
 
-Use `PlayInAppUpdateAction` when an Android app is distributed through Google Play:
+Use `appStore` for iOS and `macAppStore` for macOS.
 
-```json
-{
-  "type": "playInAppUpdate",
-  "mode": "immediate"
-}
-```
-
-## Chinese Android Markets
-
-Use `OpenAndroidMarketAction` for Huawei AppGallery, Honor App Market, Xiaomi GetApps, OPPO App Market, vivo App Store, Meizu App Store, Tencent MyApp, or generic Android market pages.
+### Chinese Android Markets
 
 ```json
 {
@@ -131,72 +119,115 @@ Use `OpenAndroidMarketAction` for Huawei AppGallery, Honor App Market, Xiaomi Ge
 }
 ```
 
-This opens a market page or update page. It does not promise automatic installation.
+Supported market names: `huawei`, `honor`, `xiaomi`, `oppo`, `vivo`, `meizu`, `tencentMyApp`, and `generic`.
 
-## Direct Package Updates
+### Self-Hosted Android APK
 
-Use `DownloadPackageAction` for self-hosted package distribution:
+Use one action when you want the package to download and then start Android installation:
+
+```json
+{
+  "type": "downloadAndInstallPackage",
+  "packageUrl": "https://example.com/app.apk",
+  "packageType": "apk",
+  "packageSizeBytes": 25600000,
+  "sha256": "optional-file-hash"
+}
+```
+
+Use separate actions when your app wants to download now and install later:
 
 ```json
 {
   "type": "downloadPackage",
   "packageUrl": "https://example.com/app.apk",
-  "packageType": "apk",
-  "packageSizeBytes": 25600000,
-  "sha256": "..."
+  "packageType": "apk"
 }
 ```
 
-Package downloads verify SHA-256 before the file is accepted. Resume metadata stores the package URL, validators, and downloaded byte count in a sidecar file.
+```json
+{
+  "type": "installPackage",
+  "packagePath": "/local/path/app.apk",
+  "packageType": "apk"
+}
+```
 
-## Desktop Installer Updates
+### iOS App Store
 
-Use `OpenInstallerAction` for desktop installer flows:
+```json
+{
+  "type": "openStore",
+  "store": "appStore",
+  "storeUrl": "https://apps.apple.com/app/id123456789"
+}
+```
+
+### macOS and Windows Installers
 
 ```json
 {
   "type": "openInstaller",
   "installerUrl": "https://example.com/app.msi",
   "installerType": "msi",
-  "installerSizeBytes": 82000000,
-  "sha256": "..."
+  "installerSizeBytes": 82000000
 }
 ```
 
-The first v3 desktop path downloads, verifies, and opens the installer. Silent replacement, background daemons, and relaunch orchestration are out of scope.
+Supported stable installer types:
+
+- Windows: `msix`, `msi`, `exe`
+- macOS: `dmg`, `zip`
 
 ## Platform Matrix
 
-| Platform | Official store | Chinese markets | Direct package | Desktop installer |
-| --- | --- | --- | --- | --- |
-| Android | Google Play URL, Play in-app entry point | Supported | APK package flow | Not applicable |
-| iOS | App Store URL | Not applicable | File download only | Not applicable |
-| macOS | Mac App Store URL | Not applicable | File download only | DMG, ZIP |
-| Windows | Store URL through system handler | Not applicable | File download only | MSIX, MSI, EXE |
-| Linux | Planned | Not applicable | File download only | Planned |
+| Platform | Official store | Chinese markets | Package download | Package install | Desktop installer | Play In-App Updates |
+| --- | --- | --- | --- | --- | --- | --- |
+| Android | Stable | Stable | Stable | Stable | Not applicable | Planned |
+| iOS | Stable | Not applicable | Unsupported | Unsupported | Not applicable | Not applicable |
+| macOS | Stable | Not applicable | Stable | Unsupported | Stable | Not applicable |
+| Windows | URL handler support | Not applicable | Stable | Unsupported | Stable | Not applicable |
+| OHOS | Planned | Planned | Planned | Planned | Not applicable | Not applicable |
+| Linux | Planned | Not applicable | Planned | Planned | Planned | Not applicable |
 
-## Security Model
+Unsupported actions return structured failures instead of throwing platform exceptions through the public API.
 
-- Package and installer actions require SHA-256.
-- The manifest parser rejects unsupported schema versions and unsupported action types.
-- Package resume only uses Range when the saved validator still matches.
-- Failures are structured with `UpdateErrorCode`.
-- v3 does not collapse failed checks into `null`.
+## Error Handling
 
-## Migration
+`checkAndPrepare()` returns:
 
-v3 is not API-compatible with v2. Replace the old single-update-info flow with candidates, policies, and explicit actions.
+- `PreparedUpdateAvailable`
+- `PreparedUpdateNotAvailable`
+- `PreparedUpdateCheckFailed`
 
-## Verification
+`perform()` and `performRecommended()` return `UpdateActionResult`.
 
-Maintainers should run:
+Useful error codes include:
+
+- `MANIFEST_FETCH_FAILED`
+- `MANIFEST_INVALID`
+- `NO_SUPPORTED_ACTION`
+- `STORE_NOT_AVAILABLE`
+- `MARKET_NOT_AVAILABLE`
+- `PACKAGE_DOWNLOAD_FAILED`
+- `PACKAGE_HASH_MISMATCH`
+- `PACKAGE_INSTALL_PERMISSION_REQUIRED`
+- `PACKAGE_FILE_NOT_FOUND`
+- `PACKAGE_INSTALL_FAILED`
+- `INSTALLER_OPEN_FAILED`
+- `PLATFORM_NOT_SUPPORTED`
+
+## Maintainer Verification
 
 ```bash
+dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
-flutter analyze example
 dart doc --dry-run
 flutter pub publish --dry-run
+flutter analyze example
+(cd example && flutter test)
+(cd example && flutter build apk --debug)
 ```
 
 ## License

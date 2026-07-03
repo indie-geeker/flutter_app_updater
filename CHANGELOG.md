@@ -1,6 +1,9 @@
 ## 3.0.0 - 2026-07-03
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
+* **Breaking**: Make package and installer hashes optional; hashes are verified only when supplied.
+* **Feature**: Add package install and download-then-install actions for Android self-hosted APK flows.
+* **Feature**: Add `AppUpdater.manifest`, `checkAndPrepare`, and `performRecommended` as the default UI-free integration flow.
 * **Feature**: Add manifest v3 parsing, validation, and release selection.
 * **Feature**: Add official store actions for App Store, Mac App Store, Google Play fallback URLs, and a Play in-app update entry point.
 * **Feature**: Add Chinese Android market descriptors and Android market opening support.
