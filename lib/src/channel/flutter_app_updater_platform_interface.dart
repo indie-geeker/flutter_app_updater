@@ -57,4 +57,10 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
       'startPlayInAppUpdate() has not been implemented.',
     );
   }
+
+  Future<void> openInstaller({
+    required String installerPath,
+  }) {
+    throw UnimplementedError('openInstaller() has not been implemented.');
+  }
 }

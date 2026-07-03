@@ -24,6 +24,8 @@ public class FlutterAppUpdaterPlugin: NSObject, FlutterPlugin {
         message: "Google Play In-App Updates are unavailable on macOS",
         details: nil
       ))
+    case "openInstaller":
+      openInstaller(call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -50,6 +52,31 @@ public class FlutterAppUpdaterPlugin: NSObject, FlutterPlugin {
       result(FlutterError(
         code: "STORE_NOT_AVAILABLE",
         message: "No application can open the store URL",
+        details: nil
+      ))
+    }
+  }
+
+  private func openInstaller(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let installerPath = arguments["installerPath"] as? String
+    else {
+      result(FlutterError(
+        code: "INVALID_ARGUMENT",
+        message: "installerPath is required",
+        details: nil
+      ))
+      return
+    }
+
+    let url = URL(fileURLWithPath: installerPath)
+    if NSWorkspace.shared.open(url) {
+      result(true)
+    } else {
+      result(FlutterError(
+        code: "INSTALLER_OPEN_FAILED",
+        message: "Failed to open installer",
         details: nil
       ))
     }

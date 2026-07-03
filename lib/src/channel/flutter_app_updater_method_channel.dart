@@ -55,4 +55,13 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
       'mode': mode,
     });
   }
+
+  @override
+  Future<void> openInstaller({
+    required String installerPath,
+  }) async {
+    await methodChannel.invokeMethod<void>('openInstaller', {
+      'installerPath': installerPath,
+    });
+  }
 }

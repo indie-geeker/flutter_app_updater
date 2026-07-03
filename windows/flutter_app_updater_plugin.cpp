@@ -11,9 +11,47 @@
 #include <flutter/standard_method_codec.h>
 
 #include <memory>
+#include <optional>
 #include <sstream>
+#include <string>
 
 namespace flutter_app_updater {
+
+namespace {
+
+std::optional<std::string> GetStringArgument(
+    const flutter::EncodableValue* arguments,
+    const char* key) {
+  if (arguments == nullptr ||
+      !std::holds_alternative<flutter::EncodableMap>(*arguments)) {
+    return std::nullopt;
+  }
+
+  const auto& map = std::get<flutter::EncodableMap>(*arguments);
+  auto iterator = map.find(flutter::EncodableValue(std::string(key)));
+  if (iterator == map.end() ||
+      !std::holds_alternative<std::string>(iterator->second)) {
+    return std::nullopt;
+  }
+
+  return std::get<std::string>(iterator->second);
+}
+
+std::wstring Utf8ToWide(const std::string& value) {
+  if (value.empty()) {
+    return std::wstring();
+  }
+
+  const int size_needed = MultiByteToWideChar(
+      CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), nullptr, 0);
+  std::wstring result(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(),
+                      static_cast<int>(value.size()), result.data(),
+                      size_needed);
+  return result;
+}
+
+}  // namespace
 
 // static
 void FlutterAppUpdaterPlugin::RegisterWithRegistrar(
@@ -55,6 +93,23 @@ void FlutterAppUpdaterPlugin::HandleMethodCall(
              method_call.method_name().compare("getAppVersionCode") == 0 ||
              method_call.method_name().compare("getDownloadPath") == 0) {
     result->Success(flutter::EncodableValue());
+  } else if (method_call.method_name().compare("openInstaller") == 0) {
+    auto installer_path =
+        GetStringArgument(method_call.arguments(), "installerPath");
+    if (!installer_path.has_value() || installer_path->empty()) {
+      result->Error("INVALID_ARGUMENT", "installerPath is required");
+      return;
+    }
+
+    auto wide_path = Utf8ToWide(installer_path.value());
+    HINSTANCE shell_result = ShellExecuteW(nullptr, L"open", wide_path.c_str(),
+                                           nullptr, nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<intptr_t>(shell_result) <= 32) {
+      result->Error("INSTALLER_OPEN_FAILED", "Failed to open installer");
+      return;
+    }
+
+    result->Success(flutter::EncodableValue(true));
   } else {
     result->NotImplemented();
   }
