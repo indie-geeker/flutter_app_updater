@@ -1,234 +1,201 @@
 # Flutter App Updater
 
-轻量级 Flutter 应用更新基础库，适合独立开发者在自有分发场景中接入版本检查、更新提示、文件下载和 Android APK 安装。
+Flutter App Updater v3 is a breaking update for modeling application updates as explicit actions.
 
-## 能力范围
+The package is centered on:
 
-- 自定义更新接口字段映射
-- 结构化区分“有更新 / 无更新 / 检查失败”
-- 默认更新弹窗，也支持完全自定义 UI
-- 下载进度、暂停、恢复、取消
-- Range 断点续传、重试策略、MD5 校验
-- Android APK 安装
-- Android / iOS / macOS 应用版本读取
+- `AppUpdater`
+- `UpdateSource`
+- `UpdateCandidate`
+- `UpdatePolicy`
+- `UpdateAction`
 
-## 平台支持
+v3 describes what the app should do next: open an official store, open a Chinese Android market, download a self-hosted package, or open a desktop installer.
 
-| 平台 | 检查更新 | 下载文件 | 自动读取应用版本 | 安装更新 |
-| --- | --- | --- | --- | --- |
-| Android | 支持 | 支持 | 支持 | 支持 APK |
-| iOS | 支持 | 支持 | 支持 | 不支持应用内安装 |
-| macOS | 支持 | 支持 | 支持 | 不支持 |
-| Windows | 支持 | 支持 | 需传 `currentVersion` | 不支持 |
-| OpenHarmony | 支持 | 支持 | 需传 `currentVersion` | 不支持 |
-
-> iOS 应用更新通常应跳转 App Store、TestFlight 或你的企业分发页面，本库不会绕过系统安装策略。
-
-## 安装
+## Install
 
 ```yaml
 dependencies:
-  flutter_app_updater: ^2.1.0
+  flutter_app_updater: ^3.0.0
 ```
 
-```bash
-flutter pub get
-```
-
-## 服务端响应示例
-
-默认字段：
-
-```json
-{
-  "version": "2.0.0",
-  "downloadUrl": "https://example.com/app-2.0.0.apk",
-  "changelog": "Bug fixes and performance improvements",
-  "isForceUpdate": false,
-  "fileSize": 25600000,
-  "md5": "8b1a9953c4611296a827abf8c47804d7",
-  "publishDate": "2026-07-02T10:00:00Z"
-}
-```
-
-`version` 和 `downloadUrl` 是必填字段。缺失或为空会返回 `INVALID_UPDATE_INFO` 错误。
-
-## 基本使用
+## Quick Start
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_app_updater/flutter_app_updater.dart';
-
-final updater = FlutterAppUpdater(
-  updateUrl: 'https://your-api.com/update.json',
-);
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await updater.init();
-  runApp(const MyApp());
-}
-
-Future<void> checkUpdate(BuildContext context) async {
-  final result = await updater.checkForUpdateResult(forceCheck: true);
-
-  if (result.isAvailable) {
-    await updater.showUpdateDialog(
-      context: context,
-      updateInfo: result.updateInfo!,
-    );
-    return;
-  }
-
-  if (result.isFailed) {
-    debugPrint('检查更新失败: ${result.error}');
-    return;
-  }
-
-  debugPrint('已经是最新版本');
-}
-```
-
-如果只需要旧式返回值，也可以继续使用：
-
-```dart
-final updateInfo = await updater.checkForUpdate();
-```
-
-这个方法在“无更新”和“检查失败”时都会返回 `null`。新项目建议使用 `checkForUpdateResult()`。
-
-## 自定义字段
-
-```dart
-final updater = FlutterAppUpdater(
-  updateUrl: 'https://your-api.com/update.json',
-  versionKey: 'newVersionCode',
-  downloadUrlKey: 'apkUrl',
-  changeLogKey: 'updateMessage',
-  isForceUpdateKey: 'forceUpdate',
-);
-```
-
-## 自定义检查逻辑
-
-`onCheckUpdate` 返回一个 `Map<String, dynamic>`，之后仍会复用字段解析、版本比较和校验逻辑。
-
-```dart
-final updater = FlutterAppUpdater(
-  currentVersion: '1.0.0',
-  onCheckUpdate: () async {
-    final response = await customApiCall();
-    return {
-      'version': response.version,
-      'downloadUrl': response.apkUrl,
-      'changelog': response.releaseNotes,
-      'isForceUpdate': response.mandatory,
-    };
-  },
-);
-```
-
-## 自定义更新弹窗
-
-```dart
-await updater.showUpdateDialog(
-  context: context,
-  updateInfo: updateInfo,
-  dialogBuilder: (context, updateInfo) {
-    return AlertDialog(
-      title: Text('发现新版本 ${updateInfo.newVersion}'),
-      content: Text(updateInfo.changelog),
-      actions: [
-        if (!updateInfo.isForceUpdate)
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('稍后再说'),
-          ),
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(context, true);
-            await updater.downloadUpdate(autoInstall: true);
-          },
-          child: const Text('立即更新'),
-        ),
-      ],
-    );
-  },
-);
-```
-
-## 下载与安装
-
-```dart
-final file = await updater.downloadUpdate(
-  autoInstall: true,
-);
-```
-
-Android 下载完成后可以调用：
-
-```dart
-final installed = await updater.installUpdate();
-```
-
-Android 8.0+ 需要用户授权“安装未知来源应用”。如果未授权，安装会失败并返回 `INSTALL_PERMISSION_REQUIRED`。
-
-## 重试策略
-
-```dart
-final downloader = UpdateDownloader(
-  url: 'https://example.com/app.apk',
-  savePath: '/path/to/app.apk',
-  retryStrategy: RetryStrategy.fast,
-);
-
-final customDownloader = UpdateDownloader(
-  url: 'https://example.com/app.apk',
-  savePath: '/path/to/app.apk',
-  retryStrategy: const RetryStrategy(
-    maxAttempts: 5,
-    initialDelay: Duration(seconds: 2),
-    backoffFactor: 2.0,
-    maxDelay: Duration(minutes: 1),
-    enableJitter: true,
+final updater = AppUpdater(
+  source: UpdateSource.manifest(
+    manifestUrl: Uri.parse('https://example.com/app-updates.json'),
+  ),
+  selector: const UpdateSelector(
+    installedVersion: '1.0.0',
+    platform: TargetPlatform.android,
+    architecture: 'arm64',
+    channel: 'stable',
   ),
 );
 ```
 
-## 日志
+`check()` always returns a structured result:
 
 ```dart
-UpdateLogger.setLogLevel(LogLevel.error);
-UpdateLogger.setLogLevel(LogLevel.debug);
+final result = await updater.check();
+
+switch (result) {
+  case UpdateAvailable(:final candidate, :final recommendedAction):
+    debugPrint('Update ${candidate.version}: $recommendedAction');
+  case UpdateNotAvailable():
+    debugPrint('Already current');
+  case UpdateCheckFailed(:final code, :final message):
+    debugPrint('$code: $message');
+}
 ```
 
-## 错误码
+## Manifest v3
 
-常见错误：
+```json
+{
+  "schemaVersion": 3,
+  "appId": "com.example.app",
+  "channel": "stable",
+  "releases": [
+    {
+      "version": "2.0.0",
+      "buildNumber": "42",
+      "platform": "android",
+      "architecture": "arm64",
+      "releaseNotes": "Bug fixes",
+      "releasedAt": "2026-07-03T10:00:00Z",
+      "policy": {
+        "level": "required",
+        "minSupportedVersion": "1.5.0"
+      },
+      "actions": [
+        {
+          "type": "downloadPackage",
+          "packageUrl": "https://example.com/app.apk",
+          "packageType": "apk",
+          "packageSizeBytes": 25600000,
+          "sha256": "..."
+        }
+      ]
+    }
+  ]
+}
+```
 
-- `MISSING_VERSION`：未传入当前应用版本，且平台无法自动读取
-- `MISSING_URL`：未配置 `updateUrl` 或 `onCheckUpdate`
-- `INVALID_UPDATE_INFO`：服务端响应缺少必填字段
-- `INVALID_VERSION`：版本号格式不受支持
-- `NETWORK_ERROR`：网络连接失败
-- `SERVER_ERROR`：服务端响应异常
-- `DOWNLOAD_ERROR`：下载失败
-- `MD5_MISMATCH`：文件校验失败
-- `INSTALL_PERMISSION_REQUIRED`：Android 未授权安装 APK
-- `PLATFORM_NOT_SUPPORTED`：当前平台不支持安装
+Use direct field names:
 
-## 验证命令
+- `storeUrl`
+- `packageUrl`
+- `installerUrl`
+- `packageSizeBytes`
+- `installerSizeBytes`
+- `releaseNotes`
+- `releasedAt`
+- `sha256`
 
-维护者发布前应至少运行：
+## Official Store Updates
+
+Use `OpenStoreAction` for App Store, Mac App Store, or Google Play fallback pages.
+
+```json
+{
+  "type": "openStore",
+  "store": "googlePlay",
+  "storeUrl": "https://play.google.com/store/apps/details?id=com.example.app"
+}
+```
+
+Use `PlayInAppUpdateAction` when an Android app is distributed through Google Play:
+
+```json
+{
+  "type": "playInAppUpdate",
+  "mode": "immediate"
+}
+```
+
+## Chinese Android Markets
+
+Use `OpenAndroidMarketAction` for Huawei AppGallery, Honor App Market, Xiaomi GetApps, OPPO App Market, vivo App Store, Meizu App Store, Tencent MyApp, or generic Android market pages.
+
+```json
+{
+  "type": "openAndroidMarket",
+  "market": "xiaomi",
+  "targetPackageName": "com.example.app",
+  "fallbackUrl": "https://app.mi.com/details?id=com.example.app"
+}
+```
+
+This opens a market page or update page. It does not promise automatic installation.
+
+## Direct Package Updates
+
+Use `DownloadPackageAction` for self-hosted package distribution:
+
+```json
+{
+  "type": "downloadPackage",
+  "packageUrl": "https://example.com/app.apk",
+  "packageType": "apk",
+  "packageSizeBytes": 25600000,
+  "sha256": "..."
+}
+```
+
+Package downloads verify SHA-256 before the file is accepted. Resume metadata stores the package URL, validators, and downloaded byte count in a sidecar file.
+
+## Desktop Installer Updates
+
+Use `OpenInstallerAction` for desktop installer flows:
+
+```json
+{
+  "type": "openInstaller",
+  "installerUrl": "https://example.com/app.msi",
+  "installerType": "msi",
+  "installerSizeBytes": 82000000,
+  "sha256": "..."
+}
+```
+
+The first v3 desktop path downloads, verifies, and opens the installer. Silent replacement, background daemons, and relaunch orchestration are out of scope.
+
+## Platform Matrix
+
+| Platform | Official store | Chinese markets | Direct package | Desktop installer |
+| --- | --- | --- | --- | --- |
+| Android | Google Play URL, Play in-app entry point | Supported | APK package flow | Not applicable |
+| iOS | App Store URL | Not applicable | File download only | Not applicable |
+| macOS | Mac App Store URL | Not applicable | File download only | DMG, ZIP |
+| Windows | Store URL through system handler | Not applicable | File download only | MSIX, MSI, EXE |
+| Linux | Planned | Not applicable | File download only | Planned |
+
+## Security Model
+
+- Package and installer actions require SHA-256.
+- The manifest parser rejects unsupported schema versions and unsupported action types.
+- Package resume only uses Range when the saved validator still matches.
+- Failures are structured with `UpdateErrorCode`.
+- v3 does not collapse failed checks into `null`.
+
+## Migration
+
+v3 is not API-compatible with v2. Replace the old single-update-info flow with candidates, policies, and explicit actions.
+
+## Verification
+
+Maintainers should run:
 
 ```bash
 flutter analyze
 flutter test
 flutter analyze example
-(cd example && flutter build apk --debug)
+dart doc --dry-run
 flutter pub publish --dry-run
 ```
 
-## 许可
+## License
 
 Apache-2.0

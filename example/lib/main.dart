@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'dart:async';
-
-import 'package:flutter/services.dart';
-// ignore: implementation_imports
-import 'package:flutter_app_updater/src/updater.dart';
+import 'package:flutter_app_updater/flutter_app_updater.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,111 +13,137 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
-  String _appVersionCode = 'Unknown';
-  String _appVersionName = 'Unknown';
-  final _flutterAppUpdaterPlugin = FlutterAppUpdater(
-      updateUrl: "https://power.earthg.cn/update/update.json",
-      versionKey: "newVersionCode",
-      downloadUrlKey: "apkUrl",
-      changeLogKey: "updateMessage",
-      isForceUpdateKey: "forceUpdate"
+  static final _manifestUrl = Uri.parse(
+    'https://example.com/app-updates.json',
   );
 
+  late final AppUpdater _updater = AppUpdater(
+    source: UpdateSource.manifest(manifestUrl: _manifestUrl),
+    selector: const UpdateSelector(
+      installedVersion: '1.0.0',
+      platform: TargetPlatform.android,
+      architecture: 'arm64',
+      channel: 'stable',
+    ),
+  );
 
-  @override
-  void initState() {
-    super.initState();
-    _flutterAppUpdaterPlugin.init();
+  late final UpdateCandidate _previewCandidate = UpdateCandidate(
+    version: '2.0.0',
+    buildNumber: '42',
+    channel: 'stable',
+    platform: TargetPlatform.android,
+    architecture: 'arm64',
+    releaseNotes: 'Bug fixes and performance improvements',
+    releasedAt: DateTime.utc(2026, 7, 3, 10),
+    policy: const UpdatePolicy(level: UpdatePolicyLevel.recommended),
+    actions: [
+      OpenStoreAction(
+        store: StoreKind.googlePlay,
+        storeUrl: Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.example.app',
+        ),
+      ),
+      OpenAndroidMarketAction(
+        market: AndroidMarketKind.xiaomi,
+        targetPackageName: 'com.example.app',
+        fallbackUrl: Uri.parse('https://app.mi.com/details?id=com.example.app'),
+      ),
+      DownloadPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+        packageSizeBytes: 25600000,
+        sha256: 'a' * 64,
+      ),
+    ],
+  );
 
-    initPlatformState();
+  String _status = 'Ready';
+  UpdateCheckResult? _result;
 
-  }
-
-  Future<void> initPlatformState() async {
-    String platformVersion;
-    String appVersion;
-    String appVersionName;
-    try {
-      platformVersion =
-          await _flutterAppUpdaterPlugin.getPlatformVersion() ?? 'Unknown platform version';
-      appVersion =
-          await _flutterAppUpdaterPlugin.getAppVersionCode() ?? 'Unknown app version';
-
-      appVersionName =
-          await _flutterAppUpdaterPlugin.getAppVersionName() ?? 'Unknown app version name';
-
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
-      appVersion = 'Failed to get app version.';
-      appVersionName = 'Failed to get app version name.';
-    }
-    if (!mounted) return;
+  void _previewSelection() {
+    const selector = UpdateSelector(
+      installedVersion: '1.0.0',
+      platform: TargetPlatform.android,
+      architecture: 'arm64',
+      channel: 'stable',
+    );
+    final result = selector.select([_previewCandidate]);
 
     setState(() {
-      _platformVersion = platformVersion;
-      _appVersionCode = appVersion;
-      _appVersionName = appVersionName;
+      _result = result;
+      _status = switch (result) {
+        UpdateAvailable(:final candidate, :final recommendedAction) =>
+          'Update ${candidate.version}: ${_labelFor(recommendedAction)}',
+        UpdateNotAvailable() => 'Already current',
+        UpdateCheckFailed(:final code) => 'Failed: ${code.value}',
+      };
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      // 添加国际化支持
-      localizationsDelegates: const [
-        // 使用内置的本地化委托
-        ...GlobalMaterialLocalizations.delegates,
-      ],
-      supportedLocales: const [
-        Locale('zh', 'CN'), // 中文
-        Locale('en', 'US'), // 英文
-      ],
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Plugin example app'),
+          title: const Text('Flutter App Updater v3'),
         ),
-        body: Center(
-          child: Column(
-            children: [
-              Text('Running on: $_platformVersion\n'),
-              Text('App Version: $_appVersionCode\n'),
-              Text('App Version Name: $_appVersionName\n'),
-              ElevatedButton(
-                onPressed: () async {
-                  try {
-                    // 检查更新，设置 showDialogIfAvailable 为 false，因为我们想手动控制对话框显示
-                    final updateInfo = await _flutterAppUpdaterPlugin.checkForUpdate(
-                      showDialogIfAvailable: false,
-                    );
-
-                    if (updateInfo != null) {
-                      debugPrint('New version available: ${updateInfo.newVersion}');
-                      debugPrint('Download URL: ${updateInfo.downloadUrl}');
-                      debugPrint('Changelog: ${updateInfo.changelog}');
-
-                      // 清晰地显示更新对话框
-                      if (mounted) {
-                        await _flutterAppUpdaterPlugin.showUpdateDialog(
-                          context: this.context,
-                          updateInfo: updateInfo,
-                        );
-                      }
-                    } else {
-                      debugPrint('No updates available');
-                    }
-                  } catch (e) {
-                    debugPrint('Error checking for updates: $e');
-                  }
-                },
-                child: const Text('Check for Updates'),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('Manifest source: $_manifestUrl'),
+            const SizedBox(height: 12),
+            Text('Updater source: ${_updater.source.runtimeType}'),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: _previewSelection,
+              child: const Text('Preview update actions'),
+            ),
+            const SizedBox(height: 12),
+            Text(_status),
+            const SizedBox(height: 24),
+            const Text('Candidate actions'),
+            const SizedBox(height: 8),
+            for (final action in _previewCandidate.actions)
+              ListTile(
+                title: Text(_labelFor(action)),
+                subtitle: Text(_descriptionFor(action)),
+              ),
+            if (_result case UpdateAvailable(:final recommendedAction)) ...[
+              const Divider(),
+              ListTile(
+                title: const Text('Recommended action'),
+                subtitle: Text(_descriptionFor(recommendedAction)),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  String _labelFor(UpdateAction action) {
+    return switch (action) {
+      OpenStoreAction(:final store) => 'Open ${store.name}',
+      PlayInAppUpdateAction(:final mode) => 'Play in-app ${mode.name}',
+      OpenAndroidMarketAction(:final market) => 'Open ${market.name}',
+      DownloadPackageAction(:final packageType) =>
+        'Download ${packageType.name}',
+      OpenInstallerAction(:final installerType) =>
+        'Open ${installerType.name} installer',
+    };
+  }
+
+  String _descriptionFor(UpdateAction action) {
+    return switch (action) {
+      OpenStoreAction(:final storeUrl) => storeUrl.toString(),
+      PlayInAppUpdateAction(:final mode) => 'Mode: ${mode.name}',
+      OpenAndroidMarketAction(:final targetPackageName, :final fallbackUrl) =>
+        '$targetPackageName ${fallbackUrl ?? ''}',
+      DownloadPackageAction(:final packageUrl, :final packageSizeBytes) =>
+        '$packageUrl ${packageSizeBytes ?? ''} bytes',
+      OpenInstallerAction(:final installerUrl, :final installerSizeBytes) =>
+        '$installerUrl ${installerSizeBytes ?? ''} bytes',
+    };
   }
 }
