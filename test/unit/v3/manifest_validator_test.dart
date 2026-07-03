@@ -125,6 +125,39 @@ void main() {
         ),
       );
     });
+
+    test('rejects relative action URLs', () {
+      for (final action in [
+        {
+          'type': 'openStore',
+          'store': 'googlePlay',
+          'storeUrl': 'app.apk',
+        },
+        {
+          'type': 'downloadPackage',
+          'packageUrl': '/app.apk',
+          'packageType': 'apk',
+          'sha256': 'a' * 64,
+        },
+        {
+          'type': 'openInstaller',
+          'installerUrl': 'app.dmg',
+          'installerType': 'dmg',
+          'sha256': 'a' * 64,
+        },
+      ]) {
+        expect(
+          () => const ManifestParser().parse(_manifestWithAction(action)),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestInvalid,
+            ),
+          ),
+        );
+      }
+    });
   });
 }
 

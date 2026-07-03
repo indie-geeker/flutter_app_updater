@@ -68,7 +68,7 @@ class ManifestParser {
     return switch (type) {
       'openStore' => OpenStoreAction(
           store: _parseStoreKind(_requiredString(action, 'store')),
-          storeUrl: _requiredUri(action, 'storeUrl'),
+          storeUrl: _requiredAbsoluteUri(action, 'storeUrl'),
         ),
       'playInAppUpdate' => PlayInAppUpdateAction(
           mode: _parsePlayUpdateMode(_requiredString(action, 'mode')),
@@ -76,10 +76,10 @@ class ManifestParser {
       'openAndroidMarket' => OpenAndroidMarketAction(
           market: _parseAndroidMarketKind(_requiredString(action, 'market')),
           targetPackageName: _requiredString(action, 'targetPackageName'),
-          fallbackUrl: _optionalUri(action, 'fallbackUrl'),
+          fallbackUrl: _optionalAbsoluteUri(action, 'fallbackUrl'),
         ),
       'downloadPackage' => DownloadPackageAction(
-          packageUrl: _requiredUri(action, 'packageUrl'),
+          packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
           packageType:
               _parsePackageType(_requiredString(action, 'packageType')),
           packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
@@ -87,7 +87,7 @@ class ManifestParser {
           signature: _optionalString(action, 'signature'),
         ),
       'openInstaller' => OpenInstallerAction(
-          installerUrl: _requiredUri(action, 'installerUrl'),
+          installerUrl: _requiredAbsoluteUri(action, 'installerUrl'),
           installerType: _parseInstallerType(
             _requiredString(action, 'installerType'),
           ),
@@ -213,13 +213,24 @@ class ManifestParser {
     );
   }
 
-  Uri _requiredUri(Map<String, Object?> map, String field) {
-    return Uri.parse(_requiredString(map, field));
+  Uri _requiredAbsoluteUri(Map<String, Object?> map, String field) {
+    return _parseAbsoluteUri(_requiredString(map, field), field);
   }
 
-  Uri? _optionalUri(Map<String, Object?> map, String field) {
+  Uri? _optionalAbsoluteUri(Map<String, Object?> map, String field) {
     final value = _optionalString(map, field);
-    return value == null ? null : Uri.parse(value);
+    return value == null ? null : _parseAbsoluteUri(value, field);
+  }
+
+  Uri _parseAbsoluteUri(String value, String field) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      throw ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: '$field must be an absolute URL.',
+      );
+    }
+    return uri;
   }
 
   Map<String, Object?>? _optionalMap(Map<String, Object?> map, String field) {

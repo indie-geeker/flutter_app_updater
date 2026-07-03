@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../models/update_error_code.dart';
+import '../manifest/manifest_schema.dart';
 
 class CliCommandResult {
   final int exitCode;
@@ -61,13 +61,13 @@ class ManifestCommand {
       }
 
       final decoded = jsonDecode(await file.readAsString());
-      _verifyManifest(_asStringMap(decoded));
+      const ManifestSchema().validate(_asStringMap(decoded));
 
       return const CliCommandResult(
         exitCode: 0,
         stdout: 'Manifest valid\n',
       );
-    } on _ManifestCliException catch (error) {
+    } on ManifestParseException catch (error) {
       return CliCommandResult(
         exitCode: 1,
         stderr: '${error.code.value}: ${error.message}\n',
@@ -116,107 +116,4 @@ class ManifestCommand {
     }
     return result;
   }
-
-  void _verifyManifest(Map<String, Object?> manifest) {
-    _rejectLegacyFields(manifest);
-
-    if (manifest['schemaVersion'] != 3) {
-      throw const _ManifestCliException(
-        UpdateErrorCode.unsupportedSchemaVersion,
-        'Only schemaVersion 3 is supported.',
-      );
-    }
-
-    _requireString(manifest, 'appId');
-    _requireString(manifest, 'channel');
-
-    final releases = manifest['releases'];
-    if (releases is! List) {
-      throw const _ManifestCliException(
-        UpdateErrorCode.missingRequiredField,
-        'releases is required.',
-      );
-    }
-
-    for (final release in releases) {
-      final releaseMap = _asStringMap(release);
-      _requireString(releaseMap, 'version');
-      _requireString(releaseMap, 'platform');
-      _requireString(releaseMap, 'releaseNotes');
-      final actions = releaseMap['actions'];
-      if (actions is! List || actions.isEmpty) {
-        throw const _ManifestCliException(
-          UpdateErrorCode.missingRequiredField,
-          'actions is required.',
-        );
-      }
-
-      for (final action in actions) {
-        _verifyAction(_asStringMap(action));
-      }
-    }
-  }
-
-  void _verifyAction(Map<String, Object?> action) {
-    final type = _requireString(action, 'type');
-    switch (type) {
-      case 'openStore':
-        _requireString(action, 'storeUrl');
-      case 'openAndroidMarket':
-        _requireString(action, 'targetPackageName');
-      case 'playInAppUpdate':
-        _requireString(action, 'mode');
-      case 'downloadPackage':
-        _requireString(action, 'packageUrl');
-        _requireString(action, 'packageType');
-        _requireString(action, 'sha256');
-      case 'openInstaller':
-        _requireString(action, 'installerUrl');
-        _requireString(action, 'installerType');
-        _requireString(action, 'sha256');
-      default:
-        throw _ManifestCliException(
-          UpdateErrorCode.unsupportedActionType,
-          'Unsupported action type: $type.',
-        );
-    }
-  }
-
-  void _rejectLegacyFields(Object? value) {
-    if (value is Map) {
-      for (final entry in value.entries) {
-        if (entry.key == 'downloadUrl' ||
-            entry.key == 'artifactUri' ||
-            entry.key == 'md5') {
-          throw _ManifestCliException(
-            UpdateErrorCode.legacyFieldNotSupported,
-            '${entry.key} is not supported.',
-          );
-        }
-        _rejectLegacyFields(entry.value);
-      }
-    } else if (value is Iterable) {
-      for (final item in value) {
-        _rejectLegacyFields(item);
-      }
-    }
-  }
-
-  String _requireString(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value is String && value.isNotEmpty) {
-      return value;
-    }
-    throw _ManifestCliException(
-      UpdateErrorCode.missingRequiredField,
-      '$field is required.',
-    );
-  }
-}
-
-class _ManifestCliException implements Exception {
-  final UpdateErrorCode code;
-  final String message;
-
-  const _ManifestCliException(this.code, this.message);
 }

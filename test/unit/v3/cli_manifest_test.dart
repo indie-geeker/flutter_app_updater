@@ -70,6 +70,91 @@ void main() {
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('LEGACY_FIELD_NOT_SUPPORTED'));
     });
+
+    test('rejects openStore actions without store', () async {
+      final manifestFile = await _writeManifest(
+        tempDir,
+        _manifestWithAction({
+          'type': 'openStore',
+          'storeUrl':
+              'https://play.google.com/store/apps/details?id=com.example.app',
+        }),
+      );
+
+      final result = await const ManifestCommand().verify(manifestFile.path);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
+      expect(result.stderr, contains('store'));
+    });
+
+    test('rejects openAndroidMarket actions without market', () async {
+      final manifestFile = await _writeManifest(
+        tempDir,
+        _manifestWithAction({
+          'type': 'openAndroidMarket',
+          'targetPackageName': 'com.example.app',
+        }),
+      );
+
+      final result = await const ManifestCommand().verify(manifestFile.path);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
+      expect(result.stderr, contains('market'));
+    });
+
+    test('rejects downloadPackage actions without packageType', () async {
+      final manifestFile = await _writeManifest(
+        tempDir,
+        _manifestWithAction({
+          'type': 'downloadPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'sha256': 'a' * 64,
+        }),
+      );
+
+      final result = await const ManifestCommand().verify(manifestFile.path);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
+      expect(result.stderr, contains('packageType'));
+    });
+
+    test('rejects relative action URLs', () async {
+      final cases = [
+        _manifestWithAction({
+          'type': 'openStore',
+          'store': 'googlePlay',
+          'storeUrl': 'app.apk',
+        }),
+        _manifestWithAction({
+          'type': 'downloadPackage',
+          'packageUrl': '/app.apk',
+          'packageType': 'apk',
+          'sha256': 'a' * 64,
+        }),
+        _manifestWithAction({
+          'type': 'openInstaller',
+          'installerUrl': 'app.dmg',
+          'installerType': 'dmg',
+          'sha256': 'a' * 64,
+        }),
+      ];
+
+      for (var index = 0; index < cases.length; index += 1) {
+        final manifestFile = await _writeManifest(
+          tempDir,
+          cases[index],
+          name: 'relative-url-$index.json',
+        );
+
+        final result = await const ManifestCommand().verify(manifestFile.path);
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('MANIFEST_INVALID'));
+      }
+    });
   });
 
   group('HashCommand', () {
@@ -85,4 +170,30 @@ void main() {
       );
     });
   });
+}
+
+Future<File> _writeManifest(
+  Directory tempDir,
+  Map<String, Object?> manifest, {
+  String name = 'manifest.json',
+}) async {
+  final file = File('${tempDir.path}/$name');
+  await file.writeAsString(jsonEncode(manifest));
+  return file;
+}
+
+Map<String, Object?> _manifestWithAction(Map<String, Object?> action) {
+  return {
+    'schemaVersion': 3,
+    'appId': 'com.example.app',
+    'channel': 'stable',
+    'releases': [
+      {
+        'version': '2.0.0',
+        'platform': 'android',
+        'releaseNotes': 'Bug fixes',
+        'actions': [action],
+      },
+    ],
+  };
 }
