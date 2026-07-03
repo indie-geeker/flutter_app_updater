@@ -99,6 +99,29 @@ void main() {
       );
     });
 
+    test('allows installPackage actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'installPackage',
+          'packagePath': '/tmp/app.apk',
+          'packageType': 'apk',
+        })),
+        returnsNormally,
+      );
+    });
+
+    test('allows downloadAndInstallPackage actions without sha256', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+          'packageSizeBytes': 25600000,
+        })),
+        returnsNormally,
+      );
+    });
+
     test('rejects unsupported action types', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({

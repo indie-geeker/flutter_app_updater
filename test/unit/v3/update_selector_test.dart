@@ -98,10 +98,9 @@ void main() {
     });
 
     test('prioritizes direct actions for required updates', () {
-      final packageAction = DownloadPackageAction(
+      final packageAction = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
-        sha256: 'a' * 64,
       );
       final result = _selector().select([
         _candidate(
@@ -122,6 +121,22 @@ void main() {
       expect(result, isA<UpdateAvailable>());
       expect(
           (result as UpdateAvailable).recommendedAction, same(packageAction));
+      expect(result.isRequired, isTrue);
+    });
+
+    test('minSupportedVersion makes matching updates required', () {
+      final result = _selector(installedVersion: '1.4.0').select([
+        _candidate(
+          version: '2.0.0',
+          policy: const UpdatePolicy(
+            level: UpdatePolicyLevel.recommended,
+            minSupportedVersion: '1.5.0',
+          ),
+        ),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).isRequired, isTrue);
     });
   });
 
@@ -168,6 +183,7 @@ UpdateCandidate _candidate({
   String? architecture = 'arm64',
   String channel = 'stable',
   UpdatePolicyLevel policyLevel = UpdatePolicyLevel.optional,
+  UpdatePolicy? policy,
   List<UpdateAction>? actions,
 }) {
   return UpdateCandidate(
@@ -177,7 +193,7 @@ UpdateCandidate _candidate({
     platform: platform,
     architecture: architecture,
     releaseNotes: 'Bug fixes',
-    policy: UpdatePolicy(level: policyLevel),
+    policy: policy ?? UpdatePolicy(level: policyLevel),
     actions: actions ??
         [
           DownloadPackageAction(

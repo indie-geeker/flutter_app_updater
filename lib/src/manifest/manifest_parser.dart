@@ -85,6 +85,19 @@ class ManifestParser {
           packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
           sha256: _optionalString(action, 'sha256'),
         ),
+      'installPackage' => InstallPackageAction(
+          packagePath: _requiredString(action, 'packagePath'),
+          packageType: _parsePackageType(
+            _optionalString(action, 'packageType') ?? PackageType.apk.name,
+          ),
+        ),
+      'downloadAndInstallPackage' => DownloadAndInstallPackageAction(
+          packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
+          packageType:
+              _parsePackageType(_requiredString(action, 'packageType')),
+          packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
+          sha256: _optionalString(action, 'sha256'),
+        ),
       'openInstaller' => OpenInstallerAction(
           installerUrl: _requiredAbsoluteUri(action, 'installerUrl'),
           installerType: _parseInstallerType(

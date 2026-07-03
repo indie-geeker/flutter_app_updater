@@ -40,7 +40,8 @@ class UpdateSelector {
     });
 
     final candidate = candidates.first;
-    final recommendedAction = _recommendedAction(candidate);
+    final isRequired = _isRequired(candidate);
+    final recommendedAction = _recommendedAction(candidate, isRequired);
     if (recommendedAction == null) {
       return UpdateCheckFailed(
         code: UpdateErrorCode.noSupportedAction,
@@ -51,6 +52,7 @@ class UpdateSelector {
     return UpdateAvailable(
       candidate: candidate,
       recommendedAction: recommendedAction,
+      isRequired: isRequired,
     );
   }
 
@@ -90,14 +92,32 @@ class UpdateSelector {
     return int.tryParse(release.buildNumber ?? '') ?? -1;
   }
 
-  UpdateAction? _recommendedAction(UpdateCandidate candidate) {
+  bool _isRequired(UpdateCandidate candidate) {
+    if (candidate.policy.level == UpdatePolicyLevel.required) {
+      return true;
+    }
+
+    final minSupportedVersion = candidate.policy.minSupportedVersion;
+    if (minSupportedVersion == null) {
+      return false;
+    }
+
+    return VersionComparator.compare(installedVersion, minSupportedVersion) < 0;
+  }
+
+  UpdateAction? _recommendedAction(
+    UpdateCandidate candidate,
+    bool isRequired,
+  ) {
     if (candidate.actions.isEmpty) {
       return null;
     }
 
-    if (candidate.policy.level == UpdatePolicyLevel.required) {
+    if (isRequired) {
       for (final action in candidate.actions) {
-        if (action is DownloadPackageAction || action is OpenInstallerAction) {
+        if (action is DownloadAndInstallPackageAction ||
+            action is DownloadPackageAction ||
+            action is OpenInstallerAction) {
           return action;
         }
       }
@@ -114,10 +134,12 @@ sealed class UpdateCheckResult {
 class UpdateAvailable extends UpdateCheckResult {
   final UpdateCandidate candidate;
   final UpdateAction recommendedAction;
+  final bool isRequired;
 
   const UpdateAvailable({
     required this.candidate,
     required this.recommendedAction,
+    this.isRequired = false,
   });
 }
 

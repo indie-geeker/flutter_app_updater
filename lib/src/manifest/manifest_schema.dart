@@ -82,6 +82,12 @@ class ManifestSchema {
       case 'downloadPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
+      case 'installPackage':
+        _requiredString(action, 'packagePath');
+        _optionalString(action, 'packageType');
+      case 'downloadAndInstallPackage':
+        _requiredAbsoluteUrl(action, 'packageUrl');
+        _requiredString(action, 'packageType');
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');

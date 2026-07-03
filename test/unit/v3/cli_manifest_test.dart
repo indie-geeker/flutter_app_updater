@@ -28,7 +28,7 @@ void main() {
       expect(data['channel'], 'stable');
       expect(data['releases'], isA<List>());
       expect(output, contains('packageUrl'));
-      expect(output, contains('sha256'));
+      expect(output, contains('downloadAndInstallPackage'));
     });
 
     test('verifies manifest schema', () async {
@@ -119,6 +119,22 @@ void main() {
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
       expect(result.stderr, contains('packageType'));
+    });
+
+    test('verifies downloadAndInstallPackage actions without sha256', () async {
+      final manifestFile = await _writeManifest(
+        tempDir,
+        _manifestWithAction({
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+        }),
+      );
+
+      final result = await const ManifestCommand().verify(manifestFile.path);
+
+      expect(result.exitCode, 0);
+      expect(result.stdout, contains('Manifest valid'));
     });
 
     test('rejects relative action URLs', () async {

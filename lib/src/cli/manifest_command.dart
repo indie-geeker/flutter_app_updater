@@ -38,11 +38,10 @@ class ManifestCommand {
           },
           'actions': [
             {
-              'type': 'downloadPackage',
+              'type': 'downloadAndInstallPackage',
               'packageUrl': 'https://example.com/app.apk',
               'packageType': 'apk',
               'packageSizeBytes': 25600000,
-              'sha256': 'a' * 64,
             },
           ],
         },
