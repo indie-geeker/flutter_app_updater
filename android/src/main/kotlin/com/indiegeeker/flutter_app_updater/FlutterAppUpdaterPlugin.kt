@@ -47,6 +47,7 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       "getDownloadPath" -> getDownloadPath(result)
       "openStore" -> openStore(call, result)
       "startPlayInAppUpdate" -> startPlayInAppUpdate(result)
+      "openAndroidMarket" -> openAndroidMarket(call, result)
       else -> result.notImplemented()
     }
   }
@@ -200,5 +201,42 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       "当前原生插件未集成Google Play In-App Updates",
       null
     )
+  }
+
+  private fun openAndroidMarket(call: MethodCall, result: Result) {
+    val arguments = call.arguments as? Map<*, *>
+    val marketPackageName = arguments?.get("marketPackageName") as? String
+    val marketUri = arguments?.get("marketUri") as? String
+    val targetPackageName = arguments?.get("targetPackageName") as? String
+    val fallbackUrl = arguments?.get("fallbackUrl") as? String
+
+    if (targetPackageName.isNullOrBlank()) {
+      result.error("INVALID_ARGUMENT", "targetPackageName不能为空", null)
+      return
+    }
+
+    val configuredUri = if (!marketUri.isNullOrBlank()) {
+      Uri.parse(marketUri)
+    } else {
+      Uri.parse("market://details?id=$targetPackageName")
+    }
+
+    if (!marketPackageName.isNullOrBlank() &&
+        tryOpenStoreIntent(configuredUri, marketPackageName)) {
+      result.success(true)
+      return
+    }
+
+    if (tryOpenStoreIntent(Uri.parse("market://details?id=$targetPackageName"), null)) {
+      result.success(true)
+      return
+    }
+
+    if (!fallbackUrl.isNullOrBlank() && tryOpenStoreIntent(Uri.parse(fallbackUrl), null)) {
+      result.success(true)
+      return
+    }
+
+    result.error("MARKET_NOT_AVAILABLE", "没有可用应用市场可以打开目标应用", null)
   }
 }

@@ -4,6 +4,20 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <queries>
+        <package android:name="com.huawei.appmarket" />
+        <package android:name="com.hihonor.appmarket" />
+        <package android:name="com.xiaomi.market" />
+        <package android:name="com.oppo.market" />
+        <package android:name="com.bbk.appstore" />
+        <package android:name="com.meizu.mstore" />
+        <package android:name="com.tencent.android.qqdownloader" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="market" />
+        </intent>
+    </queries>
+
     <application android:enableOnBackInvokedCallback="true">
         <provider
             android:name="androidx.core.content.FileProvider"
