@@ -71,8 +71,8 @@ class RetryStrategy {
     this.backoffFactor = 2.0,
     this.maxDelay = const Duration(seconds: 30),
     this.enableJitter = true,
-  }) : assert(maxAttempts >= 0, '最大重试次数不能为负数'),
-       assert(backoffFactor > 0, '退避因子必须大于0');
+  })  : assert(maxAttempts >= 0, '最大重试次数不能为负数'),
+        assert(backoffFactor > 0, '退避因子必须大于0');
 
   /// 禁用重试的策略
   static const disabled = RetryStrategy(maxAttempts: 0);
@@ -113,8 +113,8 @@ class RetryStrategy {
     }
 
     // 计算指数退避延迟
-    final baseDelay = initialDelay.inMilliseconds *
-        math.pow(backoffFactor, attemptNumber);
+    final baseDelay =
+        initialDelay.inMilliseconds * math.pow(backoffFactor, attemptNumber);
 
     // 限制最大延迟
     var delayMs = math.min(baseDelay, maxDelay.inMilliseconds.toDouble());
@@ -194,6 +194,7 @@ class RetryStrategy {
       // 文件相关错误 - 不可重试
       case 'FILE_ERROR':
       case 'MD5_MISMATCH':
+      case 'PACKAGE_HASH_MISMATCH':
         return false;
 
       // 权限相关错误 - 不可重试
