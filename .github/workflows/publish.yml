@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.6' # Replace with the required version
+          channel: stable
 
       - name: Setup Pub Credentials
         run: |
@@ -28,12 +28,23 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze package
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Generate docs dry-run
+        run: dart doc --dry-run
+
       - name: Dry run publish
         run: flutter pub publish --dry-run
 
 
       - name: Publish to pub.dev
         run: flutter pub publish -f
-
 
 

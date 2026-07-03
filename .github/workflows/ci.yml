@@ -20,14 +20,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
       - name: Analyze package
         run: flutter analyze
 
       - name: Run tests
         run: flutter test
 
+      - name: Generate docs dry-run
+        run: dart doc --dry-run
+
       - name: Analyze example
         run: flutter analyze example
+
+      - name: Test example
+        working-directory: example
+        run: flutter test
 
       - name: Build Android example
         working-directory: example
