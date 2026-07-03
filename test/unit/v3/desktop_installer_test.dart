@@ -101,7 +101,16 @@ void main() {
       expect(platform.openedInstallers, isEmpty);
     });
 
-    test('requires SHA-256 before opening installer', () async {
+    test('opens installers without SHA-256', () async {
+      final bytes = utf8.encode('windows-installer');
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream.value(bytes),
+        ),
+      );
+
       final result = await DesktopInstallerExecutor(
         platform: TargetPlatform.windows,
         platformChannel: platform,
@@ -109,10 +118,9 @@ void main() {
         downloadDirectory: tempDir,
       ).perform(_installer(sha256: ''));
 
-      expect(result.isSuccess, isFalse);
-      expect(result.code, UpdateErrorCode.missingRequiredField);
-      expect(client.requests, isEmpty);
-      expect(platform.openedInstallers, isEmpty);
+      expect(result.isSuccess, isTrue);
+      expect(client.requests.single, Uri.parse('https://example.com/app.msi'));
+      expect(platform.openedInstallers.single, endsWith('.msi'));
     });
 
     test('returns structured failure for unsupported platform', () async {

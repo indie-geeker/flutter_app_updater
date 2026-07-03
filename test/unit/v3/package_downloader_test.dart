@@ -72,7 +72,8 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(result.file?.readAsStringSync(), 'package-without-hash');
       expect(result.sha256, isNull);
-      expect(client.requests.single.url, Uri.parse('https://example.com/app.apk'));
+      expect(
+          client.requests.single.url, Uri.parse('https://example.com/app.apk'));
     });
 
     test('rejects hash mismatch only when SHA-256 is provided', () async {

@@ -186,6 +186,9 @@ class RetryStrategy {
       UpdateErrorCode.playInAppUpdateUnavailable ||
       UpdateErrorCode.packageHashMismatch ||
       UpdateErrorCode.packageSignatureInvalid ||
+      UpdateErrorCode.packageInstallPermissionRequired ||
+      UpdateErrorCode.packageFileNotFound ||
+      UpdateErrorCode.packageInstallFailed ||
       UpdateErrorCode.installerOpenFailed ||
       UpdateErrorCode.platformNotSupported =>
         false,

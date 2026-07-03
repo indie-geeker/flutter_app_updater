@@ -1,2 +1,5 @@
+build/
+**/doc/api/
+doc/api/
 doc/plans/
 docs/plans/

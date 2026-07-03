@@ -20,7 +20,8 @@ class DownloadAndInstallPackageExecutor implements UpdateActionExecutor {
         installExecutor = installExecutor ?? InstallPackageExecutor();
 
   @override
-  bool supports(UpdateAction action) => action is DownloadAndInstallPackageAction;
+  bool supports(UpdateAction action) =>
+      action is DownloadAndInstallPackageAction;
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {

@@ -49,7 +49,8 @@ void main() {
         // 构建号应该被忽略
         expect(VersionComparator.compare('1.0.0+1', '1.0.0+2'), equals(0));
         expect(VersionComparator.compare('1.0.0+100', '1.0.1'), lessThan(0));
-        expect(VersionComparator.compare('2.0.0+5', '1.9.9+999'), greaterThan(0));
+        expect(
+            VersionComparator.compare('2.0.0+5', '1.9.9+999'), greaterThan(0));
       });
 
       test('should handle pre-release versions', () {
@@ -59,11 +60,14 @@ void main() {
         expect(VersionComparator.compare('1.0.0-rc.1', '1.0.0'), lessThan(0));
 
         // 预发布版本之间的字典序比较
-        expect(VersionComparator.compare('1.0.0-alpha', '1.0.0-beta'), lessThan(0));
-        expect(VersionComparator.compare('1.0.0-beta', '1.0.0-rc'), lessThan(0));
+        expect(VersionComparator.compare('1.0.0-alpha', '1.0.0-beta'),
+            lessThan(0));
+        expect(
+            VersionComparator.compare('1.0.0-beta', '1.0.0-rc'), lessThan(0));
 
         // 都是预发布版本时，主版本号仍然有效
-        expect(VersionComparator.compare('2.0.0-alpha', '1.0.0-beta'), greaterThan(0));
+        expect(VersionComparator.compare('2.0.0-alpha', '1.0.0-beta'),
+            greaterThan(0));
       });
 
       test('should handle edge cases', () {
@@ -75,7 +79,8 @@ void main() {
         expect(VersionComparator.compare('1', '2'), lessThan(0));
 
         // 长版本号
-        expect(VersionComparator.compare('1.2.3.4.5', '1.2.3.4.6'), lessThan(0));
+        expect(
+            VersionComparator.compare('1.2.3.4.5', '1.2.3.4.6'), lessThan(0));
       });
 
       test('should handle real-world version scenarios', () {

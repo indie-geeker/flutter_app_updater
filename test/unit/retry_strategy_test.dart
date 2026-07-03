@@ -263,6 +263,24 @@ void main() {
             isFalse,
           );
         });
+
+        test('should not retry package install failures', () {
+          expect(
+            strategy.shouldRetry(
+              UpdateErrorCode.packageInstallPermissionRequired,
+              0,
+            ),
+            isFalse,
+          );
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.packageFileNotFound, 0),
+            isFalse,
+          );
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.packageInstallFailed, 0),
+            isFalse,
+          );
+        });
       });
 
       group('attempt limit', () {
