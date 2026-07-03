@@ -47,8 +47,15 @@ void main() {
         ),
       ],
     );
+    final manifest = UpdateManifest(
+      schemaVersion: 3,
+      appId: 'com.example.app',
+      channel: 'stable',
+      releases: [candidate],
+    );
 
     expect(updater.source, isA<ManifestUpdateSource>());
+    expect(manifest.releases.single, same(candidate));
     expect(candidate.actions, hasLength(4));
     expect(candidate.policy.level, UpdatePolicyLevel.required);
     expect(action.packageUrl.path, '/app.apk');
@@ -65,11 +72,23 @@ void main() {
     final readme = File('README.md').readAsStringSync();
 
     expect(readme, contains('v3 is a breaking update'));
+    expect(readme, contains('await updater.perform(recommendedAction)'));
+    expect(
+        readme, isNot(contains('Remote manifest fetching is not implemented')));
     expect(readme, contains('storeUrl'));
     expect(readme, contains('packageUrl'));
     expect(readme, contains('installerUrl'));
     expect(readme, isNot(contains('downloadUrl')));
     expect(readme, isNot(contains('artifactUri')));
     expect(readme.toLowerCase(), isNot(contains('md5')));
+  });
+
+  test('example demonstrates check and perform through the public API', () {
+    final example = File('example/lib/main.dart').readAsStringSync();
+
+    expect(example, contains('UpdateSource.staticManifest'));
+    expect(example, contains('await _updater.check()'));
+    expect(example, contains('await _updater.perform(recommendedAction)'));
+    expect(example, contains('DownloadPackageExecutor'));
   });
 }

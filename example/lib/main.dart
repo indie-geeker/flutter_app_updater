@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 
@@ -18,13 +20,25 @@ class _MyAppState extends State<MyApp> {
   );
 
   late final AppUpdater _updater = AppUpdater(
-    source: UpdateSource.manifest(manifestUrl: _manifestUrl),
+    source: UpdateSource.staticManifest(manifest: _previewManifest),
     selector: const UpdateSelector(
       installedVersion: '1.0.0',
       platform: TargetPlatform.android,
       architecture: 'arm64',
       channel: 'stable',
     ),
+    executors: [
+      StoreUpdateExecutor(),
+      AndroidMarketExecutor(),
+      DownloadPackageExecutor(downloadDirectory: Directory.systemTemp.path),
+    ],
+  );
+
+  late final UpdateManifest _previewManifest = UpdateManifest(
+    schemaVersion: 3,
+    appId: 'com.example.app',
+    channel: 'stable',
+    releases: [_previewCandidate],
   );
 
   late final UpdateCandidate _previewCandidate = UpdateCandidate(
@@ -60,14 +74,12 @@ class _MyAppState extends State<MyApp> {
   String _status = 'Ready';
   UpdateCheckResult? _result;
 
-  void _previewSelection() {
-    const selector = UpdateSelector(
-      installedVersion: '1.0.0',
-      platform: TargetPlatform.android,
-      architecture: 'arm64',
-      channel: 'stable',
-    );
-    final result = selector.select([_previewCandidate]);
+  Future<void> _checkForUpdate() async {
+    setState(() {
+      _status = 'Checking for updates';
+    });
+
+    final result = await _updater.check();
 
     setState(() {
       _result = result;
@@ -77,6 +89,26 @@ class _MyAppState extends State<MyApp> {
         UpdateNotAvailable() => 'Already current',
         UpdateCheckFailed(:final code) => 'Failed: ${code.value}',
       };
+    });
+  }
+
+  Future<void> _performRecommendedAction() async {
+    final result = _result;
+    if (result is! UpdateAvailable) {
+      return;
+    }
+
+    final recommendedAction = result.recommendedAction;
+    setState(() {
+      _status = 'Running ${_labelFor(recommendedAction)}';
+    });
+
+    final actionResult = await _updater.perform(recommendedAction);
+
+    setState(() {
+      _status = actionResult.isSuccess
+          ? 'Action completed'
+          : 'Action failed: ${actionResult.code?.value ?? actionResult.message}';
     });
   }
 
@@ -91,14 +123,21 @@ class _MyAppState extends State<MyApp> {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Manifest source: $_manifestUrl'),
+            Text('Remote manifest source: $_manifestUrl'),
             const SizedBox(height: 12),
             Text('Updater source: ${_updater.source.runtimeType}'),
             const SizedBox(height: 12),
             FilledButton(
-              onPressed: _previewSelection,
-              child: const Text('Preview update actions'),
+              onPressed: _checkForUpdate,
+              child: const Text('Check for updates'),
             ),
+            if (_result case UpdateAvailable()) ...[
+              const SizedBox(height: 8),
+              FilledButton(
+                onPressed: _performRecommendedAction,
+                child: const Text('Perform recommended action'),
+              ),
+            ],
             const SizedBox(height: 12),
             Text(_status),
             const SizedBox(height: 24),

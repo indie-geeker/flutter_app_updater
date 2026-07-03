@@ -6,7 +6,8 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('selects a v3 update action', (WidgetTester tester) async {
+  testWidgets('checks and performs a v3 update action',
+      (WidgetTester tester) async {
     final packageAction = DownloadPackageAction(
       packageUrl: Uri.parse('https://example.com/app.apk'),
       packageType: PackageType.apk,
@@ -20,18 +21,46 @@ void main() {
       policy: const UpdatePolicy(level: UpdatePolicyLevel.required),
       actions: [packageAction],
     );
-    const selector = UpdateSelector(
-      installedVersion: '2.0.0',
-      platform: TargetPlatform.android,
-      channel: 'stable',
+    final executor = _RecordingExecutor();
+    final updater = AppUpdater(
+      source: UpdateSource.staticManifest(
+        manifest: UpdateManifest(
+          schemaVersion: 3,
+          appId: 'com.example.app',
+          channel: 'stable',
+          releases: [candidate],
+        ),
+      ),
+      selector: const UpdateSelector(
+        installedVersion: '2.0.0',
+        platform: TargetPlatform.android,
+        channel: 'stable',
+      ),
+      executors: [executor],
     );
 
-    final result = selector.select([candidate]);
+    final result = await updater.check();
 
     expect(result, isA<UpdateAvailable>());
-    expect(
-      (result as UpdateAvailable).recommendedAction,
-      same(packageAction),
-    );
+    final recommendedAction = (result as UpdateAvailable).recommendedAction;
+    expect(recommendedAction, same(packageAction));
+
+    final actionResult = await updater.perform(recommendedAction);
+
+    expect(actionResult.isSuccess, isTrue);
+    expect(executor.actions, [same(packageAction)]);
   });
+}
+
+class _RecordingExecutor implements UpdateActionExecutor {
+  final actions = <UpdateAction>[];
+
+  @override
+  bool supports(UpdateAction action) => action is DownloadPackageAction;
+
+  @override
+  Future<UpdateActionResult> perform(UpdateAction action) async {
+    actions.add(action);
+    return const UpdateActionResult.success();
+  }
 }

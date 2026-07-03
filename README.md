@@ -41,8 +41,11 @@ final updater = AppUpdater(
 final result = await updater.check();
 
 switch (result) {
-  case UpdateAvailable(:final candidate, :final recommendedAction):
-    debugPrint('Update ${candidate.version}: $recommendedAction');
+  case UpdateAvailable(:final recommendedAction):
+    final actionResult = await updater.perform(recommendedAction);
+    if (!actionResult.isSuccess) {
+      debugPrint('${actionResult.code}: ${actionResult.message}');
+    }
   case UpdateNotAvailable():
     debugPrint('Already current');
   case UpdateCheckFailed(:final code, :final message):
