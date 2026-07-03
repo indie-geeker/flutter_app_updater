@@ -619,7 +619,7 @@ dart run flutter_app_updater hash path/to/package.apk
 ```bash
 flutter analyze
 flutter test test/unit/v3/cli_manifest_test.dart
-dart run flutter_app_updater manifest verify docs/examples/update-manifest-v3.json
+dart run flutter_app_updater manifest verify doc/examples/update-manifest-v3.json
 ```
 
 Expected: PASS.
@@ -673,10 +673,9 @@ git commit -m "chore: validate v3 updater redesign"
 
 ## Execution Options
 
-Plan complete and saved to `docs/plans/2026-07-03-v3-updater-redesign-implementation.md`.
+Plan complete and saved to `doc/plans/2026-07-03-v3-updater-redesign-implementation.md`.
 
 Two execution options:
 
 1. **Subagent-Driven (this session)** - dispatch a fresh subagent per task, review between tasks, fast iteration.
 2. **Parallel Session (separate)** - open a new session with `superpowers:executing-plans`, batch execution with checkpoints.
-

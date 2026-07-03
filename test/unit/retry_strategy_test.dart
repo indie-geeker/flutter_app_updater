@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:flutter_app_updater/src/models/update_error.dart';
+import 'package:flutter_app_updater/src/models/update_error_code.dart';
 import 'package:flutter_app_updater/src/utils/retry_strategy.dart';
 
 void main() {
@@ -249,59 +249,19 @@ void main() {
         });
       });
 
-      group('UpdateError', () {
-        test('should retry on NETWORK_ERROR', () {
-          const error =
-              UpdateError(code: 'NETWORK_ERROR', message: 'Network error');
-          expect(strategy.shouldRetry(error, 0), isTrue);
-        });
-
-        test('should retry on TIMEOUT', () {
-          const error = UpdateError(code: 'TIMEOUT', message: 'Timeout');
-          expect(strategy.shouldRetry(error, 0), isTrue);
-        });
-
-        test('should retry on SERVER_ERROR', () {
-          const error =
-              UpdateError(code: 'SERVER_ERROR', message: 'Server error');
-          expect(strategy.shouldRetry(error, 0), isTrue);
-        });
-
-        test('should not retry on PARSE_ERROR', () {
-          const error =
-              UpdateError(code: 'PARSE_ERROR', message: 'Parse error');
-          expect(strategy.shouldRetry(error, 0), isFalse);
-        });
-
-        test('should not retry on FILE_ERROR', () {
-          const error = UpdateError(code: 'FILE_ERROR', message: 'File error');
-          expect(strategy.shouldRetry(error, 0), isFalse);
-        });
-
-        test('should not retry on MD5_MISMATCH', () {
-          const error =
-              UpdateError(code: 'MD5_MISMATCH', message: 'MD5 mismatch');
-          expect(strategy.shouldRetry(error, 0), isFalse);
-        });
-
-        test('should not retry on MISSING_URL', () {
-          const error =
-              UpdateError(code: 'MISSING_URL', message: 'Missing URL');
-          expect(strategy.shouldRetry(error, 0), isFalse);
-        });
-
-        test('should check wrapped exception for unknown error code', () {
-          const error = UpdateError(
-            code: 'UNKNOWN_CODE',
-            message: 'Unknown',
-            exception: SocketException('Connection failed'),
+      group('UpdateErrorCode', () {
+        test('should retry on PACKAGE_DOWNLOAD_FAILED', () {
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.packageDownloadFailed, 0),
+            isTrue,
           );
-          expect(strategy.shouldRetry(error, 0), isTrue);
         });
 
-        test('should not retry unknown error code without exception', () {
-          const error = UpdateError(code: 'UNKNOWN_CODE', message: 'Unknown');
-          expect(strategy.shouldRetry(error, 0), isFalse);
+        test('should not retry on PACKAGE_HASH_MISMATCH', () {
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.packageHashMismatch, 0),
+            isFalse,
+          );
         });
       });
 

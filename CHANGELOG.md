@@ -1,4 +1,4 @@
-## Unreleased
+## 3.0.0 - 2026-07-03
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
 * **Feature**: Add manifest v3 parsing, validation, and release selection.

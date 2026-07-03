@@ -1,25 +1,37 @@
-// This is a basic Flutter integration test.
-//
-// Since integration tests run in a full Flutter application, they can interact
-// with the host side of a plugin implementation, unlike Dart unit tests.
-//
-// For more information about Flutter integration tests, please see
-// https://docs.flutter.dev/cookbook/testing/integration/introduction
-
+import 'package:flutter/foundation.dart';
+import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
-// ignore: implementation_imports
-import 'package:flutter_app_updater/src/updater.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('getPlatformVersion test', (WidgetTester tester) async {
-    final FlutterAppUpdater plugin = FlutterAppUpdater();
-    final String? version = await plugin.getPlatformVersion();
-    // The version string depends on the host platform running the test, so
-    // just assert that some non-empty string is returned.
-    expect(version?.isNotEmpty, true);
+  testWidgets('selects a v3 update action', (WidgetTester tester) async {
+    final packageAction = DownloadPackageAction(
+      packageUrl: Uri.parse('https://example.com/app.apk'),
+      packageType: PackageType.apk,
+      sha256: 'a' * 64,
+    );
+    final candidate = UpdateCandidate(
+      version: '3.0.0',
+      channel: 'stable',
+      platform: TargetPlatform.android,
+      releaseNotes: 'v3',
+      policy: const UpdatePolicy(level: UpdatePolicyLevel.required),
+      actions: [packageAction],
+    );
+    const selector = UpdateSelector(
+      installedVersion: '2.0.0',
+      platform: TargetPlatform.android,
+      channel: 'stable',
+    );
+
+    final result = selector.select([candidate]);
+
+    expect(result, isA<UpdateAvailable>());
+    expect(
+      (result as UpdateAvailable).recommendedAction,
+      same(packageAction),
+    );
   });
 }

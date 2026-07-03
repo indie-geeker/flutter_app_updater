@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import '../models/update_error.dart';
+import '../models/update_error_code.dart';
 
 /// 重试策略配置类
 ///
@@ -154,9 +154,9 @@ class RetryStrategy {
       return false;
     }
 
-    // 如果是UpdateError，检查错误代码
-    if (error is UpdateError) {
-      return _shouldRetryUpdateError(error);
+    // 如果是v3结构化错误码，检查错误类型
+    if (error is UpdateErrorCode) {
+      return _shouldRetryUpdateErrorCode(error);
     }
 
     // 如果是原始异常，检查异常类型
@@ -168,47 +168,28 @@ class RetryStrategy {
     return false;
   }
 
-  /// 判断UpdateError是否应该重试
-  bool _shouldRetryUpdateError(UpdateError error) {
-    switch (error.code) {
-      // 网络相关错误 - 可重试
-      case 'NETWORK_ERROR':
-      case 'TIMEOUT':
-      case 'CONNECTION_ERROR':
-        return true;
-
-      // 服务器错误 - 可重试
-      case 'SERVER_ERROR':
-      case 'SERVICE_UNAVAILABLE':
-        return true;
-
-      // 客户端错误 - 不可重试
-      case 'PARSE_ERROR':
-      case 'INVALID_RESPONSE':
-      case 'MISSING_URL':
-      case 'MISSING_VERSION':
-      case 'INVALID_METHOD':
-      case 'INVALID_BODY':
-        return false;
-
-      // 文件相关错误 - 不可重试
-      case 'FILE_ERROR':
-      case 'MD5_MISMATCH':
-      case 'PACKAGE_HASH_MISMATCH':
-        return false;
-
-      // 权限相关错误 - 不可重试
-      case 'PERMISSION_DENIED':
-      case 'PLATFORM_NOT_SUPPORTED':
-        return false;
-
-      // 未知错误 - 检查原始异常
-      default:
-        if (error.exception != null) {
-          return _shouldRetryException(error.exception!);
-        }
-        return false;
-    }
+  /// 判断v3结构化错误码是否应该重试
+  bool _shouldRetryUpdateErrorCode(UpdateErrorCode code) {
+    return switch (code) {
+      UpdateErrorCode.manifestFetchFailed ||
+      UpdateErrorCode.packageDownloadFailed =>
+        true,
+      UpdateErrorCode.manifestInvalid ||
+      UpdateErrorCode.unsupportedSchemaVersion ||
+      UpdateErrorCode.unsupportedActionType ||
+      UpdateErrorCode.missingRequiredField ||
+      UpdateErrorCode.legacyFieldNotSupported ||
+      UpdateErrorCode.noMatchingRelease ||
+      UpdateErrorCode.noSupportedAction ||
+      UpdateErrorCode.storeNotAvailable ||
+      UpdateErrorCode.marketNotAvailable ||
+      UpdateErrorCode.playInAppUpdateUnavailable ||
+      UpdateErrorCode.packageHashMismatch ||
+      UpdateErrorCode.packageSignatureInvalid ||
+      UpdateErrorCode.installerOpenFailed ||
+      UpdateErrorCode.platformNotSupported =>
+        false,
+    };
   }
 
   /// 判断原始异常是否应该重试
