@@ -84,6 +84,30 @@ class DownloadPackageAction extends UpdateAction {
   });
 }
 
+class InstallPackageAction extends UpdateAction {
+  final String packagePath;
+  final PackageType packageType;
+
+  const InstallPackageAction({
+    required this.packagePath,
+    this.packageType = PackageType.apk,
+  });
+}
+
+class DownloadAndInstallPackageAction extends UpdateAction {
+  final Uri packageUrl;
+  final PackageType packageType;
+  final int? packageSizeBytes;
+  final String? sha256;
+
+  const DownloadAndInstallPackageAction({
+    required this.packageUrl,
+    required this.packageType,
+    this.packageSizeBytes,
+    this.sha256,
+  });
+}
+
 class OpenInstallerAction extends UpdateAction {
   final Uri installerUrl;
   final InstallerType installerType;
