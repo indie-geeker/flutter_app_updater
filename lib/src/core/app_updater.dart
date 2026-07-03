@@ -2,6 +2,7 @@ import '../actions/update_action.dart';
 import '../models/update_error_code.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
+import '../platform/android_market_executor.dart';
 import '../platform/store_update_executor.dart';
 import '../platform/update_action_executor.dart';
 import 'update_selector.dart';
@@ -84,6 +85,9 @@ class AppUpdater {
   }
 
   List<UpdateActionExecutor> _defaultExecutors() {
-    return [StoreUpdateExecutor()];
+    return [
+      StoreUpdateExecutor(),
+      AndroidMarketExecutor(),
+    ];
   }
 }

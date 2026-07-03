@@ -57,6 +57,21 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   }
 
   @override
+  Future<void> openAndroidMarket({
+    required String marketPackageName,
+    required String marketUri,
+    required String targetPackageName,
+    String? fallbackUrl,
+  }) async {
+    await methodChannel.invokeMethod<void>('openAndroidMarket', {
+      'marketPackageName': marketPackageName,
+      'marketUri': marketUri,
+      'targetPackageName': targetPackageName,
+      if (fallbackUrl != null) 'fallbackUrl': fallbackUrl,
+    });
+  }
+
+  @override
   Future<void> openInstaller({
     required String installerPath,
   }) async {

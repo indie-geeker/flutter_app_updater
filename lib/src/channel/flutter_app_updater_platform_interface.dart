@@ -58,6 +58,15 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
     );
   }
 
+  Future<void> openAndroidMarket({
+    required String marketPackageName,
+    required String marketUri,
+    required String targetPackageName,
+    String? fallbackUrl,
+  }) {
+    throw UnimplementedError('openAndroidMarket() has not been implemented.');
+  }
+
   Future<void> openInstaller({
     required String installerPath,
   }) {

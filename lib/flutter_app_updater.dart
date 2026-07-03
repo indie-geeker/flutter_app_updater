@@ -6,6 +6,7 @@ export 'src/manifest/manifest_fetcher.dart';
 export 'src/models/update_candidate.dart';
 export 'src/models/update_error_code.dart';
 export 'src/models/update_policy.dart';
+export 'src/platform/android_market_executor.dart';
 export 'src/platform/download_package_executor.dart';
 export 'src/platform/store_update_executor.dart' show StoreUpdateExecutor;
 export 'src/platform/update_action_executor.dart';
