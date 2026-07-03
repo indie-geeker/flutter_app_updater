@@ -91,7 +91,8 @@ class PackageDownloader {
     required DownloadPackageAction action,
     required String savePath,
   }) async {
-    if (action.sha256.trim().isEmpty) {
+    final expectedSha256 = action.sha256?.trim().toLowerCase();
+    if (expectedSha256 == null || expectedSha256.isEmpty) {
       return const PackageDownloadResult.failure(
         code: UpdateErrorCode.missingRequiredField,
         message: 'sha256 is required for package downloads.',
@@ -149,7 +150,7 @@ class PackageDownloader {
       );
 
       final actualSha256 = await _sha256Of(partialFile);
-      if (actualSha256 != action.sha256.toLowerCase().trim()) {
+      if (actualSha256 != expectedSha256) {
         if (await partialFile.exists()) {
           await partialFile.delete();
         }

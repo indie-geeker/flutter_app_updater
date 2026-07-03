@@ -83,8 +83,7 @@ class ManifestParser {
           packageType:
               _parsePackageType(_requiredString(action, 'packageType')),
           packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
-          sha256: _requiredString(action, 'sha256'),
-          signature: _optionalString(action, 'signature'),
+          sha256: _optionalString(action, 'sha256'),
         ),
       'openInstaller' => OpenInstallerAction(
           installerUrl: _requiredAbsoluteUri(action, 'installerUrl'),
@@ -92,8 +91,7 @@ class ManifestParser {
             _requiredString(action, 'installerType'),
           ),
           installerSizeBytes: _optionalInt(action, 'installerSizeBytes'),
-          sha256: _requiredString(action, 'sha256'),
-          signature: _optionalString(action, 'signature'),
+          sha256: _optionalString(action, 'sha256'),
         ),
       _ => throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,

@@ -36,14 +36,12 @@ void main() {
                 'packageUrl': 'https://example.com/app.apk',
                 'packageType': 'apk',
                 'packageSizeBytes': 25600000,
-                'sha256': 'a' * 64,
               },
               {
                 'type': 'openInstaller',
                 'installerUrl': 'https://example.com/app.dmg',
                 'installerType': 'dmg',
                 'installerSizeBytes': 82000000,
-                'sha256': 'b' * 64,
               },
             ],
           },
@@ -73,13 +71,13 @@ void main() {
       expect(packageAction.packageUrl.path, '/app.apk');
       expect(packageAction.packageType, PackageType.apk);
       expect(packageAction.packageSizeBytes, 25600000);
-      expect(packageAction.sha256, 'a' * 64);
+      expect(packageAction.sha256, isNull);
 
       final installerAction = release.actions[2] as OpenInstallerAction;
       expect(installerAction.installerUrl.path, '/app.dmg');
       expect(installerAction.installerType, InstallerType.dmg);
       expect(installerAction.installerSizeBytes, 82000000);
-      expect(installerAction.sha256, 'b' * 64);
+      expect(installerAction.sha256, isNull);
     });
 
     test('parses Android market and Play in-app update actions', () {

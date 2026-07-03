@@ -68,9 +68,12 @@ class DownloadPackageExecutor implements UpdateActionExecutor {
       return lastSegment;
     }
 
-    final prefix = action.sha256.length >= 12
-        ? action.sha256.substring(0, 12)
-        : action.sha256;
+    final sha256 = action.sha256?.trim().toLowerCase();
+    final prefix = sha256 == null || sha256.isEmpty
+        ? 'download'
+        : sha256.length >= 12
+            ? sha256.substring(0, 12)
+            : sha256;
     return 'package-$prefix.${action.packageType.name}';
   }
 

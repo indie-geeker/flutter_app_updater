@@ -74,15 +74,13 @@ class DownloadPackageAction extends UpdateAction {
   final Uri packageUrl;
   final PackageType packageType;
   final int? packageSizeBytes;
-  final String sha256;
-  final String? signature;
+  final String? sha256;
 
   const DownloadPackageAction({
     required this.packageUrl,
     required this.packageType,
     this.packageSizeBytes,
-    required this.sha256,
-    this.signature,
+    this.sha256,
   });
 }
 
@@ -90,14 +88,12 @@ class OpenInstallerAction extends UpdateAction {
   final Uri installerUrl;
   final InstallerType installerType;
   final int? installerSizeBytes;
-  final String sha256;
-  final String? signature;
+  final String? sha256;
 
   const OpenInstallerAction({
     required this.installerUrl,
     required this.installerType,
     this.installerSizeBytes,
-    required this.sha256,
-    this.signature,
+    this.sha256,
   });
 }

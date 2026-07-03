@@ -77,37 +77,25 @@ void main() {
       );
     });
 
-    test('rejects missing sha256 for package actions', () {
+    test('allows package actions without sha256', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
           'type': 'downloadPackage',
           'packageUrl': 'https://example.com/app.apk',
           'packageType': 'apk',
         })),
-        throwsA(
-          isA<ManifestParseException>().having(
-            (error) => error.code,
-            'code',
-            UpdateErrorCode.missingRequiredField,
-          ),
-        ),
+        returnsNormally,
       );
     });
 
-    test('rejects missing sha256 for installer actions', () {
+    test('allows installer actions without sha256', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
           'type': 'openInstaller',
           'installerUrl': 'https://example.com/app.dmg',
           'installerType': 'dmg',
         })),
-        throwsA(
-          isA<ManifestParseException>().having(
-            (error) => error.code,
-            'code',
-            UpdateErrorCode.missingRequiredField,
-          ),
-        ),
+        returnsNormally,
       );
     });
 

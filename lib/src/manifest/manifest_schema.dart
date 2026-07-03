@@ -82,11 +82,9 @@ class ManifestSchema {
       case 'downloadPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
-        _requiredString(action, 'sha256');
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
-        _requiredString(action, 'sha256');
       default:
         throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,

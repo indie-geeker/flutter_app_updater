@@ -35,7 +35,8 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
       );
     }
 
-    if (action.sha256.trim().isEmpty) {
+    final sha256 = action.sha256?.trim();
+    if (sha256 == null || sha256.isEmpty) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.missingRequiredField,
         message: 'sha256 is required before opening installers.',
@@ -56,7 +57,6 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
         packageType: PackageType.apk,
         packageSizeBytes: action.installerSizeBytes,
         sha256: action.sha256,
-        signature: action.signature,
       ),
       savePath: _installerPath(action),
     );
@@ -127,10 +127,12 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
           : '$decodedFileName.$extension';
     }
 
-    final normalizedSha256 = action.sha256.toLowerCase().trim();
-    final prefix = normalizedSha256.length >= 12
-        ? normalizedSha256.substring(0, 12)
-        : normalizedSha256;
+    final normalizedSha256 = action.sha256?.toLowerCase().trim();
+    final prefix = normalizedSha256 == null || normalizedSha256.isEmpty
+        ? 'download'
+        : normalizedSha256.length >= 12
+            ? normalizedSha256.substring(0, 12)
+            : normalizedSha256;
     return 'installer-$prefix.$extension';
   }
 
