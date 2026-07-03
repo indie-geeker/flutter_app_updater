@@ -2,6 +2,7 @@ package com.indiegeeker.flutter_app_updater
 
 import android.content.Context
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
@@ -44,6 +45,8 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
         installApp(filePath, result)
       }
       "getDownloadPath" -> getDownloadPath(result)
+      "openStore" -> openStore(call, result)
+      "startPlayInAppUpdate" -> startPlayInAppUpdate(result)
       else -> result.notImplemented()
     }
   }
@@ -144,5 +147,58 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     } catch (e: Exception) {
       result.error("PATH_ERROR", "获取下载路径失败", e.message)
     }
+  }
+
+  private fun openStore(call: MethodCall, result: Result) {
+    val arguments = call.arguments as? Map<*, *>
+    val store = arguments?.get("store") as? String
+    val storeUrl = arguments?.get("storeUrl") as? String
+
+    if (storeUrl.isNullOrBlank()) {
+      result.error("INVALID_ARGUMENT", "storeUrl不能为空", null)
+      return
+    }
+
+    val uri = Uri.parse(storeUrl)
+    if (uri.scheme.isNullOrBlank()) {
+      result.error("INVALID_ARGUMENT", "storeUrl必须是绝对URL", null)
+      return
+    }
+
+    if (store == "googlePlay" && tryOpenStoreIntent(uri, "com.android.vending")) {
+      result.success(true)
+      return
+    }
+
+    if (tryOpenStoreIntent(uri, null)) {
+      result.success(true)
+      return
+    }
+
+    result.error("STORE_NOT_AVAILABLE", "没有可用应用可以打开商店链接", null)
+  }
+
+  private fun tryOpenStoreIntent(uri: Uri, packageName: String?): Boolean {
+    return try {
+      val intent = Intent(Intent.ACTION_VIEW, uri)
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      if (!packageName.isNullOrBlank()) {
+        intent.setPackage(packageName)
+      }
+      applicationContext.startActivity(intent)
+      true
+    } catch (e: ActivityNotFoundException) {
+      false
+    } catch (e: Exception) {
+      false
+    }
+  }
+
+  private fun startPlayInAppUpdate(result: Result) {
+    result.error(
+      "PLAY_IN_APP_UPDATE_UNAVAILABLE",
+      "当前原生插件未集成Google Play In-App Updates",
+      null
+    )
   }
 }

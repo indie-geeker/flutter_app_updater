@@ -16,8 +16,42 @@ public class FlutterAppUpdaterPlugin: NSObject, FlutterPlugin {
       result(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
     case "getAppVersionCode":
       result(Bundle.main.infoDictionary?["CFBundleVersion"] as? String)
+    case "openStore":
+      openStore(call, result: result)
+    case "startPlayInAppUpdate":
+      result(FlutterError(
+        code: "PLAY_IN_APP_UPDATE_UNAVAILABLE",
+        message: "Google Play In-App Updates are unavailable on macOS",
+        details: nil
+      ))
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func openStore(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let storeUrl = arguments["storeUrl"] as? String,
+      let url = URL(string: storeUrl),
+      url.scheme != nil
+    else {
+      result(FlutterError(
+        code: "INVALID_ARGUMENT",
+        message: "storeUrl must be an absolute URL",
+        details: nil
+      ))
+      return
+    }
+
+    if NSWorkspace.shared.open(url) {
+      result(true)
+    } else {
+      result(FlutterError(
+        code: "STORE_NOT_AVAILABLE",
+        message: "No application can open the store URL",
+        details: nil
+      ))
     }
   }
 }

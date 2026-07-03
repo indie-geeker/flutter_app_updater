@@ -2,7 +2,6 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'flutter_app_updater_method_channel.dart';
 
-
 abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
   /// Constructs a FlutterAppUpdaterPlatform.
   FlutterAppUpdaterPlatform() : super(token: _token);
@@ -31,6 +30,7 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
   Future<String?> getAppVersionCode() {
     throw UnimplementedError('appVersion() has not been implemented.');
   }
+
   Future<String?> getAppVersionName() {
     throw UnimplementedError('appVersion() has not been implemented.');
   }
@@ -43,4 +43,18 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
     throw UnimplementedError('getDownloadPath() has not been implemented.');
   }
 
+  Future<void> openStore({
+    required String store,
+    required String storeUrl,
+  }) {
+    throw UnimplementedError('openStore() has not been implemented.');
+  }
+
+  Future<void> startPlayInAppUpdate({
+    required String mode,
+  }) {
+    throw UnimplementedError(
+      'startPlayInAppUpdate() has not been implemented.',
+    );
+  }
 }
