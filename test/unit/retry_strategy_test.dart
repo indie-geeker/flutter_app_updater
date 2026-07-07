@@ -281,6 +281,13 @@ void main() {
             isFalse,
           );
         });
+
+        test('should not retry canceled actions', () {
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.actionCanceled, 0),
+            isFalse,
+          );
+        });
       });
 
       group('attempt limit', () {

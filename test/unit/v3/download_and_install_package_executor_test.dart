@@ -80,6 +80,68 @@ void main() {
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
       expect(platform.installedPaths, isEmpty);
     });
+
+    test('performStream emits download progress and install events', () async {
+      final firstChunk = utf8.encode('package ');
+      final secondChunk = utf8.encode('bytes');
+      final bytes = [...firstChunk, ...secondChunk];
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream.fromIterable([firstChunk, secondChunk]),
+        ),
+      );
+      final action = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(events, hasLength(6));
+      expect(events[0], isA<UpdateActionStarted>());
+      expect(
+        events[1],
+        isA<UpdateDownloadProgress>().having(
+          (event) => event.receivedBytes,
+          'receivedBytes',
+          firstChunk.length,
+        ),
+      );
+      expect(
+        events[2],
+        isA<UpdateDownloadProgress>().having(
+          (event) => event.receivedBytes,
+          'receivedBytes',
+          bytes.length,
+        ),
+      );
+      expect(events[3], isA<UpdateDownloadCompleted>());
+      expect(
+        events[4],
+        isA<UpdateInstallStarted>().having(
+          (event) => event.packagePath,
+          'packagePath',
+          endsWith('${Platform.pathSeparator}app.apk'),
+        ),
+      );
+      expect(
+        events[5],
+        isA<UpdateActionCompleted>().having(
+          (event) => event.result.downloadedBytes,
+          'downloadedBytes',
+          bytes.length,
+        ),
+      );
+      expect(platform.installedPaths.single,
+          endsWith('${Platform.pathSeparator}app.apk'));
+    });
   });
 }
 

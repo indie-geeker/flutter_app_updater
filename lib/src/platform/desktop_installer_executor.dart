@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -6,9 +7,13 @@ import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
+import 'streaming_update_action_executor.dart';
+import 'update_action_cancel_token.dart';
+import 'update_action_event.dart';
 import 'update_action_executor.dart';
 
-class DesktopInstallerExecutor implements UpdateActionExecutor {
+class DesktopInstallerExecutor
+    implements UpdateActionExecutor, StreamingUpdateActionExecutor {
   final TargetPlatform platform;
   final FlutterAppUpdaterPlatform platformChannel;
   final PackageDownloadClient client;
@@ -35,6 +40,95 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
       );
     }
 
+    return _performOpenInstaller(action);
+  }
+
+  @override
+  Stream<UpdateActionEvent> performStream(UpdateAction action) {
+    var isActive = true;
+    final cancelToken = UpdateActionCancelToken();
+    late final StreamController<UpdateActionEvent> controller;
+    controller = StreamController<UpdateActionEvent>(
+      onListen: () {
+        unawaited(
+          _performOpenInstallerStream(
+            action: action,
+            controller: controller,
+            cancelToken: cancelToken,
+            isActive: () => isActive,
+          ),
+        );
+      },
+      onCancel: () {
+        isActive = false;
+        cancelToken.cancel();
+      },
+    );
+    return controller.stream;
+  }
+
+  Future<void> _performOpenInstallerStream({
+    required UpdateAction action,
+    required StreamController<UpdateActionEvent> controller,
+    required UpdateActionCancelToken cancelToken,
+    required bool Function() isActive,
+  }) async {
+    void add(UpdateActionEvent event) {
+      if (isActive() && !controller.isClosed) {
+        controller.add(event);
+      }
+    }
+
+    try {
+      add(UpdateActionStarted(action));
+
+      if (action is! OpenInstallerAction) {
+        add(
+          const UpdateActionFailed(
+            UpdateActionResult.failure(
+              code: UpdateErrorCode.noSupportedAction,
+              message:
+                  'DesktopInstallerExecutor only supports installer actions.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final result = await _performOpenInstaller(
+        action,
+        onProgress: (progress) {
+          add(
+            UpdateDownloadProgress(
+              receivedBytes: progress.receivedBytes,
+              totalBytes: progress.totalBytes,
+            ),
+          );
+        },
+        onDownloadCompleted: (downloadResult) {
+          add(UpdateDownloadCompleted(downloadResult));
+        },
+        cancelToken: cancelToken,
+      );
+
+      if (result.isSuccess) {
+        add(UpdateActionCompleted(result));
+      } else {
+        add(UpdateActionFailed(result));
+      }
+    } finally {
+      if (!controller.isClosed) {
+        await controller.close();
+      }
+    }
+  }
+
+  Future<UpdateActionResult> _performOpenInstaller(
+    OpenInstallerAction action, {
+    PackageDownloadProgressCallback? onProgress,
+    void Function(UpdateActionResult downloadResult)? onDownloadCompleted,
+    UpdateActionCancelToken? cancelToken,
+  }) async {
     if (!_supportsPlatform(platform) ||
         !_supportsInstallerType(platform, action.installerType)) {
       return const UpdateActionResult.failure(
@@ -51,6 +145,8 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
         sha256: action.sha256,
       ),
       savePath: _installerPath(action),
+      onProgress: onProgress,
+      cancelToken: cancelToken,
     );
 
     if (!downloadResult.isSuccess || downloadResult.file == null) {
@@ -59,6 +155,14 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
         message: downloadResult.message ?? 'Installer download failed.',
       );
     }
+
+    onDownloadCompleted?.call(
+      UpdateActionResult.success(
+        file: downloadResult.file,
+        downloadedBytes: downloadResult.downloadedBytes,
+        sha256: downloadResult.sha256,
+      ),
+    );
 
     try {
       await platformChannel.openInstaller(

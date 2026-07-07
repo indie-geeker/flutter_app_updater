@@ -8,6 +8,7 @@ import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_int
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
 import 'package:flutter_app_updater/src/models/update_error_code.dart';
 import 'package:flutter_app_updater/src/platform/desktop_installer_executor.dart';
+import 'package:flutter_app_updater/src/platform/update_action_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -179,6 +180,53 @@ void main() {
           startsWith('${tempDir.absolute.path}${Platform.pathSeparator}'),
         );
       }
+    });
+
+    test('performStream emits progress and opens installer', () async {
+      final firstChunk = utf8.encode('windows-');
+      final secondChunk = utf8.encode('installer');
+      final bytes = [...firstChunk, ...secondChunk];
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream.fromIterable([firstChunk, secondChunk]),
+        ),
+      );
+      final action = _installer(
+        installerUrl: Uri.parse('https://example.com/app.msi'),
+        installerType: InstallerType.msi,
+        sha256: _sha256(bytes),
+      );
+
+      final events = await DesktopInstallerExecutor(
+        platform: TargetPlatform.windows,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      ).performStream(action).toList();
+
+      expect(events, hasLength(5));
+      expect(events[0], isA<UpdateActionStarted>());
+      expect(
+        events[1],
+        isA<UpdateDownloadProgress>().having(
+          (event) => event.receivedBytes,
+          'receivedBytes',
+          firstChunk.length,
+        ),
+      );
+      expect(
+        events[2],
+        isA<UpdateDownloadProgress>().having(
+          (event) => event.receivedBytes,
+          'receivedBytes',
+          bytes.length,
+        ),
+      );
+      expect(events[3], isA<UpdateDownloadCompleted>());
+      expect(events[4], isA<UpdateActionCompleted>());
+      expect(platform.openedInstallers.single, endsWith('.msi'));
     });
   });
 }
