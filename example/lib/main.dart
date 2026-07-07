@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
+import 'package:flutter_app_updater/flutter_app_updater_ui.dart' as updater_ui;
 
 void main() {
   runApp(const MyApp());
@@ -107,6 +108,29 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  Future<void> _showDefaultUpdateDialog() async {
+    final result = _result;
+    if (result is! PreparedUpdateAvailable) {
+      return;
+    }
+
+    final actionResult = await updater_ui.showUpdateFlowDialog(
+      context: context,
+      updater: _updater,
+      update: result,
+    );
+
+    if (!mounted || actionResult == null) {
+      return;
+    }
+
+    setState(() {
+      _status = actionResult.isSuccess
+          ? 'Action completed'
+          : 'Action failed: ${actionResult.code?.value ?? actionResult.message}';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -131,6 +155,11 @@ class _MyAppState extends State<MyApp> {
               FilledButton(
                 onPressed: _performRecommendedAction,
                 child: const Text('Perform recommended action'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _showDefaultUpdateDialog,
+                child: const Text('Show default update dialog'),
               ),
             ],
             const SizedBox(height: 12),

@@ -73,6 +73,15 @@ void main() {
     expect(barrel, isNot(contains("src/models/update_info.dart")));
   });
 
+  test('UI helper is exported from a separate optional library', () {
+    final coreBarrel = File('lib/flutter_app_updater.dart').readAsStringSync();
+    final uiBarrel = File('lib/flutter_app_updater_ui.dart').readAsStringSync();
+
+    expect(coreBarrel, isNot(contains('src/ui/')));
+    expect(uiBarrel, contains("export 'flutter_app_updater.dart'"));
+    expect(uiBarrel, contains("export 'src/ui/update_flow_dialog.dart'"));
+  });
+
   test('README documents v3 without legacy fields', () {
     final readme = File('README.md').readAsStringSync();
 

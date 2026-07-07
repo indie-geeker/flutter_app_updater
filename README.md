@@ -47,7 +47,55 @@ switch (result) {
 }
 ```
 
-The package does not show UI. Use the prepared result to drive your own dialog, sheet, page, or silent policy.
+The core package does not show UI. Use the prepared result to drive your own
+dialog, sheet, page, or silent policy.
+
+### Optional Default Dialog
+
+Apps that want a bundled Material progress dialog can import the optional UI
+entrypoint:
+
+```dart
+import 'package:flutter_app_updater/flutter_app_updater_ui.dart' as updater_ui;
+
+final result = await updater.checkAndPrepare();
+
+if (result is PreparedUpdateAvailable && context.mounted) {
+  final actionResult = await updater_ui.showUpdateFlowDialog(
+    context: context,
+    updater: updater,
+    update: result,
+  );
+
+  if (actionResult != null && !actionResult.isSuccess) {
+    debugPrint('${actionResult.code}: ${actionResult.message}');
+  }
+}
+```
+
+Required updates cannot be dismissed from the default dialog. Optional updates
+show a cancel action that cancels the update stream.
+
+### Custom Progress UI
+
+For a custom dialog or page, consume `performStream()` directly:
+
+```dart
+await for (final event in updater.performStream(result.recommendedAction)) {
+  switch (event) {
+    case UpdateDownloadProgress(:final receivedBytes, :final totalBytes):
+      debugPrint('$receivedBytes / ${totalBytes ?? 'unknown'}');
+    case UpdateActionCompleted(:final result):
+      debugPrint('Completed: ${result.downloadedBytes}');
+    case UpdateActionFailed(:final result):
+      debugPrint('Failed: ${result.code}');
+    default:
+      break;
+  }
+}
+```
+
+iOS App Store and Play In-App Updates do not use the APK download dialog path.
 
 ## Manifest v3
 
