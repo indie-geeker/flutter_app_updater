@@ -94,6 +94,25 @@ void main() {
       expect(result.code, UpdateErrorCode.packageHashMismatch);
     });
 
+    test('rejects declared size mismatches', () async {
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream.value(utf8.encode('short')),
+        ),
+      );
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(packageSizeBytes: 10),
+        savePath: _path('app.apk'),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageDownloadFailed);
+      expect(await File('${_path('app.apk')}.download').exists(), isFalse);
+    });
+
     test('resumes only when ETag still matches through If-Range', () async {
       final partialFile = File('${_path('app.apk')}.download');
       await partialFile.writeAsString('hello');
@@ -231,11 +250,13 @@ void main() {
 
 DownloadPackageAction _action({
   Uri? packageUrl,
+  int? packageSizeBytes,
   String? sha256,
 }) {
   return DownloadPackageAction(
     packageUrl: packageUrl ?? Uri.parse('https://example.com/app.apk'),
     packageType: PackageType.apk,
+    packageSizeBytes: packageSizeBytes,
     sha256: sha256 ?? _sha256(utf8.encode('package-bytes')),
   );
 }

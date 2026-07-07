@@ -136,20 +136,24 @@ class PackageDownloader {
         await sink.close();
       }
 
-      await _writeResumeMetadata(
-        action: action,
-        response: response,
-        partialFile: partialFile,
-        metadataFile: metadataFile,
-      );
+      final downloadedBytes = await partialFile.length();
+      final expectedSize = action.packageSizeBytes;
+      if (expectedSize != null && downloadedBytes != expectedSize) {
+        await _deleteIfExists(partialFile);
+        await _deleteIfExists(metadataFile);
+        return PackageDownloadResult.failure(
+          code: UpdateErrorCode.packageDownloadFailed,
+          message: 'Downloaded package size $downloadedBytes does not match '
+              'declared size $expectedSize.',
+        );
+      }
 
       String? actualSha256;
       if (expectedSha256 != null) {
         actualSha256 = await _sha256Of(partialFile);
         if (actualSha256 != expectedSha256) {
-          if (await partialFile.exists()) {
-            await partialFile.delete();
-          }
+          await _deleteIfExists(partialFile);
+          await _deleteIfExists(metadataFile);
           return const PackageDownloadResult.failure(
             code: UpdateErrorCode.packageHashMismatch,
             message: 'Package SHA-256 does not match.',
@@ -161,9 +165,7 @@ class PackageDownloader {
         await targetFile.delete();
       }
       final finalFile = await partialFile.rename(savePath);
-      if (await metadataFile.exists()) {
-        await metadataFile.delete();
-      }
+      await _deleteIfExists(metadataFile);
 
       return PackageDownloadResult.success(
         file: finalFile,
@@ -226,25 +228,16 @@ class PackageDownloader {
     );
   }
 
-  Future<void> _writeResumeMetadata({
-    required DownloadPackageAction action,
-    required PackageDownloadResponse response,
-    required File partialFile,
-    required File metadataFile,
-  }) async {
-    final data = <String, Object?>{
-      'packageUrl': action.packageUrl.toString(),
-      'etag': response.etag,
-      'lastModified': response.lastModified,
-      'downloadedBytes': await partialFile.length(),
-    };
-    await metadataFile.writeAsString(jsonEncode(data));
-  }
-
   Future<String> _sha256Of(File file) async {
     return crypto.sha256.bind(file.openRead()).first.then((digest) {
       return digest.toString().toLowerCase();
     });
+  }
+
+  Future<void> _deleteIfExists(File file) async {
+    if (await file.exists()) {
+      await file.delete();
+    }
   }
 
   String? _normalizedSha256(String? value) {

@@ -24,6 +24,7 @@ class AppUpdater {
   final List<UpdateActionExecutor>? executors;
   final String? downloadDirectory;
   final TargetPlatform? platform;
+  final String? expectedAppId;
 
   const AppUpdater({
     required this.source,
@@ -32,6 +33,7 @@ class AppUpdater {
     this.executors,
     this.downloadDirectory,
     this.platform,
+    this.expectedAppId,
   });
 
   factory AppUpdater.manifest({
@@ -45,6 +47,7 @@ class AppUpdater {
     String? downloadDirectory,
     ManifestFetcher manifestFetcher = const IoManifestFetcher(),
     List<UpdateActionExecutor>? executors,
+    String? expectedAppId,
   }) {
     return AppUpdater(
       source: UpdateSource.manifest(
@@ -62,6 +65,7 @@ class AppUpdater {
       executors: executors,
       downloadDirectory: downloadDirectory,
       platform: platform,
+      expectedAppId: expectedAppId,
     );
   }
 
@@ -78,7 +82,7 @@ class AppUpdater {
 
     return switch (source) {
       StaticManifestUpdateSource(:final manifest) =>
-        effectiveSelector.select(manifest.releases),
+        _selectManifest(manifest, effectiveSelector),
       ManifestUpdateSource manifestSource =>
         _checkRemoteManifest(manifestSource, effectiveSelector),
     };
@@ -113,7 +117,7 @@ class AppUpdater {
     try {
       final json = await manifestFetcher.fetch(manifestSource);
       final manifest = const ManifestParser().parse(json);
-      return effectiveSelector.select(manifest.releases);
+      return _selectManifest(manifest, effectiveSelector);
     } on FormatException catch (error) {
       return UpdateCheckFailed(
         code: UpdateErrorCode.manifestInvalid,
@@ -135,6 +139,22 @@ class AppUpdater {
         message: 'Failed to fetch update manifest: $error',
       );
     }
+  }
+
+  UpdateCheckResult _selectManifest(
+    UpdateManifest manifest,
+    UpdateSelector effectiveSelector,
+  ) {
+    final expected = expectedAppId?.trim();
+    if (expected != null && expected.isNotEmpty && manifest.appId != expected) {
+      return UpdateCheckFailed(
+        code: UpdateErrorCode.manifestInvalid,
+        message:
+            'Manifest appId ${manifest.appId} does not match expected appId $expected.',
+      );
+    }
+
+    return effectiveSelector.select(manifest.releases);
   }
 
   Future<UpdateActionResult> perform(UpdateAction action) async {

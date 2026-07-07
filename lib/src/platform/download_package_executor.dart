@@ -33,6 +33,21 @@ class DownloadPackageExecutor implements UpdateActionExecutor {
       );
     }
 
+    if (!_isAllowedSelfHostedArtifactUrl(action.packageUrl)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'packageUrl must use HTTPS outside localhost.',
+      );
+    }
+
+    final packageSizeBytes = action.packageSizeBytes;
+    if (packageSizeBytes != null && packageSizeBytes <= 0) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'packageSizeBytes must be a positive integer.',
+      );
+    }
+
     final result = await downloader.download(
       action: action,
       savePath: _savePath(action),
@@ -84,5 +99,18 @@ class DownloadPackageExecutor implements UpdateActionExecutor {
     return !value.contains('/') &&
         !value.contains(r'\') &&
         !value.contains(RegExp(r'[\x00-\x1F]'));
+  }
+
+  bool _isAllowedSelfHostedArtifactUrl(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme == 'https') {
+      return true;
+    }
+    if (scheme != 'http') {
+      return false;
+    }
+
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 }

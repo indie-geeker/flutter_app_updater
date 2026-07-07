@@ -77,6 +77,32 @@ void main() {
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
     });
 
+    test('rejects insecure production package URLs before downloading',
+        () async {
+      final executor = DownloadPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(
+          client: _FakePackageClient(
+            const PackageDownloadResponse(
+              statusCode: 200,
+              headers: {},
+              bytes: Stream<List<int>>.empty(),
+            ),
+          ),
+        ),
+      );
+
+      final result = await executor.perform(
+        DownloadPackageAction(
+          packageUrl: Uri.parse('http://example.com/app.apk'),
+          packageType: PackageType.apk,
+        ),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.manifestInvalid);
+    });
+
     test('downloads package actions without SHA-256', () async {
       final bytes = utf8.encode('package bytes');
       final action = DownloadPackageAction(

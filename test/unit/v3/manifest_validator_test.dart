@@ -219,6 +219,84 @@ void main() {
         );
       }
     });
+
+    test('rejects production self-hosted artifact URLs without HTTPS', () {
+      for (final action in [
+        {
+          'type': 'downloadPackage',
+          'packageUrl': 'http://example.com/app.apk',
+          'packageType': 'apk',
+        },
+        {
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'http://example.com/app.apk',
+          'packageType': 'apk',
+        },
+        {
+          'type': 'openInstaller',
+          'installerUrl': 'http://example.com/app.msi',
+          'installerType': 'msi',
+        },
+      ]) {
+        expect(
+          () => const ManifestParser().parse(_manifestWithAction(action)),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestInvalid,
+            ),
+          ),
+        );
+      }
+    });
+
+    test('allows localhost self-hosted artifact URLs for local testing', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadPackage',
+          'packageUrl': 'http://localhost:8080/app.apk',
+          'packageType': 'apk',
+        })),
+        returnsNormally,
+      );
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'openInstaller',
+          'installerUrl': 'http://127.0.0.1:8080/app.msi',
+          'installerType': 'msi',
+        })),
+        returnsNormally,
+      );
+    });
+
+    test('rejects non-positive declared artifact sizes', () {
+      for (final action in [
+        {
+          'type': 'downloadPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+          'packageSizeBytes': 0,
+        },
+        {
+          'type': 'openInstaller',
+          'installerUrl': 'https://example.com/app.msi',
+          'installerType': 'msi',
+          'installerSizeBytes': -1,
+        },
+      ]) {
+        expect(
+          () => const ManifestParser().parse(_manifestWithAction(action)),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestInvalid,
+            ),
+          ),
+        );
+      }
+    });
   });
 }
 

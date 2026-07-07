@@ -78,8 +78,9 @@ class ManifestSchema {
         _requiredString(action, 'targetPackageName');
         _optionalAbsoluteUrl(action, 'fallbackUrl');
       case 'downloadPackage':
-        _requiredAbsoluteUrl(action, 'packageUrl');
+        _requiredSelfHostedArtifactUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
+        _optionalPositiveInt(action, 'packageSizeBytes');
       case 'installPackage':
         _requiredString(action, 'packagePath');
         _requireApkPackageType(
@@ -87,14 +88,16 @@ class ManifestSchema {
           'installPackage',
         );
       case 'downloadAndInstallPackage':
-        _requiredAbsoluteUrl(action, 'packageUrl');
+        _requiredSelfHostedArtifactUrl(action, 'packageUrl');
         _requireApkPackageType(
           _requiredString(action, 'packageType'),
           'downloadAndInstallPackage',
         );
+        _optionalPositiveInt(action, 'packageSizeBytes');
       case 'openInstaller':
-        _requiredAbsoluteUrl(action, 'installerUrl');
+        _requiredSelfHostedArtifactUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
+        _optionalPositiveInt(action, 'installerSizeBytes');
       default:
         throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,
@@ -114,6 +117,16 @@ class ManifestSchema {
     }
   }
 
+  void _requiredSelfHostedArtifactUrl(Map<String, Object?> map, String field) {
+    final uri = _parseAbsoluteUrl(_requiredString(map, field), field);
+    if (!_isAllowedSelfHostedArtifactUrl(uri)) {
+      throw ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: '$field must use HTTPS outside localhost.',
+      );
+    }
+  }
+
   void _requireApkPackageType(String packageType, String actionType) {
     if (packageType != 'apk') {
       throw ManifestParseException(
@@ -121,6 +134,32 @@ class ManifestSchema {
         message: '$actionType only supports packageType apk.',
       );
     }
+  }
+
+  void _optionalPositiveInt(Map<String, Object?> map, String field) {
+    final value = map[field];
+    if (value == null) {
+      return;
+    }
+    if (value is! int || value <= 0) {
+      throw ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: '$field must be a positive integer.',
+      );
+    }
+  }
+
+  bool _isAllowedSelfHostedArtifactUrl(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme == 'https') {
+      return true;
+    }
+    if (scheme != 'http') {
+      return false;
+    }
+
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 
   Uri _parseAbsoluteUrl(String value, String field) {

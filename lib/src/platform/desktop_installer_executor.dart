@@ -43,6 +43,21 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
       );
     }
 
+    if (!_isAllowedSelfHostedArtifactUrl(action.installerUrl)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'installerUrl must use HTTPS outside localhost.',
+      );
+    }
+
+    final installerSizeBytes = action.installerSizeBytes;
+    if (installerSizeBytes != null && installerSizeBytes <= 0) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'installerSizeBytes must be a positive integer.',
+      );
+    }
+
     final downloadResult = await PackageDownloader(client: client).download(
       action: DownloadPackageAction(
         packageUrl: action.installerUrl,
@@ -135,6 +150,19 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
     return !value.contains('/') &&
         !value.contains(r'\') &&
         !value.contains(RegExp(r'[\x00-\x1F\x7F]'));
+  }
+
+  bool _isAllowedSelfHostedArtifactUrl(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme == 'https') {
+      return true;
+    }
+    if (scheme != 'http') {
+      return false;
+    }
+
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 
   String _extensionFor(InstallerType installerType) {

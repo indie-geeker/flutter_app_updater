@@ -30,6 +30,7 @@ final updater = AppUpdater.manifest(
   architecture: 'arm64',
   channel: 'stable',
   downloadDirectory: downloadDirectory,
+  expectedAppId: 'com.example.app',
 );
 
 final result = await updater.checkAndPrepare();
@@ -97,7 +98,9 @@ Direct field names:
 - `releasedAt`
 - `sha256`
 
-`sha256` is optional. When it is present, the downloaded file is checked before the action continues. When it is absent, the package still downloads and installs.
+Pass `expectedAppId` when checking manifests so a server or channel mix-up cannot offer updates for another app. The manifest `appId` must match the expected value when it is configured.
+
+`sha256` is optional but strongly recommended for self-hosted packages and installers. When it is present, the downloaded file is checked before the action continues. `packageSizeBytes` and `installerSizeBytes`, when present, must be positive and must match the downloaded byte count.
 
 ## Recipes
 
@@ -146,6 +149,8 @@ APK self-hosted updates are host app opt-in on Android. Store URL updates do not
 
 Android App Bundle (`aab`) files are store upload artifacts, not local install packages. `installPackage` and `downloadAndInstallPackage` accept only `apk`.
 
+Self-hosted `packageUrl` values must use HTTPS outside localhost or `127.0.0.1` development URLs.
+
 Use separate actions when your app wants to download now and install later:
 
 ```json
@@ -177,6 +182,8 @@ Use separate actions when your app wants to download now and install later:
 ### macOS and Windows Installers
 
 Mac App Store builds should use `openStore` with `macAppStore`. Direct installer actions are for non-store macOS and Windows distribution.
+
+Self-hosted `installerUrl` values must use HTTPS outside localhost or `127.0.0.1` development URLs.
 
 ```json
 {

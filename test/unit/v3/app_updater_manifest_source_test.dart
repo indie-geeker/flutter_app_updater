@@ -21,6 +21,29 @@ void main() {
       expect((result as UpdateAvailable).candidate.version, '2.0.0');
     });
 
+    test('rejects manifests for a different app id', () async {
+      final fetcher = _FakeManifestFetcher(
+        _manifestJson(
+          version: '2.0.0',
+          appId: 'com.other.app',
+        ),
+      );
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+        ),
+        manifestFetcher: fetcher,
+        expectedAppId: 'com.example.app',
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+          (result as UpdateCheckFailed).code, UpdateErrorCode.manifestInvalid);
+      expect(result.message, contains('appId'));
+    });
+
     test('passes configured headers to the manifest fetcher', () async {
       final headers = {'authorization': 'Bearer token'};
       final fetcher = _FakeManifestFetcher(_manifestJson(version: '2.0.0'));
@@ -131,10 +154,11 @@ UpdateSelector _selector() {
 
 Map<String, Object?> _manifestJson({
   required String version,
+  String appId = 'com.example.app',
 }) {
   return {
     'schemaVersion': 3,
-    'appId': 'com.example.app',
+    'appId': appId,
     'channel': 'stable',
     'releases': [
       {

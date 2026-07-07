@@ -101,6 +101,44 @@ void main() {
       expect(platform.openedInstallers, isEmpty);
     });
 
+    test('rejects insecure production installer URLs before downloading',
+        () async {
+      final result = await DesktopInstallerExecutor(
+        platform: TargetPlatform.windows,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      ).perform(
+        _installer(installerUrl: Uri.parse('http://example.com/app.msi')),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.manifestInvalid);
+      expect(client.requests, isEmpty);
+      expect(platform.openedInstallers, isEmpty);
+    });
+
+    test('does not open installers when declared size mismatches', () async {
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream.value(utf8.encode('short')),
+        ),
+      );
+
+      final result = await DesktopInstallerExecutor(
+        platform: TargetPlatform.windows,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      ).perform(_installer(installerSizeBytes: 10, sha256: ''));
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageDownloadFailed);
+      expect(platform.openedInstallers, isEmpty);
+    });
+
     test('opens installers without SHA-256', () async {
       final bytes = utf8.encode('windows-installer');
       client.enqueue(
@@ -186,12 +224,13 @@ void main() {
 OpenInstallerAction _installer({
   Uri? installerUrl,
   InstallerType installerType = InstallerType.msi,
+  int? installerSizeBytes,
   String? sha256,
 }) {
   return OpenInstallerAction(
     installerUrl: installerUrl ?? Uri.parse('https://example.com/app.msi'),
     installerType: installerType,
-    installerSizeBytes: 1024,
+    installerSizeBytes: installerSizeBytes,
     sha256: sha256 ?? _sha256(utf8.encode('windows-installer')),
   );
 }

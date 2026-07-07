@@ -1,6 +1,7 @@
 ## 3.1.0 - Unreleased
 
 * **Breaking**: Remove the Google Play in-app update action, platform channel method, native stubs, and manifest action type. Google Play distribution should use `openStore` with `storeUrl`.
+* **Fix**: Add optional manifest `appId` matching, HTTPS checks for self-hosted artifacts, positive size validation, and declared download size verification.
 * **Documentation**: Clarify store URL distribution and self-hosted Android APK or desktop installer flows.
 
 ## 3.0.0 - 2026-07-03
