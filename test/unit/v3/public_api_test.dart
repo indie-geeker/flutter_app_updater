@@ -96,6 +96,21 @@ void main() {
     expect(readme.toLowerCase(), isNot(contains('md5')));
   });
 
+  test('Android APK install permission is host-app opt-in', () {
+    final pluginManifest =
+        File('android/src/main/AndroidManifest.xml').readAsStringSync();
+    final exampleManifest =
+        File('example/android/app/src/main/AndroidManifest.xml')
+            .readAsStringSync();
+    final readme = File('README.md').readAsStringSync();
+
+    expect(pluginManifest, isNot(contains('REQUEST_INSTALL_PACKAGES')));
+    expect(exampleManifest, contains('REQUEST_INSTALL_PACKAGES'));
+    expect(readme, contains('REQUEST_INSTALL_PACKAGES'));
+    expect(readme, contains('host app'));
+    expect(readme, contains('APK self-hosted updates'));
+  });
+
   test('example demonstrates the convenience flow through the public API', () {
     final example = File('example/lib/main.dart').readAsStringSync();
 

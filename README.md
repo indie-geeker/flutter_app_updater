@@ -142,6 +142,8 @@ Use one action when you want the package to download and then start Android inst
 }
 ```
 
+APK self-hosted updates are host app opt-in on Android. Store URL updates do not need `REQUEST_INSTALL_PACKAGES`. If your host app offers APK installation, declare `android.permission.REQUEST_INSTALL_PACKAGES` in the host app manifest, keep the flow user initiated, and verify your distribution policy allows APK self-updates.
+
 Use separate actions when your app wants to download now and install later:
 
 ```json
