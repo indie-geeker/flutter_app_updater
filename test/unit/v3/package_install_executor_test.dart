@@ -54,6 +54,22 @@ void main() {
       expect(platform.installedPaths, isEmpty);
     });
 
+    test('rejects AAB package installs before calling platform', () async {
+      final platform = _FakeInstallPlatform();
+      final executor = InstallPackageExecutor(platform: platform);
+
+      final result = await executor.perform(
+        const InstallPackageAction(
+          packagePath: '/tmp/app.aab',
+          packageType: PackageType.aab,
+        ),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageTypeNotInstallable);
+      expect(platform.installedPaths, isEmpty);
+    });
+
     test('maps install permission failures', () async {
       final executor = InstallPackageExecutor(
         platform: _FakeInstallPlatform(

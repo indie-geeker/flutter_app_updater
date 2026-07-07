@@ -14,6 +14,7 @@ enum UpdateErrorCode {
   packageDownloadFailed('PACKAGE_DOWNLOAD_FAILED'),
   packageHashMismatch('PACKAGE_HASH_MISMATCH'),
   packageSignatureInvalid('PACKAGE_SIGNATURE_INVALID'),
+  packageTypeNotInstallable('PACKAGE_TYPE_NOT_INSTALLABLE'),
   packageInstallPermissionRequired('PACKAGE_INSTALL_PERMISSION_REQUIRED'),
   packageFileNotFound('PACKAGE_FILE_NOT_FOUND'),
   packageInstallFailed('PACKAGE_INSTALL_FAILED'),

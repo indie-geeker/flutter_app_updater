@@ -183,6 +183,17 @@ Use one action when you want the package to download and then start Android inst
 }
 ```
 
+Host apps that use APK install flows must opt in to Android package install
+permission themselves:
+
+```xml
+<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+```
+
+Store-only apps should not add this permission. Google Play distributed apps
+should prefer Google Play or store flows unless their APK self-install behavior
+is allowed by the applicable store policy.
+
 Use separate actions when your app wants to download now and install later:
 
 ```json
@@ -192,6 +203,9 @@ Use separate actions when your app wants to download now and install later:
   "packageType": "apk"
 }
 ```
+
+`aab` is allowed only for download-only workflows. AAB files are Android App
+Bundle artifacts and cannot be installed through the local APK installer path.
 
 ```json
 {

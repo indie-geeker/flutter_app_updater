@@ -82,6 +82,27 @@ void main() {
       expect(platform.installedPaths, isEmpty);
     });
 
+    test('rejects AAB download-and-install actions before downloading',
+        () async {
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+
+      final result = await executor.perform(
+        DownloadAndInstallPackageAction(
+          packageUrl: Uri.parse('https://example.com/app.aab'),
+          packageType: PackageType.aab,
+        ),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.packageTypeNotInstallable);
+      expect(client.requests, isEmpty);
+      expect(platform.installedPaths, isEmpty);
+    });
+
     test('performStream emits download progress and install events', () async {
       final firstChunk = utf8.encode('package ');
       final secondChunk = utf8.encode('bytes');
@@ -189,6 +210,7 @@ void main() {
 
 class _FakePackageClient implements PackageDownloadClient {
   final _responses = <PackageDownloadResponse>[];
+  final requests = <Uri>[];
 
   void enqueue(PackageDownloadResponse response) {
     _responses.add(response);
@@ -199,6 +221,7 @@ class _FakePackageClient implements PackageDownloadClient {
     Uri url, {
     Map<String, String> headers = const {},
   }) async {
+    requests.add(url);
     if (_responses.isEmpty) {
       throw StateError('No response queued.');
     }

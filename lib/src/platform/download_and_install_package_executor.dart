@@ -38,6 +38,10 @@ class DownloadAndInstallPackageExecutor
       );
     }
 
+    if (action.packageType != PackageType.apk) {
+      return _notInstallablePackageType();
+    }
+
     final downloadResult = await downloadExecutor.perform(
       DownloadPackageAction(
         packageUrl: action.packageUrl,
@@ -130,6 +134,11 @@ class DownloadAndInstallPackageExecutor
             ),
           ),
         );
+        return;
+      }
+
+      if (action.packageType != PackageType.apk) {
+        add(UpdateActionFailed(_notInstallablePackageType()));
         return;
       }
 
@@ -256,6 +265,13 @@ class DownloadAndInstallPackageExecutor
       packageType: action.packageType,
       packageSizeBytes: action.packageSizeBytes,
       sha256: action.sha256,
+    );
+  }
+
+  UpdateActionResult _notInstallablePackageType() {
+    return const UpdateActionResult.failure(
+      code: UpdateErrorCode.packageTypeNotInstallable,
+      message: 'Only APK files can be installed locally.',
     );
   }
 }

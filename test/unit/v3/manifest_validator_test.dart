@@ -88,6 +88,17 @@ void main() {
       );
     });
 
+    test('allows download-only AAB actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadPackage',
+          'packageUrl': 'https://example.com/app.aab',
+          'packageType': 'aab',
+        })),
+        returnsNormally,
+      );
+    });
+
     test('allows installer actions without sha256', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
@@ -110,6 +121,23 @@ void main() {
       );
     });
 
+    test('rejects installPackage AAB actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'installPackage',
+          'packagePath': '/tmp/app.aab',
+          'packageType': 'aab',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.packageTypeNotInstallable,
+          ),
+        ),
+      );
+    });
+
     test('allows downloadAndInstallPackage actions without sha256', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
@@ -119,6 +147,23 @@ void main() {
           'packageSizeBytes': 25600000,
         })),
         returnsNormally,
+      );
+    });
+
+    test('rejects download-and-install AAB actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'https://example.com/app.aab',
+          'packageType': 'aab',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.packageTypeNotInstallable,
+          ),
+        ),
       );
     });
 

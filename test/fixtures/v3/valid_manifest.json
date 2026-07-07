@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 3,
+  "appId": "com.example.app",
+  "channel": "stable",
+  "releases": [
+    {
+      "version": "2.0.0",
+      "platform": "android",
+      "releaseNotes": "Bug fixes",
+      "actions": [
+        {
+          "type": "downloadAndInstallPackage",
+          "packageUrl": "https://example.com/app.apk",
+          "packageType": "apk",
+          "packageSizeBytes": 25600000
+        }
+      ]
+    }
+  ]
+}

@@ -55,6 +55,11 @@ class InstallPackageExecutor
       return;
     }
 
+    if (action.packageType != PackageType.apk) {
+      yield UpdateActionFailed(_notInstallablePackageType());
+      return;
+    }
+
     yield UpdateInstallStarted(packagePath: packagePath);
 
     final result = await _performInstall(action);
@@ -77,6 +82,10 @@ class InstallPackageExecutor
         code: UpdateErrorCode.missingRequiredField,
         message: 'packagePath is required for package installs.',
       );
+    }
+
+    if (action.packageType != PackageType.apk) {
+      return _notInstallablePackageType();
     }
 
     try {
@@ -104,5 +113,12 @@ class InstallPackageExecutor
       'INVALID_ARGUMENT' => UpdateErrorCode.manifestInvalid,
       _ => UpdateErrorCode.packageInstallFailed,
     };
+  }
+
+  UpdateActionResult _notInstallablePackageType() {
+    return const UpdateActionResult.failure(
+      code: UpdateErrorCode.packageTypeNotInstallable,
+      message: 'Only APK files can be installed locally.',
+    );
   }
 }

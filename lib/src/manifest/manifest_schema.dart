@@ -84,10 +84,14 @@ class ManifestSchema {
         _requiredString(action, 'packageType');
       case 'installPackage':
         _requiredString(action, 'packagePath');
-        _optionalString(action, 'packageType');
+        _rejectNonInstallablePackageType(
+          _optionalString(action, 'packageType') ?? 'apk',
+        );
       case 'downloadAndInstallPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
-        _requiredString(action, 'packageType');
+        _rejectNonInstallablePackageType(
+          _requiredString(action, 'packageType'),
+        );
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
@@ -107,6 +111,15 @@ class ManifestSchema {
     final value = _optionalString(map, field);
     if (value != null) {
       _parseAbsoluteUrl(value, field);
+    }
+  }
+
+  void _rejectNonInstallablePackageType(String packageType) {
+    if (packageType == 'aab') {
+      throw const ManifestParseException(
+        code: UpdateErrorCode.packageTypeNotInstallable,
+        message: 'AAB files are not locally installable package artifacts.',
+      );
     }
   }
 
