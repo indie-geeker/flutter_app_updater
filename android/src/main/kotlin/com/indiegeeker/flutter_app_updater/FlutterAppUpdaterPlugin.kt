@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -47,6 +48,7 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       "getDownloadPath" -> getDownloadPath(result)
       "openStore" -> openStore(call, result)
       "openAndroidMarket" -> openAndroidMarket(call, result)
+      "openInstallPermissionSettings" -> openInstallPermissionSettings(result)
       else -> result.notImplemented()
     }
   }
@@ -229,5 +231,25 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     result.error("MARKET_NOT_AVAILABLE", "没有可用应用市场可以打开目标应用", null)
+  }
+
+  private fun openInstallPermissionSettings(result: Result) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      result.success(true)
+      return
+    }
+
+    val uri = Uri.parse("package:${applicationContext.packageName}")
+    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, uri)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    try {
+      applicationContext.startActivity(intent)
+      result.success(true)
+    } catch (e: ActivityNotFoundException) {
+      result.error("PLATFORM_NOT_SUPPORTED", "无法打开未知来源安装权限设置", null)
+    } catch (e: Exception) {
+      result.error("PLATFORM_NOT_SUPPORTED", "无法打开未知来源安装权限设置", e.message)
+    }
   }
 }

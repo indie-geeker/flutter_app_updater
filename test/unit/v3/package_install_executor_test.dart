@@ -102,17 +102,61 @@ void main() {
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.packageFileNotFound);
     });
+
+    test('opens install permission settings through public AppUpdater API',
+        () async {
+      final originalPlatform = FlutterAppUpdaterPlatform.instance;
+      final platform = _FakeInstallPlatform();
+      FlutterAppUpdaterPlatform.instance = platform;
+      addTearDown(() {
+        FlutterAppUpdaterPlatform.instance = originalPlatform;
+      });
+
+      final result = await _updater().openInstallPermissionSettings();
+
+      expect(result.isSuccess, isTrue);
+      expect(platform.openedInstallPermissionSettings, 1);
+    });
+
+    test('maps unsupported install permission settings', () async {
+      final originalPlatform = FlutterAppUpdaterPlatform.instance;
+      FlutterAppUpdaterPlatform.instance = _FakeInstallPlatform(
+        settingsFailure: PlatformException(
+          code: 'PLATFORM_NOT_SUPPORTED',
+          message: 'Settings not available.',
+        ),
+      );
+      addTearDown(() {
+        FlutterAppUpdaterPlatform.instance = originalPlatform;
+      });
+
+      final result = await _updater().openInstallPermissionSettings();
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.platformNotSupported);
+    });
   });
+}
+
+AppUpdater _updater() {
+  return AppUpdater(
+    source: UpdateSource.manifest(
+      manifestUrl: Uri.parse('https://example.com/update.json'),
+    ),
+  );
 }
 
 class _FakeInstallPlatform extends Fake
     with MockPlatformInterfaceMixin
     implements FlutterAppUpdaterPlatform {
   final PlatformException? failure;
+  final PlatformException? settingsFailure;
   final installedPaths = <String>[];
+  var openedInstallPermissionSettings = 0;
 
   _FakeInstallPlatform({
     this.failure,
+    this.settingsFailure,
   });
 
   @override
@@ -122,5 +166,14 @@ class _FakeInstallPlatform extends Fake
       throw failure;
     }
     installedPaths.add(path);
+  }
+
+  @override
+  Future<void> openInstallPermissionSettings() async {
+    final failure = settingsFailure;
+    if (failure != null) {
+      throw failure;
+    }
+    openedInstallPermissionSettings++;
   }
 }

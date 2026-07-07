@@ -64,4 +64,10 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
   }) {
     throw UnimplementedError('openInstaller() has not been implemented.');
   }
+
+  Future<void> openInstallPermissionSettings() {
+    throw UnimplementedError(
+      'openInstallPermissionSettings() has not been implemented.',
+    );
+  }
 }

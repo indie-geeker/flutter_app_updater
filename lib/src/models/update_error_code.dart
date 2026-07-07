@@ -16,6 +16,7 @@ enum UpdateErrorCode {
   packageFileNotFound('PACKAGE_FILE_NOT_FOUND'),
   packageInstallFailed('PACKAGE_INSTALL_FAILED'),
   installerOpenFailed('INSTALLER_OPEN_FAILED'),
+  actionCanceled('ACTION_CANCELED'),
   platformNotSupported('PLATFORM_NOT_SUPPORTED');
 
   final String value;

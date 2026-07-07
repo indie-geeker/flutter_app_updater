@@ -82,6 +82,9 @@ void main() {
     expect(readme, contains('downloadAndInstallPackage'));
     expect(readme, contains('Google Play uses storeUrl'));
     expect(readme, contains('App Store uses storeUrl'));
+    expect(readme, contains('performStream'));
+    expect(readme, contains('openInstallPermissionSettings'));
+    expect(readme, contains('ACTION_CANCELED'));
     expect(readme, isNot(contains('Play In-App Updates')));
     expect(readme, isNot(contains('playInAppUpdate')));
     expect(

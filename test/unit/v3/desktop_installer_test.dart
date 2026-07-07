@@ -8,6 +8,7 @@ import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_int
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
 import 'package:flutter_app_updater/src/models/update_error_code.dart';
 import 'package:flutter_app_updater/src/platform/desktop_installer_executor.dart';
+import 'package:flutter_app_updater/src/platform/update_action_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -158,6 +159,41 @@ void main() {
 
       expect(result.isSuccess, isTrue);
       expect(client.requests.single, Uri.parse('https://example.com/app.msi'));
+      expect(platform.openedInstallers.single, endsWith('.msi'));
+    });
+
+    test('performStream emits progress before opening installer', () async {
+      final chunks = [
+        utf8.encode('installer '),
+        utf8.encode('bytes'),
+      ];
+      final bytes = chunks.expand((chunk) => chunk).toList();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream<List<int>>.fromIterable(chunks),
+        ),
+      );
+
+      final events = await DesktopInstallerExecutor(
+        platform: TargetPlatform.windows,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      )
+          .performStream(
+            _installer(
+              installerSizeBytes: bytes.length,
+              sha256: '',
+            ),
+          )
+          .toList();
+
+      expect(events.first, isA<UpdateActionStarted>());
+      expect(events.whereType<UpdateActionProgress>(), hasLength(2));
+      expect(events.last, isA<UpdateActionCompleted>());
+      expect((events.last as UpdateActionCompleted).result.isSuccess, isTrue);
       expect(platform.openedInstallers.single, endsWith('.msi'));
     });
 

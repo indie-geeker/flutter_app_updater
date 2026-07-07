@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 
 import '../actions/update_action.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
+import 'streaming_update_action_executor.dart';
+import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
+import 'update_action_event.dart';
 
-class DownloadPackageExecutor implements UpdateActionExecutor {
+class DownloadPackageExecutor implements StreamingUpdateActionExecutor {
   final PackageDownloader downloader;
   final String downloadDirectory;
 
@@ -19,6 +23,41 @@ class DownloadPackageExecutor implements UpdateActionExecutor {
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
+    return _perform(action);
+  }
+
+  @override
+  Stream<UpdateActionEvent> performStream(
+    UpdateAction action, {
+    UpdateActionCancelToken? cancelToken,
+  }) {
+    final controller = StreamController<UpdateActionEvent>();
+    () async {
+      controller.add(UpdateActionStarted(action));
+      final result = await _perform(
+        action,
+        cancelToken: cancelToken,
+        onProgress: (progress) {
+          controller.add(
+            UpdateActionProgress(
+              action: action,
+              downloadedBytes: progress.downloadedBytes,
+              totalBytes: progress.totalBytes,
+            ),
+          );
+        },
+      );
+      controller.add(UpdateActionCompleted(result));
+      await controller.close();
+    }();
+    return controller.stream;
+  }
+
+  Future<UpdateActionResult> _perform(
+    UpdateAction action, {
+    void Function(PackageDownloadProgress progress)? onProgress,
+    UpdateActionCancelToken? cancelToken,
+  }) async {
     if (action is! DownloadPackageAction) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
@@ -51,6 +90,8 @@ class DownloadPackageExecutor implements UpdateActionExecutor {
     final result = await downloader.download(
       action: action,
       savePath: _savePath(action),
+      onProgress: onProgress,
+      cancelToken: cancelToken,
     );
 
     if (!result.isSuccess) {

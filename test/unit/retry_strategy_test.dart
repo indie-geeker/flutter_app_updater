@@ -264,6 +264,13 @@ void main() {
           );
         });
 
+        test('should not retry canceled actions', () {
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.actionCanceled, 0),
+            isFalse,
+          );
+        });
+
         test('should not retry package install failures', () {
           expect(
             strategy.shouldRetry(

@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../actions/update_action.dart';
+import '../channel/flutter_app_updater_platform_interface.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
 import '../platform/android_market_executor.dart';
@@ -12,8 +14,11 @@ import '../platform/desktop_installer_executor.dart';
 import '../platform/download_and_install_package_executor.dart';
 import '../platform/download_package_executor.dart';
 import '../platform/install_package_executor.dart';
+import '../platform/streaming_update_action_executor.dart';
 import '../platform/store_update_executor.dart';
+import '../platform/update_action_cancel_token.dart';
 import '../platform/update_action_executor.dart';
+import '../platform/update_action_event.dart';
 import 'update_selector.dart';
 import 'update_source.dart';
 
@@ -170,10 +175,63 @@ class AppUpdater {
     );
   }
 
+  Stream<UpdateActionEvent> performStream(
+    UpdateAction action, {
+    UpdateActionCancelToken? cancelToken,
+  }) async* {
+    for (final executor in executors ?? _defaultExecutors()) {
+      if (!executor.supports(action)) {
+        continue;
+      }
+
+      if (executor is StreamingUpdateActionExecutor) {
+        yield* executor.performStream(action, cancelToken: cancelToken);
+        return;
+      }
+
+      yield UpdateActionStarted(action);
+      final result = await executor.perform(action);
+      yield UpdateActionCompleted(result);
+      return;
+    }
+
+    yield UpdateActionStarted(action);
+    yield const UpdateActionCompleted(
+      UpdateActionResult.failure(
+        code: UpdateErrorCode.noSupportedAction,
+        message: 'No executor supports this update action.',
+      ),
+    );
+  }
+
   Future<UpdateActionResult> performRecommended(
     PreparedUpdateAvailable update,
   ) {
     return perform(update.recommendedAction);
+  }
+
+  Future<UpdateActionResult> openInstallPermissionSettings() async {
+    try {
+      await FlutterAppUpdaterPlatform.instance.openInstallPermissionSettings();
+      return const UpdateActionResult.success();
+    } on PlatformException catch (error) {
+      return UpdateActionResult.failure(
+        code: _mapInstallPermissionSettingsCode(error.code),
+        message: error.message ?? error.code,
+      );
+    } on MissingPluginException catch (error) {
+      return UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: error.message ??
+            'Install permission settings are not supported on this platform.',
+      );
+    } on UnimplementedError catch (error) {
+      return UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: error.message ??
+            'Install permission settings are not supported on this platform.',
+      );
+    }
   }
 
   List<UpdateActionExecutor> _defaultExecutors() {
@@ -196,6 +254,13 @@ class AppUpdater {
         downloadDirectory: Directory(effectiveDownloadDirectory),
       ),
     ];
+  }
+
+  UpdateErrorCode _mapInstallPermissionSettingsCode(String code) {
+    return switch (code) {
+      'PLATFORM_NOT_SUPPORTED' => UpdateErrorCode.platformNotSupported,
+      _ => UpdateErrorCode.packageInstallFailed,
+    };
   }
 }
 

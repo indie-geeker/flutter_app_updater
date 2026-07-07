@@ -70,4 +70,9 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
       'installerPath': installerPath,
     });
   }
+
+  @override
+  Future<void> openInstallPermissionSettings() async {
+    await methodChannel.invokeMethod<void>('openInstallPermissionSettings');
+  }
 }

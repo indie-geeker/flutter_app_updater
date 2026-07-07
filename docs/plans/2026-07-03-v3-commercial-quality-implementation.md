@@ -13,7 +13,7 @@
 ## Constraints
 
 - Stable scope: Android store/market/APK download/install, iOS App Store, macOS/Windows installer download/open.
-- Planned only: Play In-App Updates, OHOS, Linux.
+- Planned only: OHOS and Linux.
 - Keep core package UI-free.
 - Breaking v3 API changes are allowed.
 - Do not require HTTPS.
@@ -619,7 +619,7 @@ Update public API/readme tests to assert:
 - README quick start uses `AppUpdater.manifest`.
 - README includes `checkAndPrepare`.
 - README includes `downloadAndInstallPackage`.
-- README platform matrix marks OHOS/Linux/Play In-App Updates as planned or unsupported.
+- README platform matrix marks OHOS/Linux as planned or unsupported.
 - README does not claim mandatory SHA-256.
 - README does not mention public `signature` support.
 - `.pubignore` excludes `doc/plans/` and `docs/plans/`.

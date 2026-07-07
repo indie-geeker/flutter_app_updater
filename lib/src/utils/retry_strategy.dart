@@ -189,6 +189,7 @@ class RetryStrategy {
       UpdateErrorCode.packageFileNotFound ||
       UpdateErrorCode.packageInstallFailed ||
       UpdateErrorCode.installerOpenFailed ||
+      UpdateErrorCode.actionCanceled ||
       UpdateErrorCode.platformNotSupported =>
         false,
     };

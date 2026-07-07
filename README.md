@@ -147,6 +147,8 @@ Use one action when you want the package to download and then start Android inst
 
 APK self-hosted updates are host app opt-in on Android. Store URL updates do not need `REQUEST_INSTALL_PACKAGES`. If your host app offers APK installation, declare `android.permission.REQUEST_INSTALL_PACKAGES` in the host app manifest, keep the flow user initiated, and verify your distribution policy allows APK self-updates.
 
+When Android returns `PACKAGE_INSTALL_PERMISSION_REQUIRED`, call `openInstallPermissionSettings()` from your UI flow after explaining why the permission is needed. The plugin opens the current app's unknown-source install permission page on Android 8+.
+
 Android App Bundle (`aab`) files are store upload artifacts, not local install packages. `installPackage` and `downloadAndInstallPackage` accept only `apk`.
 
 Self-hosted `packageUrl` values must use HTTPS outside localhost or `127.0.0.1` development URLs.
@@ -222,6 +224,26 @@ Unsupported actions return structured failures instead of throwing platform exce
 
 `perform()` and `performRecommended()` return `UpdateActionResult`.
 
+Use `performStream()` for self-hosted downloads when the UI needs progress or cancellation:
+
+```dart
+final cancelToken = UpdateActionCancelToken();
+
+await for (final event in updater.performStream(
+  update.recommendedAction,
+  cancelToken: cancelToken,
+)) {
+  switch (event) {
+    case UpdateActionStarted():
+      break;
+    case UpdateActionProgress(:final fraction):
+      debugPrint('download progress: $fraction');
+    case UpdateActionCompleted(:final result):
+      debugPrint('${result.isSuccess}');
+  }
+}
+```
+
 Useful error codes include:
 
 - `MANIFEST_FETCH_FAILED`
@@ -235,6 +257,7 @@ Useful error codes include:
 - `PACKAGE_FILE_NOT_FOUND`
 - `PACKAGE_INSTALL_FAILED`
 - `INSTALLER_OPEN_FAILED`
+- `ACTION_CANCELED`
 - `PLATFORM_NOT_SUPPORTED`
 
 ## Maintainer Verification

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import '../actions/update_action.dart';
 import '../models/update_error_code.dart';
+import '../platform/update_action_cancel_token.dart';
 import 'package_download_result.dart';
 
 export 'package_download_result.dart';
@@ -30,6 +31,14 @@ class PackageDownloadResponse {
   String? get etag => _header('etag');
 
   String? get lastModified => _header('last-modified');
+
+  int? get contentLength {
+    final value = _header('content-length');
+    if (value == null) {
+      return null;
+    }
+    return int.tryParse(value);
+  }
 
   String? _header(String name) {
     return headers[name] ?? headers[name.toLowerCase()];
@@ -90,6 +99,8 @@ class PackageDownloader {
   Future<PackageDownloadResult> download({
     required DownloadPackageAction action,
     required String savePath,
+    void Function(PackageDownloadProgress progress)? onProgress,
+    UpdateActionCancelToken? cancelToken,
   }) async {
     final expectedSha256 = _normalizedSha256(action.sha256);
 
@@ -126,17 +137,29 @@ class PackageDownloader {
         );
       }
 
-      final sink = partialFile.openWrite(
-        mode: isResumeResponse ? FileMode.append : FileMode.write,
+      var downloadedBytes = isResumeResponse ? resume.downloadedBytes : 0;
+      final totalBytes =
+          action.packageSizeBytes ?? _totalBytes(response, downloadedBytes);
+      final canceled = await _writeResponseBytes(
+        response: response,
+        partialFile: partialFile,
+        append: isResumeResponse,
+        initialDownloadedBytes: downloadedBytes,
+        totalBytes: totalBytes,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
       );
-      try {
-        await sink.addStream(response.bytes);
-        await sink.flush();
-      } finally {
-        await sink.close();
+
+      if (canceled) {
+        await _deleteIfExists(partialFile);
+        await _deleteIfExists(metadataFile);
+        return const PackageDownloadResult.failure(
+          code: UpdateErrorCode.actionCanceled,
+          message: 'Package download canceled.',
+        );
       }
 
-      final downloadedBytes = await partialFile.length();
+      downloadedBytes = await partialFile.length();
       final expectedSize = action.packageSizeBytes;
       if (expectedSize != null && downloadedBytes != expectedSize) {
         await _deleteIfExists(partialFile);
@@ -232,6 +255,53 @@ class PackageDownloader {
     return crypto.sha256.bind(file.openRead()).first.then((digest) {
       return digest.toString().toLowerCase();
     });
+  }
+
+  Future<bool> _writeResponseBytes({
+    required PackageDownloadResponse response,
+    required File partialFile,
+    required bool append,
+    required int initialDownloadedBytes,
+    required int? totalBytes,
+    required void Function(PackageDownloadProgress progress)? onProgress,
+    required UpdateActionCancelToken? cancelToken,
+  }) async {
+    var downloadedBytes = initialDownloadedBytes;
+    var canceled = cancelToken?.isCanceled ?? false;
+    final sink = partialFile.openWrite(
+      mode: append ? FileMode.append : FileMode.write,
+    );
+    try {
+      await for (final chunk in response.bytes) {
+        if (cancelToken?.isCanceled ?? false) {
+          canceled = true;
+          break;
+        }
+        sink.add(chunk);
+        downloadedBytes += chunk.length;
+        onProgress?.call(
+          PackageDownloadProgress(
+            downloadedBytes: downloadedBytes,
+            totalBytes: totalBytes,
+          ),
+        );
+      }
+      if (cancelToken?.isCanceled ?? false) {
+        canceled = true;
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
+    }
+    return canceled;
+  }
+
+  int? _totalBytes(PackageDownloadResponse response, int downloadedBytes) {
+    final contentLength = response.contentLength;
+    if (contentLength == null || contentLength < 0) {
+      return null;
+    }
+    return downloadedBytes + contentLength;
   }
 
   Future<void> _deleteIfExists(File file) async {

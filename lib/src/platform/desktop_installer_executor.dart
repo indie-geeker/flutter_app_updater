@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -6,9 +7,12 @@ import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
+import 'streaming_update_action_executor.dart';
+import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
+import 'update_action_event.dart';
 
-class DesktopInstallerExecutor implements UpdateActionExecutor {
+class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
   final TargetPlatform platform;
   final FlutterAppUpdaterPlatform platformChannel;
   final PackageDownloadClient client;
@@ -28,6 +32,41 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
+    return _perform(action);
+  }
+
+  @override
+  Stream<UpdateActionEvent> performStream(
+    UpdateAction action, {
+    UpdateActionCancelToken? cancelToken,
+  }) {
+    final controller = StreamController<UpdateActionEvent>();
+    () async {
+      controller.add(UpdateActionStarted(action));
+      final result = await _perform(
+        action,
+        cancelToken: cancelToken,
+        onProgress: (progress) {
+          controller.add(
+            UpdateActionProgress(
+              action: action,
+              downloadedBytes: progress.downloadedBytes,
+              totalBytes: progress.totalBytes,
+            ),
+          );
+        },
+      );
+      controller.add(UpdateActionCompleted(result));
+      await controller.close();
+    }();
+    return controller.stream;
+  }
+
+  Future<UpdateActionResult> _perform(
+    UpdateAction action, {
+    void Function(PackageDownloadProgress progress)? onProgress,
+    UpdateActionCancelToken? cancelToken,
+  }) async {
     if (action is! OpenInstallerAction) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
@@ -66,6 +105,8 @@ class DesktopInstallerExecutor implements UpdateActionExecutor {
         sha256: action.sha256,
       ),
       savePath: _installerPath(action),
+      onProgress: onProgress,
+      cancelToken: cancelToken,
     );
 
     if (!downloadResult.isSuccess || downloadResult.file == null) {

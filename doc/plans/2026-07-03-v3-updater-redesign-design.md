@@ -145,25 +145,6 @@ Manifest example:
 }
 ```
 
-### Google Play In-App Updates
-
-```dart
-class PlayInAppUpdateAction extends UpdateAction {
-  final PlayUpdateMode mode;
-}
-```
-
-Use for Android apps distributed through Google Play.
-
-Manifest example:
-
-```json
-{
-  "type": "playInAppUpdate",
-  "mode": "immediate"
-}
-```
-
 ### Chinese Android Markets
 
 ```dart
@@ -312,12 +293,7 @@ Use action-scoped names instead of generic global names. A store action has `sto
 
 ### Google Play
 
-Support two paths:
-
-- `PlayInAppUpdateAction` for Play In-App Updates.
-- `OpenStoreAction` as a Play Store fallback.
-
-Play In-App Updates should be optional and Android-only.
+Support `OpenStoreAction` with a Play Store URL.
 
 ### Apple App Store and Mac App Store
 
@@ -533,4 +509,3 @@ The v3 design is ready when:
 - manifest schema is readable without package-internal vocabulary
 - failures are structured and never collapsed into `null`
 - README clearly states which platforms can update through stores, package downloads, or desktop installers
-

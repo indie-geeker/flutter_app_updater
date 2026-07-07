@@ -300,7 +300,6 @@ abstract class UpdateActionExecutor {
 Implement store executor using method channel methods:
 
 - `openStore`
-- `startPlayInAppUpdate`
 
 **Step 3: Implement Android store opening**
 

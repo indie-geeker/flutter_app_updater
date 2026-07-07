@@ -55,6 +55,40 @@ void main() {
       expect(await File(platform.installedPaths.single).readAsBytes(), bytes);
     });
 
+    test('performStream emits download progress before installing', () async {
+      final chunks = [
+        utf8.encode('package '),
+        utf8.encode('bytes'),
+      ];
+      final bytes = chunks.expand((chunk) => chunk).toList();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream<List<int>>.fromIterable(chunks),
+        ),
+      );
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+      final action = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(events.first, isA<UpdateActionStarted>());
+      expect(events.whereType<UpdateActionProgress>(), hasLength(2));
+      expect(events.last, isA<UpdateActionCompleted>());
+      expect((events.last as UpdateActionCompleted).result.isSuccess, isTrue);
+      expect(platform.installedPaths.single,
+          endsWith('${Platform.pathSeparator}app.apk'));
+    });
+
     test('does not install when download fails', () async {
       client.enqueue(
         const PackageDownloadResponse(

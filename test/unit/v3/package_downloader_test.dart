@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_app_updater/src/actions/update_action.dart';
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
 import 'package:flutter_app_updater/src/models/update_error_code.dart';
+import 'package:flutter_app_updater/src/platform/update_action_cancel_token.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 late Directory _tempDir;
@@ -244,6 +245,58 @@ void main() {
 
       expect(result.isSuccess, isTrue);
       expect(result.file?.readAsStringSync(), 'large-package-bytes');
+    });
+
+    test('reports progress for response chunks', () async {
+      final chunks = [
+        utf8.encode('one'),
+        utf8.encode('two'),
+      ];
+      final bytes = chunks.expand((chunk) => chunk).toList();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream<List<int>>.fromIterable(chunks),
+        ),
+      );
+      final progress = <PackageDownloadProgress>[];
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(sha256: _sha256(bytes)),
+        savePath: _path('app.apk'),
+        onProgress: progress.add,
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(progress.map((event) => event.downloadedBytes), [3, 6]);
+      expect(progress.map((event) => event.totalBytes), [6, 6]);
+    });
+
+    test('cancels downloads and deletes partial files', () async {
+      final cancelToken = UpdateActionCancelToken();
+      final chunks = [
+        utf8.encode('one'),
+        utf8.encode('two'),
+      ];
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream<List<int>>.fromIterable(chunks),
+        ),
+      );
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(),
+        savePath: _path('app.apk'),
+        cancelToken: cancelToken,
+        onProgress: (_) => cancelToken.cancel(),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.actionCanceled);
+      expect(await File('${_path('app.apk')}.download').exists(), isFalse);
     });
   });
 }

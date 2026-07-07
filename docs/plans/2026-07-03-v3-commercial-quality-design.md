@@ -16,7 +16,7 @@ The first stable scope is intentionally practical:
 - Windows: MSIX/MSI/EXE download-then-open.
 - OHOS: not part of the first stable promise; document as planned or experimental.
 - Linux: not part of the first stable promise; document as planned.
-- Google Play In-App Updates: not part of the first stable promise; document as planned.
+- Google Play distribution uses the store URL path; do not document a separate native Play update path as planned.
 
 The core package remains UI-free. It should provide optional convenience flow APIs and examples, but not a bundled visual update dialog as the required integration path.
 
@@ -160,7 +160,7 @@ Required stable behavior:
 - provide a combined download-then-install action
 - return structured failures for missing install permission, missing file, install start failure, unsupported platform, download failure, and hash mismatch when a hash is provided
 
-The package does not need to implement Google Play In-App Updates in this round.
+The package does not need a separate native Google Play update path in this round.
 
 ### iOS
 

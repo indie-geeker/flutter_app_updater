@@ -131,6 +131,38 @@ void main() {
       expect(result.downloadedBytes, bytes.length);
       expect(result.sha256, isNull);
     });
+
+    test('performStream emits progress and completion', () async {
+      final chunks = [
+        utf8.encode('package '),
+        utf8.encode('bytes'),
+      ];
+      final bytes = chunks.expand((chunk) => chunk).toList();
+      final action = DownloadPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
+      );
+      final executor = DownloadPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(
+          client: _FakePackageClient(
+            PackageDownloadResponse(
+              statusCode: 200,
+              headers: {'content-length': '${bytes.length}'},
+              bytes: Stream<List<int>>.fromIterable(chunks),
+            ),
+          ),
+        ),
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(events.first, isA<UpdateActionStarted>());
+      expect(events.whereType<UpdateActionProgress>(), hasLength(2));
+      expect(events.last, isA<UpdateActionCompleted>());
+      expect((events.last as UpdateActionCompleted).result.isSuccess, isTrue);
+    });
   });
 }
 
