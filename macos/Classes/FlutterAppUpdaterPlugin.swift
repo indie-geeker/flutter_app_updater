@@ -18,12 +18,6 @@ public class FlutterAppUpdaterPlugin: NSObject, FlutterPlugin {
       result(Bundle.main.infoDictionary?["CFBundleVersion"] as? String)
     case "openStore":
       openStore(call, result: result)
-    case "startPlayInAppUpdate":
-      result(FlutterError(
-        code: "PLAY_IN_APP_UPDATE_UNAVAILABLE",
-        message: "Google Play In-App Updates are unavailable on macOS",
-        details: nil
-      ))
     case "openInstaller":
       openInstaller(call, result: result)
     default:

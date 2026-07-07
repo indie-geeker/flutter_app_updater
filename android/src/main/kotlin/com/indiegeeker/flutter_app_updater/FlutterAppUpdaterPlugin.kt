@@ -46,7 +46,6 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
       }
       "getDownloadPath" -> getDownloadPath(result)
       "openStore" -> openStore(call, result)
-      "startPlayInAppUpdate" -> startPlayInAppUpdate(result)
       "openAndroidMarket" -> openAndroidMarket(call, result)
       else -> result.notImplemented()
     }
@@ -193,14 +192,6 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     } catch (e: Exception) {
       false
     }
-  }
-
-  private fun startPlayInAppUpdate(result: Result) {
-    result.error(
-      "PLAY_IN_APP_UPDATE_UNAVAILABLE",
-      "当前原生插件未集成Google Play In-App Updates",
-      null
-    )
   }
 
   private fun openAndroidMarket(call: MethodCall, result: Result) {
