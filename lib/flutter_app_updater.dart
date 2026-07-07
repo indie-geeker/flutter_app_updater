@@ -12,4 +12,7 @@ export 'src/platform/download_and_install_package_executor.dart';
 export 'src/platform/download_package_executor.dart';
 export 'src/platform/install_package_executor.dart';
 export 'src/platform/store_update_executor.dart' show StoreUpdateExecutor;
+export 'src/platform/streaming_update_action_executor.dart';
+export 'src/platform/update_action_cancel_token.dart';
+export 'src/platform/update_action_event.dart';
 export 'src/platform/update_action_executor.dart';

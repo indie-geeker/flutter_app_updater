@@ -12,7 +12,9 @@ import '../platform/desktop_installer_executor.dart';
 import '../platform/download_and_install_package_executor.dart';
 import '../platform/download_package_executor.dart';
 import '../platform/install_package_executor.dart';
+import '../platform/streaming_update_action_executor.dart';
 import '../platform/store_update_executor.dart';
+import '../platform/update_action_event.dart';
 import '../platform/update_action_executor.dart';
 import 'update_selector.dart';
 import 'update_source.dart';
@@ -154,6 +156,29 @@ class AppUpdater {
     PreparedUpdateAvailable update,
   ) {
     return perform(update.recommendedAction);
+  }
+
+  Stream<UpdateActionEvent> performStream(UpdateAction action) async* {
+    for (final executor in executors ?? _defaultExecutors()) {
+      if (executor.supports(action)) {
+        if (executor is StreamingUpdateActionExecutor) {
+          yield* executor.performStream(action);
+        } else {
+          yield* futureBackedActionEvents(
+            action: action,
+            perform: () => executor.perform(action),
+          );
+        }
+        return;
+      }
+    }
+
+    yield const UpdateActionFailed(
+      UpdateActionResult.failure(
+        code: UpdateErrorCode.noSupportedAction,
+        message: 'No executor supports this update action.',
+      ),
+    );
   }
 
   List<UpdateActionExecutor> _defaultExecutors() {
