@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../models/update_error_code.dart';
+import 'streaming_update_action_executor.dart';
+import 'update_action_event.dart';
 import 'update_action_executor.dart';
 
-class InstallPackageExecutor implements UpdateActionExecutor {
+class InstallPackageExecutor
+    implements UpdateActionExecutor, StreamingUpdateActionExecutor {
   final FlutterAppUpdaterPlatform platform;
 
   InstallPackageExecutor({
@@ -24,6 +27,50 @@ class InstallPackageExecutor implements UpdateActionExecutor {
       );
     }
 
+    return _performInstall(action);
+  }
+
+  @override
+  Stream<UpdateActionEvent> performStream(UpdateAction action) async* {
+    yield UpdateActionStarted(action);
+
+    if (action is! InstallPackageAction) {
+      yield const UpdateActionFailed(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.noSupportedAction,
+          message: 'InstallPackageExecutor only supports package installs.',
+        ),
+      );
+      return;
+    }
+
+    final packagePath = action.packagePath.trim();
+    if (packagePath.isEmpty) {
+      yield const UpdateActionFailed(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.missingRequiredField,
+          message: 'packagePath is required for package installs.',
+        ),
+      );
+      return;
+    }
+
+    yield UpdateInstallStarted(packagePath: packagePath);
+
+    final result = await _performInstall(action);
+    if (result.isSuccess) {
+      yield UpdateActionCompleted(result);
+      return;
+    }
+
+    if (result.code == UpdateErrorCode.packageInstallPermissionRequired) {
+      yield UpdateInstallPermissionRequired(packagePath: packagePath);
+    }
+    yield UpdateActionFailed(result);
+  }
+
+  Future<UpdateActionResult> _performInstall(
+      InstallPackageAction action) async {
     final packagePath = action.packagePath.trim();
     if (packagePath.isEmpty) {
       return const UpdateActionResult.failure(

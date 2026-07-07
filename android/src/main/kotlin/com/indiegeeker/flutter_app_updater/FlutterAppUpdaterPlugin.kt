@@ -1,13 +1,17 @@
 package com.indiegeeker.flutter_app_updater
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -15,10 +19,11 @@ import io.flutter.plugin.common.MethodChannel.Result
 import java.io.File
 
 /** FlutterAppUpdaterPlugin */
-class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
+class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private lateinit var channel : MethodChannel
   private lateinit var applicationContext: Context
+  private var activity: Activity? = null
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_app_updater")
@@ -29,6 +34,22 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+  }
+
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    activity = binding.activity
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() {
+    activity = null
+  }
+
+  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+    activity = binding.activity
+  }
+
+  override fun onDetachedFromActivity() {
+    activity = null
   }
 
   override fun onMethodCall(call: MethodCall, result: Result) {
@@ -44,6 +65,8 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
         }
         installApp(filePath, result)
       }
+      "canRequestPackageInstalls" -> canRequestPackageInstalls(result)
+      "openInstallPermissionSettings" -> openInstallPermissionSettings(result)
       "getDownloadPath" -> getDownloadPath(result)
       "openStore" -> openStore(call, result)
       "startPlayInAppUpdate" -> startPlayInAppUpdate(result)
@@ -52,6 +75,41 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     }
   }
 
+
+  private fun canRequestPackageInstalls(result: Result) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      result.success(true)
+      return
+    }
+    result.success(applicationContext.packageManager.canRequestPackageInstalls())
+  }
+
+  private fun openInstallPermissionSettings(result: Result) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      result.success(true)
+      return
+    }
+
+    val uri = Uri.parse("package:${applicationContext.packageName}")
+    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, uri)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    try {
+      val currentActivity = activity
+      if (currentActivity != null) {
+        currentActivity.startActivity(intent)
+      } else {
+        applicationContext.startActivity(intent)
+      }
+      result.success(true)
+    } catch (e: Exception) {
+      result.error(
+        "INSTALL_PERMISSION_SETTINGS_UNAVAILABLE",
+        "Cannot open install permission settings",
+        e.message
+      )
+    }
+  }
 
   private fun getAppVersionCode(result: Result) {
     try {

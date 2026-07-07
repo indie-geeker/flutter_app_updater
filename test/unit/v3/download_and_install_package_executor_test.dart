@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_interface.dart';
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
@@ -142,6 +143,47 @@ void main() {
       expect(platform.installedPaths.single,
           endsWith('${Platform.pathSeparator}app.apk'));
     });
+
+    test(
+        'performStream emits permission required when install permission is missing',
+        () async {
+      final bytes = utf8.encode('package bytes');
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream.value(bytes),
+        ),
+      );
+      platform.failure = PlatformException(
+        code: 'INSTALL_PERMISSION_REQUIRED',
+        message: 'Permission required.',
+      );
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+
+      final events = await executor
+          .performStream(
+            DownloadAndInstallPackageAction(
+              packageUrl: Uri.parse('https://example.com/app.apk'),
+              packageType: PackageType.apk,
+            ),
+          )
+          .toList();
+
+      expect(events.whereType<UpdateInstallPermissionRequired>(), hasLength(1));
+      expect(
+        events.last,
+        isA<UpdateActionFailed>().having(
+          (event) => event.result.code,
+          'code',
+          UpdateErrorCode.packageInstallPermissionRequired,
+        ),
+      );
+    });
   });
 }
 
@@ -168,9 +210,14 @@ class _FakeInstallPlatform extends Fake
     with MockPlatformInterfaceMixin
     implements FlutterAppUpdaterPlatform {
   final installedPaths = <String>[];
+  PlatformException? failure;
 
   @override
   Future<void> installApp({required String path}) async {
+    final failure = this.failure;
+    if (failure != null) {
+      throw failure;
+    }
     installedPaths.add(path);
   }
 }

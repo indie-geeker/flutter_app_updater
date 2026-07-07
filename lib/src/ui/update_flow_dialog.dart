@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../channel/flutter_app_updater_platform_interface.dart';
 import '../core/app_updater.dart';
 import '../platform/update_action_executor.dart';
 import 'update_flow_controller.dart';
@@ -53,16 +54,19 @@ class UpdateFlowDialog extends StatefulWidget {
   State<UpdateFlowDialog> createState() => _UpdateFlowDialogState();
 }
 
-class _UpdateFlowDialogState extends State<UpdateFlowDialog> {
+class _UpdateFlowDialogState extends State<UpdateFlowDialog>
+    with WidgetsBindingObserver {
   late final UpdateFlowController _controller;
   late final bool _ownsController;
   late UpdateFlowState _state;
   StreamSubscription<UpdateFlowState>? _stateSubscription;
   var _didPop = false;
+  var _waitingForInstallPermission = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsController = widget.controller == null;
     _controller = widget.controller ??
         UpdateFlowController(
@@ -87,11 +91,21 @@ class _UpdateFlowDialogState extends State<UpdateFlowDialog> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_stateSubscription?.cancel());
     if (_ownsController) {
       _controller.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _waitingForInstallPermission &&
+        mounted) {
+      unawaited(_resumeAfterInstallPermission());
+    }
   }
 
   @override
@@ -163,7 +177,7 @@ class _UpdateFlowDialogState extends State<UpdateFlowDialog> {
       return [
         TextButton(
           onPressed: () {
-            unawaited(_controller.retry());
+            unawaited(_openInstallPermissionSettings());
           },
           child: const Text('Continue'),
         ),
@@ -191,6 +205,29 @@ class _UpdateFlowDialogState extends State<UpdateFlowDialog> {
       navigator.pop();
     }
     await cancel;
+  }
+
+  Future<void> _openInstallPermissionSettings() async {
+    _waitingForInstallPermission = true;
+    try {
+      await FlutterAppUpdaterPlatform.instance.openInstallPermissionSettings();
+    } catch (_) {
+      _waitingForInstallPermission = false;
+    }
+  }
+
+  Future<void> _resumeAfterInstallPermission() async {
+    _waitingForInstallPermission = false;
+    try {
+      final canInstall =
+          await FlutterAppUpdaterPlatform.instance.canRequestPackageInstalls();
+      if (canInstall && mounted) {
+        await _controller.retry();
+      }
+    } catch (_) {
+      // Keep the permission-required state visible when the platform check
+      // cannot be completed.
+    }
   }
 
   String _progressLabel(UpdateFlowState state) {

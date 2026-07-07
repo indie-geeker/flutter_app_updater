@@ -22,6 +22,19 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   }
 
   @override
+  Future<bool> canRequestPackageInstalls() async {
+    return await methodChannel.invokeMethod<bool>(
+          'canRequestPackageInstalls',
+        ) ??
+        false;
+  }
+
+  @override
+  Future<void> openInstallPermissionSettings() async {
+    await methodChannel.invokeMethod<void>('openInstallPermissionSettings');
+  }
+
+  @override
   Future<String?> getAppVersionCode() async {
     return await methodChannel.invokeMethod("getAppVersionCode");
   }
