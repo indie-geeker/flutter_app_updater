@@ -137,6 +137,22 @@ void main() {
       );
     });
 
+    test('rejects Play in-app update actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'playInAppUpdate',
+          'mode': 'immediate',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.unsupportedActionType,
+          ),
+        ),
+      );
+    });
+
     test('rejects relative action URLs', () {
       for (final action in [
         {

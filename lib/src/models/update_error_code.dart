@@ -9,7 +9,6 @@ enum UpdateErrorCode {
   noSupportedAction('NO_SUPPORTED_ACTION'),
   storeNotAvailable('STORE_NOT_AVAILABLE'),
   marketNotAvailable('MARKET_NOT_AVAILABLE'),
-  playInAppUpdateUnavailable('PLAY_IN_APP_UPDATE_UNAVAILABLE'),
   packageDownloadFailed('PACKAGE_DOWNLOAD_FAILED'),
   packageHashMismatch('PACKAGE_HASH_MISMATCH'),
   packageSignatureInvalid('PACKAGE_SIGNATURE_INVALID'),

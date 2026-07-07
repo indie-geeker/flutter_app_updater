@@ -102,7 +102,7 @@ void main() {
       expect(downloadAndInstallAction.sha256, isNull);
     });
 
-    test('parses Android market and Play in-app update actions', () {
+    test('parses Android market actions', () {
       final release = const ManifestParser()
           .parse({
             'schemaVersion': 3,
@@ -121,10 +121,6 @@ void main() {
                     'fallbackUrl':
                         'https://app.mi.com/details?id=com.example.app',
                   },
-                  {
-                    'type': 'playInAppUpdate',
-                    'mode': 'immediate',
-                  },
                 ],
               },
             ],
@@ -136,9 +132,7 @@ void main() {
       expect(marketAction.market, AndroidMarketKind.xiaomi);
       expect(marketAction.targetPackageName, 'com.example.app');
       expect(marketAction.fallbackUrl?.host, 'app.mi.com');
-
-      final playAction = release.actions[1] as PlayInAppUpdateAction;
-      expect(playAction.mode, PlayUpdateMode.immediate);
+      expect(release.actions, hasLength(1));
     });
   });
 }

@@ -50,14 +50,6 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
     throw UnimplementedError('openStore() has not been implemented.');
   }
 
-  Future<void> startPlayInAppUpdate({
-    required String mode,
-  }) {
-    throw UnimplementedError(
-      'startPlayInAppUpdate() has not been implemented.',
-    );
-  }
-
   Future<void> openAndroidMarket({
     required String marketPackageName,
     required String marketUri,

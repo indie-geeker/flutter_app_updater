@@ -15,11 +15,6 @@ enum AndroidMarketKind {
   generic,
 }
 
-enum PlayUpdateMode {
-  immediate,
-  flexible,
-}
-
 enum PackageType {
   apk,
   aab,
@@ -47,14 +42,6 @@ class OpenStoreAction extends UpdateAction {
   const OpenStoreAction({
     required this.store,
     required this.storeUrl,
-  });
-}
-
-class PlayInAppUpdateAction extends UpdateAction {
-  final PlayUpdateMode mode;
-
-  const PlayInAppUpdateAction({
-    required this.mode,
   });
 }
 

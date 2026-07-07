@@ -183,7 +183,6 @@ class RetryStrategy {
       UpdateErrorCode.noSupportedAction ||
       UpdateErrorCode.storeNotAvailable ||
       UpdateErrorCode.marketNotAvailable ||
-      UpdateErrorCode.playInAppUpdateUnavailable ||
       UpdateErrorCode.packageHashMismatch ||
       UpdateErrorCode.packageSignatureInvalid ||
       UpdateErrorCode.packageInstallPermissionRequired ||

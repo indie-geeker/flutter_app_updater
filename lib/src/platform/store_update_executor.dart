@@ -14,7 +14,7 @@ class StoreUpdateExecutor implements UpdateActionExecutor {
 
   @override
   bool supports(UpdateAction action) {
-    return action is OpenStoreAction || action is PlayInAppUpdateAction;
+    return action is OpenStoreAction;
   }
 
   @override
@@ -29,7 +29,6 @@ class StoreUpdateExecutor implements UpdateActionExecutor {
     try {
       return switch (action) {
         OpenStoreAction() => _openStore(action),
-        PlayInAppUpdateAction() => _startPlayInAppUpdate(action),
         _ => const UpdateActionResult.failure(
             code: UpdateErrorCode.noSupportedAction,
             message: 'Unsupported store action.',
@@ -58,18 +57,9 @@ class StoreUpdateExecutor implements UpdateActionExecutor {
     return const UpdateActionResult.success();
   }
 
-  Future<UpdateActionResult> _startPlayInAppUpdate(
-    PlayInAppUpdateAction action,
-  ) async {
-    await platform.startPlayInAppUpdate(mode: action.mode.name);
-    return const UpdateActionResult.success();
-  }
-
   UpdateErrorCode _mapPlatformCode(String code) {
     return switch (code) {
       'STORE_NOT_AVAILABLE' => UpdateErrorCode.storeNotAvailable,
-      'PLAY_IN_APP_UPDATE_UNAVAILABLE' =>
-        UpdateErrorCode.playInAppUpdateUnavailable,
       'PLATFORM_NOT_SUPPORTED' => UpdateErrorCode.platformNotSupported,
       _ => UpdateErrorCode.storeNotAvailable,
     };
