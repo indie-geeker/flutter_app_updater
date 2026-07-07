@@ -97,7 +97,13 @@ void main() {
       expect(result, isA<UpdateNotAvailable>());
     });
 
-    test('prioritizes direct actions for required updates', () {
+    test('prefers openStore over APK install on Android', () {
+      final storeAction = OpenStoreAction(
+        store: StoreKind.googlePlay,
+        storeUrl: Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.example.app',
+        ),
+      );
       final packageAction = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
@@ -107,14 +113,55 @@ void main() {
           version: '2.0.0',
           policyLevel: UpdatePolicyLevel.required,
           actions: [
-            OpenStoreAction(
-              store: StoreKind.googlePlay,
-              storeUrl: Uri.parse(
-                'https://play.google.com/store/apps/details?id=com.example.app',
-              ),
-            ),
+            packageAction,
+            storeAction,
+          ],
+        ),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).recommendedAction, same(storeAction));
+      expect(result.isRequired, isTrue);
+    });
+
+    test('prefers openStore over APK install regardless of action order', () {
+      final storeAction = OpenStoreAction(
+        store: StoreKind.googlePlay,
+        storeUrl: Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.example.app',
+        ),
+      );
+      final packageAction = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+
+      final result = _selector().select([
+        _candidate(
+          version: '2.0.0',
+          policyLevel: UpdatePolicyLevel.required,
+          actions: [
+            storeAction,
             packageAction,
           ],
+        ),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).recommendedAction, same(storeAction));
+      expect(result.isRequired, isTrue);
+    });
+
+    test('uses direct package action for self-hosted Android manifests', () {
+      final packageAction = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final result = _selector().select([
+        _candidate(
+          version: '2.0.0',
+          policyLevel: UpdatePolicyLevel.required,
+          actions: [packageAction],
         ),
       ]);
 

@@ -113,6 +113,14 @@ class UpdateSelector {
       return null;
     }
 
+    if (platform == TargetPlatform.android) {
+      for (final action in candidate.actions) {
+        if (action is OpenStoreAction) {
+          return action;
+        }
+      }
+    }
+
     if (isRequired) {
       for (final action in candidate.actions) {
         if (action is DownloadAndInstallPackageAction ||
