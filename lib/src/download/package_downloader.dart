@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import '../actions/update_action.dart';
 import '../models/update_error_code.dart';
+import '../platform/update_action_cancel_token.dart';
 import 'package_download_result.dart';
 
 export 'package_download_result.dart';
@@ -31,10 +32,37 @@ class PackageDownloadResponse {
 
   String? get lastModified => _header('last-modified');
 
+  int? get contentLength {
+    final value = _header('content-length');
+    return value == null ? null : int.tryParse(value);
+  }
+
   String? _header(String name) {
     return headers[name] ?? headers[name.toLowerCase()];
   }
 }
+
+class PackageDownloadProgress {
+  final int receivedBytes;
+  final int? totalBytes;
+
+  const PackageDownloadProgress({
+    required this.receivedBytes,
+    required this.totalBytes,
+  });
+
+  double? get progress {
+    final total = totalBytes;
+    if (total == null || total <= 0) {
+      return null;
+    }
+    return receivedBytes / total;
+  }
+}
+
+typedef PackageDownloadProgressCallback = void Function(
+  PackageDownloadProgress progress,
+);
 
 class IoPackageDownloadClient implements PackageDownloadClient {
   @override
@@ -90,6 +118,8 @@ class PackageDownloader {
   Future<PackageDownloadResult> download({
     required DownloadPackageAction action,
     required String savePath,
+    PackageDownloadProgressCallback? onProgress,
+    UpdateActionCancelToken? cancelToken,
   }) async {
     final expectedSha256 = _normalizedSha256(action.sha256);
 
@@ -126,21 +156,54 @@ class PackageDownloader {
         );
       }
 
-      final sink = partialFile.openWrite(
+      final receivedBeforeRequest =
+          isResumeResponse ? resume.downloadedBytes : 0;
+      final totalBytes = _resolveTotalBytes(
+        action: action,
+        response: response,
+        receivedBeforeRequest: receivedBeforeRequest,
+        isResumeResponse: isResumeResponse,
+      );
+      var receivedBytes = receivedBeforeRequest;
+
+      final output = await partialFile.open(
         mode: isResumeResponse ? FileMode.append : FileMode.write,
       );
       try {
-        await sink.addStream(response.bytes);
-        await sink.flush();
+        await for (final chunk in response.bytes) {
+          if (cancelToken?.isCanceled ?? false) {
+            throw const PackageDownloadCanceledException();
+          }
+
+          await output.writeFrom(chunk);
+          receivedBytes += chunk.length;
+          await output.flush();
+          await _writeResumeMetadata(
+            action: action,
+            response: response,
+            metadataFile: metadataFile,
+            downloadedBytes: receivedBytes,
+          );
+          onProgress?.call(
+            PackageDownloadProgress(
+              receivedBytes: receivedBytes,
+              totalBytes: totalBytes,
+            ),
+          );
+        }
+
+        if (cancelToken?.isCanceled ?? false) {
+          throw const PackageDownloadCanceledException();
+        }
       } finally {
-        await sink.close();
+        await output.close();
       }
 
       await _writeResumeMetadata(
         action: action,
         response: response,
-        partialFile: partialFile,
         metadataFile: metadataFile,
+        downloadedBytes: await partialFile.length(),
       );
 
       String? actualSha256;
@@ -169,6 +232,11 @@ class PackageDownloader {
         file: finalFile,
         downloadedBytes: await finalFile.length(),
         sha256: actualSha256,
+      );
+    } on PackageDownloadCanceledException {
+      return const PackageDownloadResult.failure(
+        code: UpdateErrorCode.actionCanceled,
+        message: 'Package download was canceled.',
       );
     } on FileSystemException catch (error) {
       return PackageDownloadResult.failure(
@@ -229,16 +297,31 @@ class PackageDownloader {
   Future<void> _writeResumeMetadata({
     required DownloadPackageAction action,
     required PackageDownloadResponse response,
-    required File partialFile,
     required File metadataFile,
+    required int downloadedBytes,
   }) async {
     final data = <String, Object?>{
       'packageUrl': action.packageUrl.toString(),
       'etag': response.etag,
       'lastModified': response.lastModified,
-      'downloadedBytes': await partialFile.length(),
+      'downloadedBytes': downloadedBytes,
     };
     await metadataFile.writeAsString(jsonEncode(data));
+  }
+
+  int? _resolveTotalBytes({
+    required DownloadPackageAction action,
+    required PackageDownloadResponse response,
+    required int receivedBeforeRequest,
+    required bool isResumeResponse,
+  }) {
+    final contentLength = response.contentLength;
+    if (contentLength != null) {
+      return isResumeResponse
+          ? receivedBeforeRequest + contentLength
+          : contentLength;
+    }
+    return action.packageSizeBytes;
   }
 
   Future<String> _sha256Of(File file) async {
@@ -254,6 +337,10 @@ class PackageDownloader {
     }
     return normalized;
   }
+}
+
+class PackageDownloadCanceledException implements Exception {
+  const PackageDownloadCanceledException();
 }
 
 class _ResumeMetadata {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,6 +6,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_app_updater/src/actions/update_action.dart';
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
 import 'package:flutter_app_updater/src/models/update_error_code.dart';
+import 'package:flutter_app_updater/src/platform/update_action_cancel_token.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 late Directory _tempDir;
@@ -225,6 +227,115 @@ void main() {
 
       expect(result.isSuccess, isTrue);
       expect(result.file?.readAsStringSync(), 'large-package-bytes');
+    });
+
+    test('reports download progress for each chunk', () async {
+      final progress = <PackageDownloadProgress>[];
+      final bytes = utf8.encode('hello world');
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream<List<int>>.fromIterable([
+            utf8.encode('hello '),
+            utf8.encode('world'),
+          ]),
+        ),
+      );
+
+      final result = await PackageDownloader(client: client).download(
+        action: _action(sha256: _sha256(bytes)),
+        savePath: _path('app.apk'),
+        onProgress: progress.add,
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(progress.map((event) => event.receivedBytes), [6, 11]);
+      expect(progress.map((event) => event.totalBytes), [11, 11]);
+    });
+
+    test('reports null total when content length and package size are unknown',
+        () async {
+      final progress = <PackageDownloadProgress>[];
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {},
+          bytes: Stream.value(utf8.encode('bytes')),
+        ),
+      );
+
+      await PackageDownloader(client: client).download(
+        action: DownloadPackageAction(
+          packageUrl: Uri.parse('https://example.com/app.apk'),
+          packageType: PackageType.apk,
+        ),
+        savePath: _path('app.apk'),
+        onProgress: progress.add,
+      );
+
+      expect(progress.single.totalBytes, isNull);
+    });
+
+    test('keeps resume metadata aligned after interrupted chunks', () async {
+      final controller = StreamController<List<int>>();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'etag': '"v2"', 'content-length': '10'},
+          bytes: controller.stream,
+        ),
+      );
+
+      final download = PackageDownloader(client: client).download(
+        action: _action(),
+        savePath: _path('app.apk'),
+      );
+
+      controller.add(utf8.encode('12345'));
+      await Future<void>.delayed(Duration.zero);
+      controller.addError(const SocketException('interrupted'));
+      await controller.close();
+
+      final result = await download;
+
+      expect(result.isSuccess, isFalse);
+      final partial = File('${_path('app.apk')}.download');
+      final metadata = File('${partial.path}.meta');
+      expect(await partial.exists(), isTrue);
+      expect(await metadata.exists(), isTrue);
+      final data = jsonDecode(await metadata.readAsString());
+      expect(data, isA<Map<String, Object?>>());
+      expect((data as Map<String, Object?>)['downloadedBytes'],
+          await partial.length());
+    });
+
+    test('stops streaming when cancel token is canceled', () async {
+      final token = UpdateActionCancelToken();
+      final controller = StreamController<List<int>>();
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '10'},
+          bytes: controller.stream,
+        ),
+      );
+
+      final download = PackageDownloader(client: client).download(
+        action: _action(),
+        savePath: _path('app.apk'),
+        cancelToken: token,
+      );
+
+      controller.add(utf8.encode('12345'));
+      token.cancel();
+      controller.add(utf8.encode('67890'));
+      await controller.close();
+
+      final result = await download;
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.actionCanceled);
     });
   });
 }
