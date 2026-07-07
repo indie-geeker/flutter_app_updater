@@ -32,6 +32,13 @@ class InstallPackageExecutor implements UpdateActionExecutor {
       );
     }
 
+    if (action.packageType != PackageType.apk) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'Only APK packages can be installed locally.',
+      );
+    }
+
     try {
       await platform.installApp(path: packagePath);
       return const UpdateActionResult.success();

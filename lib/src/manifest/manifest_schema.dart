@@ -82,10 +82,16 @@ class ManifestSchema {
         _requiredString(action, 'packageType');
       case 'installPackage':
         _requiredString(action, 'packagePath');
-        _optionalString(action, 'packageType');
+        _requireApkPackageType(
+          _optionalString(action, 'packageType') ?? 'apk',
+          'installPackage',
+        );
       case 'downloadAndInstallPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
-        _requiredString(action, 'packageType');
+        _requireApkPackageType(
+          _requiredString(action, 'packageType'),
+          'downloadAndInstallPackage',
+        );
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
@@ -105,6 +111,15 @@ class ManifestSchema {
     final value = _optionalString(map, field);
     if (value != null) {
       _parseAbsoluteUrl(value, field);
+    }
+  }
+
+  void _requireApkPackageType(String packageType, String actionType) {
+    if (packageType != 'apk') {
+      throw ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: '$actionType only supports packageType apk.',
+      );
     }
   }
 

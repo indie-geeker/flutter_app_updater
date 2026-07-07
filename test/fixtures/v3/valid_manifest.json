@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 3,
+  "appId": "com.example.app",
+  "channel": "stable",
+  "releases": [
+    {
+      "version": "2.0.0",
+      "buildNumber": "42",
+      "platform": "android",
+      "architecture": "arm64",
+      "releaseNotes": "Bug fixes",
+      "actions": [
+        {
+          "type": "openStore",
+          "store": "googlePlay",
+          "storeUrl": "https://play.google.com/store/apps/details?id=com.example.app"
+        },
+        {
+          "type": "downloadAndInstallPackage",
+          "packageUrl": "https://example.com/app.apk",
+          "packageType": "apk",
+          "packageSizeBytes": 25600000
+        }
+      ]
+    }
+  ]
+}

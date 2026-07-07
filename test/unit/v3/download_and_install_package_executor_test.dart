@@ -80,6 +80,25 @@ void main() {
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
       expect(platform.installedPaths, isEmpty);
     });
+
+    test('rejects non-APK package types before downloading', () async {
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+
+      final result = await executor.perform(
+        DownloadAndInstallPackageAction(
+          packageUrl: Uri.parse('https://example.com/app.aab'),
+          packageType: PackageType.aab,
+        ),
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.manifestInvalid);
+      expect(platform.installedPaths, isEmpty);
+    });
   });
 }
 

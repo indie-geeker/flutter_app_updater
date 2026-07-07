@@ -122,6 +122,40 @@ void main() {
       );
     });
 
+    test('rejects installPackage AAB actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'installPackage',
+          'packagePath': '/tmp/app.aab',
+          'packageType': 'aab',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.manifestInvalid,
+          ),
+        ),
+      );
+    });
+
+    test('rejects downloadAndInstallPackage AAB actions', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'https://example.com/app.aab',
+          'packageType': 'aab',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.manifestInvalid,
+          ),
+        ),
+      );
+    });
+
     test('rejects unsupported action types', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({

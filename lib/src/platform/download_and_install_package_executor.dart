@@ -33,6 +33,13 @@ class DownloadAndInstallPackageExecutor implements UpdateActionExecutor {
       );
     }
 
+    if (action.packageType != PackageType.apk) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'Only APK packages can be downloaded and installed locally.',
+      );
+    }
+
     final downloadResult = await downloadExecutor.perform(
       DownloadPackageAction(
         packageUrl: action.packageUrl,
