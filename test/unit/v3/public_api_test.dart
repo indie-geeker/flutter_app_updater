@@ -80,8 +80,10 @@ void main() {
     expect(readme, contains('checkAndPrepare'));
     expect(readme, contains('performRecommended'));
     expect(readme, contains('downloadAndInstallPackage'));
-    expect(readme, contains('Play In-App Updates'));
-    expect(readme, contains('Planned'));
+    expect(readme, contains('Google Play uses storeUrl'));
+    expect(readme, contains('App Store uses storeUrl'));
+    expect(readme, isNot(contains('Play In-App Updates')));
+    expect(readme, isNot(contains('playInAppUpdate')));
     expect(
         readme, isNot(contains('Remote manifest fetching is not implemented')));
     expect(readme, contains('storeUrl'));

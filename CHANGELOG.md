@@ -1,3 +1,8 @@
+## 3.1.0 - Unreleased
+
+* **Breaking**: Remove the Google Play in-app update action, platform channel method, native stubs, and manifest action type. Google Play distribution should use `openStore` with `storeUrl`.
+* **Documentation**: Clarify store URL distribution and self-hosted Android APK or desktop installer flows.
+
 ## 3.0.0 - 2026-07-03
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
@@ -5,7 +10,7 @@
 * **Feature**: Add package install and download-then-install actions for Android self-hosted APK flows.
 * **Feature**: Add `AppUpdater.manifest`, `checkAndPrepare`, and `performRecommended` as the default UI-free integration flow.
 * **Feature**: Add manifest v3 parsing, validation, and release selection.
-* **Feature**: Add official store actions for App Store, Mac App Store, Google Play fallback URLs, and a Play in-app update entry point.
+* **Feature**: Add official store actions for App Store, Mac App Store, and Google Play fallback URLs.
 * **Feature**: Add Chinese Android market descriptors and Android market opening support.
 * **Feature**: Add SHA-256 verified package downloads with resume safety metadata.
 * **Feature**: Add desktop installer actions for verified Windows and macOS installers.

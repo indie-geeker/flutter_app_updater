@@ -4,12 +4,12 @@ Flutter App Updater is a UI-free v3 update foundation for commercial Flutter app
 
 Stable v3 scope:
 
-- Android: Google Play URL, Chinese Android markets, APK download, APK install, and download then install.
-- iOS: App Store URL.
-- macOS: Mac App Store URL, DMG and ZIP installer download then open.
+- Android: Google Play uses storeUrl, Chinese Android markets, APK download, APK install, and download then install.
+- iOS: App Store uses storeUrl.
+- macOS: Mac App Store uses storeUrl; non-store macOS apps can download and open DMG or ZIP installers.
 - Windows: MSIX, MSI, and EXE installer download then open.
 
-Planned scope: Play In-App Updates, OHOS, and Linux installer flows.
+Future platform work: OHOS and Linux installer flows.
 
 ## Install
 
@@ -70,6 +70,11 @@ The package does not show UI. Use the prepared result to drive your own dialog, 
       },
       "actions": [
         {
+          "type": "openStore",
+          "store": "googlePlay",
+          "storeUrl": "https://play.google.com/store/apps/details?id=com.example.app"
+        },
+        {
           "type": "downloadAndInstallPackage",
           "packageUrl": "https://example.com/app.apk",
           "packageType": "apk",
@@ -107,6 +112,8 @@ Direct field names:
 ```
 
 Use `appStore` for iOS and `macAppStore` for macOS.
+
+If an Android manifest contains both `openStore` and `downloadAndInstallPackage`, `openStore` is the recommended action. Keep APK installation as an explicit self-hosted option.
 
 ### Chinese Android Markets
 
@@ -165,6 +172,8 @@ Use separate actions when your app wants to download now and install later:
 
 ### macOS and Windows Installers
 
+Mac App Store builds should use `openStore` with `macAppStore`. Direct installer actions are for non-store macOS and Windows distribution.
+
 ```json
 {
   "type": "openInstaller",
@@ -181,14 +190,14 @@ Supported stable installer types:
 
 ## Platform Matrix
 
-| Platform | Official store | Chinese markets | Package download | Package install | Desktop installer | Play In-App Updates |
-| --- | --- | --- | --- | --- | --- | --- |
-| Android | Stable | Stable | Stable | Stable | Not applicable | Planned |
-| iOS | Stable | Not applicable | Unsupported | Unsupported | Not applicable | Not applicable |
-| macOS | Stable | Not applicable | Stable | Unsupported | Stable | Not applicable |
-| Windows | URL handler support | Not applicable | Stable | Unsupported | Stable | Not applicable |
-| OHOS | Planned | Planned | Planned | Planned | Not applicable | Not applicable |
-| Linux | Planned | Not applicable | Planned | Planned | Planned | Not applicable |
+| Platform | Official store | Chinese markets | Package download | Package install | Desktop installer |
+| --- | --- | --- | --- | --- | --- |
+| Android | Stable | Stable | Stable | Stable | Not applicable |
+| iOS | Stable | Not applicable | Unsupported | Unsupported | Not applicable |
+| macOS | Stable | Not applicable | Stable | Unsupported | Stable for non-store apps |
+| Windows | URL handler support | Not applicable | Stable | Unsupported | Stable |
+| OHOS | Planned | Planned | Planned | Planned | Not applicable |
+| Linux | Planned | Not applicable | Planned | Planned | Planned |
 
 Unsupported actions return structured failures instead of throwing platform exceptions through the public API.
 

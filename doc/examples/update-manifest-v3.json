@@ -16,7 +16,12 @@
       },
       "actions": [
         {
-          "type": "downloadPackage",
+          "type": "openStore",
+          "store": "googlePlay",
+          "storeUrl": "https://play.google.com/store/apps/details?id=com.example.app"
+        },
+        {
+          "type": "downloadAndInstallPackage",
           "packageUrl": "https://example.com/app.apk",
           "packageType": "apk",
           "packageSizeBytes": 25600000,

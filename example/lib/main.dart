@@ -47,16 +47,16 @@ class _MyAppState extends State<MyApp> {
     releasedAt: DateTime.utc(2026, 7, 3, 10),
     policy: const UpdatePolicy(level: UpdatePolicyLevel.recommended),
     actions: [
-      DownloadAndInstallPackageAction(
-        packageUrl: Uri.parse('https://example.com/app.apk'),
-        packageType: PackageType.apk,
-        packageSizeBytes: 25600000,
-      ),
       OpenStoreAction(
         store: StoreKind.googlePlay,
         storeUrl: Uri.parse(
           'https://play.google.com/store/apps/details?id=com.example.app',
         ),
+      ),
+      DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+        packageSizeBytes: 25600000,
       ),
       OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
@@ -160,7 +160,6 @@ class _MyAppState extends State<MyApp> {
   String _labelFor(UpdateAction action) {
     return switch (action) {
       OpenStoreAction(:final store) => 'Open ${store.name}',
-      PlayInAppUpdateAction(:final mode) => 'Play in-app ${mode.name}',
       OpenAndroidMarketAction(:final market) => 'Open ${market.name}',
       DownloadPackageAction(:final packageType) =>
         'Download ${packageType.name}',
@@ -175,7 +174,6 @@ class _MyAppState extends State<MyApp> {
   String _descriptionFor(UpdateAction action) {
     return switch (action) {
       OpenStoreAction(:final storeUrl) => storeUrl.toString(),
-      PlayInAppUpdateAction(:final mode) => 'Mode: ${mode.name}',
       OpenAndroidMarketAction(:final targetPackageName, :final fallbackUrl) =>
         '$targetPackageName ${fallbackUrl ?? ''}',
       DownloadPackageAction(:final packageUrl, :final packageSizeBytes) =>
