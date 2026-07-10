@@ -92,15 +92,23 @@ void main() {
     expect(readme, isNot(contains('downloadUrl')));
     expect(readme, isNot(contains('artifactUri')));
     expect(readme.toLowerCase(), isNot(contains('md5')));
+    expect(readme, isNot(contains('Windows | URL handler support')));
+    expect(readme, contains('Windows | Unsupported'));
   });
 
   test('example demonstrates the convenience flow through the public API', () {
     final example = File('example/lib/main.dart').readAsStringSync();
+    final examplePubspec = File('example/pubspec.yaml').readAsStringSync();
 
     expect(example, contains('UpdateSource.staticManifest'));
-    expect(example, contains('await _updater.checkAndPrepare()'));
-    expect(example, contains('await _updater.performRecommended'));
+    expect(example, contains('AppUpdater.manifest'));
+    expect(example, contains('expectedAppId: expectedAppId'));
+    expect(example, contains('await updater.checkAndPrepare()'));
+    expect(example, contains('performRecommendedStream'));
+    expect(example, contains('PreviewUpdateExecutor'));
+    expect(example, contains('UpdateActionCancelToken'));
     expect(example, contains('DownloadAndInstallPackageAction'));
+    expect(examplePubspec, contains('version: 1.0.0+1'));
   });
 
   test('publish archive excludes internal implementation plans', () {
@@ -108,5 +116,92 @@ void main() {
 
     expect(pubignore, contains('doc/plans/'));
     expect(pubignore, contains('docs/plans/'));
+  });
+
+  test('Android package installation permission is opt in', () {
+    final pluginManifest =
+        File('android/src/main/AndroidManifest.xml').readAsStringSync();
+    final exampleManifest =
+        File('example/android/app/src/main/AndroidManifest.xml')
+            .readAsStringSync();
+
+    expect(pluginManifest, isNot(contains('REQUEST_INSTALL_PACKAGES')));
+    expect(exampleManifest, contains('REQUEST_INSTALL_PACKAGES'));
+  });
+
+  test('publish archive excludes machine-local platform configuration', () {
+    final pubignore = File('.pubignore').readAsStringSync();
+
+    expect(File('ohos/local.properties').existsSync(), isFalse);
+    expect(pubignore, contains('**/local.properties'));
+  });
+
+  test('pubspec advertises a coherent Flutter SDK floor', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+
+    expect(pubspec, contains("sdk: '>=3.4.0 <4.0.0'"));
+    expect(pubspec, contains("flutter: '>=3.4.0'"));
+  });
+
+  test('pubspec and native packages contain release metadata', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final iosPodspec =
+        File('ios/flutter_app_updater.podspec').readAsStringSync();
+    final macosPodspec =
+        File('macos/flutter_app_updater.podspec').readAsStringSync();
+    final ohosPackage = File('ohos/oh-package.json5').readAsStringSync();
+
+    expect(pubspec, contains('repository:'));
+    expect(pubspec, contains('issue_tracker:'));
+    expect(pubspec, contains('topics:'));
+    for (final metadata in [iosPodspec, macosPodspec, ohosPackage]) {
+      expect(metadata, contains('3.0.0'));
+      expect(metadata, isNot(contains('example.com')));
+      expect(metadata, isNot(contains('Your Company')));
+      expect(metadata, isNot(contains('Please describe')));
+    }
+  });
+
+  test('publish workflow uses pub.dev OIDC and verifies the release tag', () {
+    final workflow = File('.github/workflows/publish.yml').readAsStringSync();
+
+    expect(workflow, contains('id-token: write'));
+    expect(workflow, contains('environment: pub.dev'));
+    expect(workflow, contains('GITHUB_REF_NAME'));
+    expect(
+      workflow,
+      contains('dart-lang/setup-dart/.github/workflows/publish.yml@v1'),
+    );
+    expect(workflow, isNot(contains('CREDENTIALS_JSON')));
+    expect(workflow, isNot(contains('credentials.json')));
+  });
+
+  test('CI covers quality gates and native example builds', () {
+    final workflow = File('.github/workflows/ci.yml').readAsStringSync();
+
+    expect(workflow, contains('flutter test --coverage'));
+    expect(workflow, contains('Enforce 80% coverage floor'));
+    expect(workflow, contains('manifest_fetcher'));
+    expect(workflow, contains('package_downloader'));
+    expect(workflow, contains('flutter pub publish --dry-run'));
+    expect(workflow, contains('flutter build apk --debug'));
+    expect(workflow, contains('macos-latest'));
+    expect(workflow, contains('flutter build ios --simulator --debug'));
+    expect(workflow, contains('flutter build macos --debug'));
+    expect(workflow, contains('windows-latest'));
+    expect(workflow, contains('flutter build windows --debug'));
+  });
+
+  test('repository includes lightweight open-source governance', () {
+    for (final path in [
+      'CONTRIBUTING.md',
+      'SECURITY.md',
+      '.github/dependabot.yml',
+      '.github/ISSUE_TEMPLATE/bug_report.yml',
+      '.github/PULL_REQUEST_TEMPLATE.md',
+    ]) {
+      expect(File(path).existsSync(), isTrue, reason: '$path must exist');
+      expect(File(path).lengthSync(), greaterThan(0));
+    }
   });
 }

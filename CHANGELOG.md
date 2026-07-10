@@ -1,4 +1,4 @@
-## 3.0.0 - 2026-07-03
+## 3.0.0 - 2026-07-10
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
 * **Breaking**: Make package and installer hashes optional; hashes are verified only when supplied.
@@ -10,6 +10,11 @@
 * **Feature**: Add SHA-256 verified package downloads with resume safety metadata.
 * **Feature**: Add desktop installer actions for verified Windows and macOS installers.
 * **Documentation**: Rewrite README and example around the v3 action model.
+* **Safety**: Make Android package-install permission opt-in and exclude machine-local platform configuration from published archives.
+* **Safety**: Bind manifests to an expected application ID and validate release versions, artifact sizes, URL schemes, response limits, and download limits.
+* **Reliability**: Add bounded manifest retries/timeouts plus resumable download retries, request/idle timeouts, active cancellation, concurrent-target protection, progress events, and partial-file cleanup.
+* **Example**: Add a network-free preview executor and an explicit remote mode covering policy, progress, cancellation, and structured failures.
+* **Release**: Add pub.dev OIDC publishing, Android/iOS/macOS/Windows CI builds, enforced coverage floors, dependency updates, and open-source governance files.
 
 ## 2.1.0
 

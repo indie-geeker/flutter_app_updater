@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
+import 'package:flutter_app_updater/src/manifest/manifest_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -36,6 +37,65 @@ void main() {
       await updater.check(selector: _selector());
 
       expect(fetcher.sources.single.headers, headers);
+    });
+
+    test('rejects a remote manifest for a different application', () async {
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+        ),
+        expectedAppId: 'com.example.expected',
+        manifestFetcher: _FakeManifestFetcher(
+          _manifestJson(version: '2.0.0', appId: 'com.example.other'),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.appIdMismatch,
+      );
+    });
+
+    test('rejects a static manifest for a different application', () async {
+      final manifest = const ManifestParser().parse(
+        _manifestJson(version: '2.0.0', appId: 'com.example.other'),
+      );
+      final updater = AppUpdater(
+        source: UpdateSource.staticManifest(manifest: manifest),
+        expectedAppId: 'com.example.expected',
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.appIdMismatch,
+      );
+    });
+
+    test('rejects a blank expected application ID as invalid configuration',
+        () async {
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+        ),
+        expectedAppId: '  ',
+        manifestFetcher: _FakeManifestFetcher(
+          _manifestJson(version: '2.0.0'),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.manifestInvalid,
+      );
     });
 
     test('maps non-200 fetch failures to manifestFetchFailed', () async {
@@ -131,10 +191,11 @@ UpdateSelector _selector() {
 
 Map<String, Object?> _manifestJson({
   required String version,
+  String appId = 'com.example.app',
 }) {
   return {
     'schemaVersion': 3,
-    'appId': 'com.example.app',
+    'appId': appId,
     'channel': 'stable',
     'releases': [
       {

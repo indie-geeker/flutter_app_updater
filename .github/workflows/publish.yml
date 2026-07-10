@@ -3,48 +3,47 @@ name: Publish to pub.dev
 on:
   push:
     tags:
-      - 'v*.*.*'  # 例如 v1.0.0 时自动触发
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
-
-      - name: Setup Pub Credentials
+          cache: true
+      - name: Verify tag matches pubspec version
+        shell: bash
         run: |
-          mkdir -p ~/.pub-cache
-          mkdir -p ~/.config/dart
-          echo '${{ secrets.CREDENTIALS_JSON }}' > ~/.pub-cache/credentials.json
-          echo '${{ secrets.CREDENTIALS_JSON }}' > ~/.config/dart/pub-credentials.json
-
+          package_version="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
+          if [[ "v${package_version}" != "${GITHUB_REF_NAME}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pubspec ${package_version}."
+            exit 1
+          fi
       - name: Install dependencies
         run: flutter pub get
-
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
-
-      - name: Analyze package
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Generate docs dry-run
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Test
+        run: flutter test --no-pub
+      - name: Generate API docs dry-run
         run: dart doc --dry-run
-
-      - name: Dry run publish
+      - name: Validate package archive
         run: flutter pub publish --dry-run
 
-
-      - name: Publish to pub.dev
-        run: flutter pub publish -f
-
-
+  publish:
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      environment: pub.dev

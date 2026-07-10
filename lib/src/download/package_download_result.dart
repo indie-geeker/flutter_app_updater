@@ -39,3 +39,21 @@ class PackageDownloadResult {
           message: message,
         );
 }
+
+class PackageDownloadProgress {
+  final int downloadedBytes;
+  final int? totalBytes;
+
+  const PackageDownloadProgress({
+    required this.downloadedBytes,
+    this.totalBytes,
+  });
+
+  double? get fraction {
+    final total = totalBytes;
+    if (total == null || total <= 0) {
+      return null;
+    }
+    return (downloadedBytes / total).clamp(0.0, 1.0).toDouble();
+  }
+}

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_app_updater/src/actions/update_action.dart';
 import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_interface.dart';
 import 'package:flutter_app_updater/src/models/update_error_code.dart';
@@ -62,6 +63,22 @@ void main() {
       expect(fakePlatform.openedStores, isEmpty);
     });
 
+    test('missing platform store implementation returns structured failure',
+        () async {
+      fakePlatform.throwMissingPluginOnOpenStore = true;
+      final action = OpenStoreAction(
+        store: StoreKind.googlePlay,
+        storeUrl: Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.example.app',
+        ),
+      );
+
+      final result = await StoreUpdateExecutor().perform(action);
+
+      expect(result.isSuccess, isFalse);
+      expect(result.code, UpdateErrorCode.platformNotSupported);
+    });
+
     test('non-store action is rejected by store executor', () async {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
@@ -82,12 +99,16 @@ class _FakeStorePlatform extends Fake
     implements FlutterAppUpdaterPlatform {
   final openedStores = <({String store, String storeUrl})>[];
   final startedPlayModes = <String>[];
+  bool throwMissingPluginOnOpenStore = false;
 
   @override
   Future<void> openStore({
     required String store,
     required String storeUrl,
   }) async {
+    if (throwMissingPluginOnOpenStore) {
+      throw MissingPluginException('openStore is not implemented.');
+    }
     openedStores.add((store: store, storeUrl: storeUrl));
   }
 

@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible package, manifest, or platform integration problem.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve flutter_app_updater.
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      placeholder: 3.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - iOS
+        - macOS
+        - Windows
+        - OHOS
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and structured error
+      description: Include the UpdateErrorCode and message, with secrets removed.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include a redacted manifest and the smallest runnable code sample.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Flutter and device environment
+      description: Paste `flutter doctor -v` and relevant device or OS details.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed tokens, signing material, private URLs, and personal data.
+          required: true

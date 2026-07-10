@@ -7,6 +7,7 @@ void main() {
     test('manifest factory builds a checkable updater', () async {
       final updater = AppUpdater.manifest(
         manifestUrl: Uri.parse('https://example.com/update.json'),
+        expectedAppId: 'com.example.app',
         installedVersion: '1.0.0',
         platform: TargetPlatform.android,
         architecture: 'arm64',

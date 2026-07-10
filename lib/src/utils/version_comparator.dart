@@ -1,130 +1,112 @@
-/// 应用版本比较工具类
+import 'package:pub_semver/pub_semver.dart';
+
+/// 应用版本比较工具类。
 ///
-/// 用于比较两个版本号的大小，支持常见的版本号格式：
-/// - 语义化版本 (Semantic Versioning): 如 1.2.3
-/// - 带构建号版本: 如 1.2.3+4
-/// - 带预发布标识版本: 如 1.2.3-alpha.1
+/// 支持语义化版本、构建元数据、预发布标识以及可选的 `v` 前缀。为了兼容
+/// 常见应用版本输入，`1` 和 `1.2` 会分别标准化为 `1.0.0` 和 `1.2.0`。
 class VersionComparator {
-  /// 比较两个版本号
+  /// 比较两个版本号。
   ///
-  /// [currentVersion] 当前版本号
-  /// [newVersion] 新版本号
-  ///
-  /// 返回值:
-  /// - 负数: 如果 newVersion 大于 currentVersion (有更新)
-  /// - 0: 如果两个版本相等
-  /// - 正数: 如果 currentVersion 大于 newVersion (无需更新)
+  /// 返回负数表示 [newVersion] 更新，零表示相等，正数表示
+  /// [currentVersion] 更新。构建元数据不参与版本优先级比较。
   static int compare(String currentVersion, String newVersion) {
-    // 清理版本号字符串
-    final cleanCurrentVersion = _cleanVersion(currentVersion);
-    final cleanNewVersion = _cleanVersion(newVersion);
-
-    // 解析版本号
-    final current = _parseVersion(cleanCurrentVersion);
-    final newer = _parseVersion(cleanNewVersion);
-
-    // 比较主版本、次版本、修订版本
-    // 使用max确保比较所有部分，不足部分视为0
-    final maxLength =
-        current.length > newer.length ? current.length : newer.length;
-
-    for (int i = 0; i < maxLength; i++) {
-      // 获取对应位置的版本号，不存在则为0
-      final currentPart = i < current.length ? current[i] : 0;
-      final newPart = i < newer.length ? newer[i] : 0;
-
-      // 使用数值比较而不是字符串比较
-      if (currentPart < newPart) return -1; // 新版本更大
-      if (currentPart > newPart) return 1; // 当前版本更大
-    }
-
-    // 主要版本号相同，检查预发布版本
-    return _comparePreRelease(cleanCurrentVersion, cleanNewVersion);
+    final current = _parseVersion(currentVersion, includeBuild: false);
+    final newer = _parseVersion(newVersion, includeBuild: false);
+    return current.compareTo(newer);
   }
 
-  /// 检查是否有可用更新
-  ///
-  /// [currentVersion] 当前版本号
-  /// [newVersion] 新版本号
-  ///
-  /// 如果新版本大于当前版本，返回 true
   static bool hasUpdate(String currentVersion, String newVersion) {
     return compare(currentVersion, newVersion) < 0;
   }
 
-  /// 判断版本号是否为受支持的格式。
+  /// 判断版本号是否为支持的语义化格式。
   ///
-  /// 支持 `v1.2.3`、`1.2.3-beta.1`、`1.2.3+4` 和更多数字段。
+  /// 超过三个数字段、空数字段或畸形的预发布/构建标识符会被拒绝。
   static bool isValidVersion(String version) {
-    final normalized = version.trim();
-    if (normalized.isEmpty) {
+    try {
+      if (_hasLeadingZeroNumericIdentifiers(version)) {
+        return false;
+      }
+      _parseVersion(version);
+      return true;
+    } on FormatException {
       return false;
     }
-
-    return RegExp(
-      r'^[vV]?\d+(?:\.\d+)*(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$',
-    ).hasMatch(normalized);
   }
 
-  /// 清理版本号字符串
-  static String _cleanVersion(String version) {
-    // 移除版本号前的'v'或'V'前缀
-    if (version.toLowerCase().startsWith('v')) {
-      version = version.substring(1);
+  static bool _hasLeadingZeroNumericIdentifiers(String version) {
+    var normalized = version.trim();
+    if (normalized.startsWith('v') || normalized.startsWith('V')) {
+      normalized = normalized.substring(1);
     }
 
-    // 移除构建元数据部分 (例如 1.2.3+4 中的 +4)
+    final suffixIndex = _firstSuffixIndex(normalized);
+    final core =
+        suffixIndex < 0 ? normalized : normalized.substring(0, suffixIndex);
+    if (core.split('.').any(_hasLeadingZero)) {
+      return true;
+    }
+
+    final preReleaseIndex = normalized.indexOf('-');
+    if (preReleaseIndex < 0) {
+      return false;
+    }
+    final buildIndex = normalized.indexOf('+', preReleaseIndex);
+    final preRelease = normalized.substring(
+      preReleaseIndex + 1,
+      buildIndex < 0 ? normalized.length : buildIndex,
+    );
+    return preRelease.split('.').any((identifier) {
+      return RegExp(r'^\d+$').hasMatch(identifier) &&
+          _hasLeadingZero(identifier);
+    });
+  }
+
+  static bool _hasLeadingZero(String identifier) {
+    return identifier.length > 1 && identifier.startsWith('0');
+  }
+
+  static Version _parseVersion(
+    String version, {
+    bool includeBuild = true,
+  }) {
+    var normalized = version.trim();
+    if (normalized.startsWith('v') || normalized.startsWith('V')) {
+      normalized = normalized.substring(1);
+    }
+
+    final suffixIndex = _firstSuffixIndex(normalized);
+    final core =
+        suffixIndex < 0 ? normalized : normalized.substring(0, suffixIndex);
+    var suffix = suffixIndex < 0 ? '' : normalized.substring(suffixIndex);
+    final segments = core.split('.');
+    if (segments.isEmpty ||
+        segments.length > 3 ||
+        segments.any((segment) =>
+            segment.isEmpty || !RegExp(r'^\d+$').hasMatch(segment))) {
+      throw FormatException('Could not parse "$version".');
+    }
+
+    while (segments.length < 3) {
+      segments.add('0');
+    }
+
+    if (!includeBuild) {
+      final buildIndex = suffix.indexOf('+');
+      if (buildIndex >= 0) {
+        suffix = suffix.substring(0, buildIndex);
+      }
+    }
+
+    normalized = '${segments.join('.')}$suffix';
+    return Version.parse(normalized);
+  }
+
+  static int _firstSuffixIndex(String version) {
+    final preReleaseIndex = version.indexOf('-');
     final buildIndex = version.indexOf('+');
-    if (buildIndex > 0) {
-      version = version.substring(0, buildIndex);
-    }
-
-    return version.trim();
-  }
-
-  /// 解析版本号为数字列表
-  static List<int> _parseVersion(String version) {
-    // 分离预发布标识符
-    final parts = version.split('-');
-    final versionCore = parts[0];
-
-    // 解析主版本号部分
-    final segments = versionCore.split('.');
-    final result = <int>[];
-
-    for (final segment in segments) {
-      final number = int.tryParse(segment);
-      result.add(number ?? 0);
-    }
-
-    // 补全至少3个部分 (主版本.次版本.修订版本)
-    while (result.length < 3) {
-      result.add(0);
-    }
-
-    return result;
-  }
-
-  /// 比较预发布版本
-  static int _comparePreRelease(String currentVersion, String newVersion) {
-    // 检查是否有预发布标识符
-    final hasCurrent = currentVersion.contains('-');
-    final hasNew = newVersion.contains('-');
-
-    // 预发布版本比较规则：
-    // 1. 有预发布标识的版本比没有预发布标识的版本低
-    // 2. 只有当两个版本都有预发布标识时才进行比较
-
-    if (!hasCurrent && !hasNew) return 0; // 都没有预发布标识
-    if (!hasCurrent && hasNew) return 1; // 新版本有预发布标识，当前没有
-    if (hasCurrent && !hasNew) return -1; // 当前版本有预发布标识，新版本没有
-
-    // 两者都有预发布标识，比较预发布标识
-    final currentPre = currentVersion.split('-')[1];
-    final newPre = newVersion.split('-')[1];
-
-    // 预发布标识的字典顺序比较
-    // 例如: alpha < beta < rc
-    return currentPre.compareTo(newPre);
+    if (preReleaseIndex < 0) return buildIndex;
+    if (buildIndex < 0) return preReleaseIndex;
+    return preReleaseIndex < buildIndex ? preReleaseIndex : buildIndex;
   }
 }

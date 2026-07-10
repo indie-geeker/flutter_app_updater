@@ -1,4 +1,5 @@
 import '../models/update_error_code.dart';
+import '../utils/version_comparator.dart';
 
 class ManifestParseException implements Exception {
   final UpdateErrorCode code;
@@ -50,9 +51,19 @@ class ManifestSchema {
   }
 
   void _validateRelease(Map<String, Object?> release) {
-    _requiredString(release, 'version');
+    _validateVersion(_requiredString(release, 'version'), 'version');
     _requiredString(release, 'platform');
     _requiredString(release, 'releaseNotes');
+
+    final policy = release['policy'];
+    if (policy != null) {
+      final policyMap = _asMap(policy, 'policy');
+      final minSupportedVersion =
+          _optionalString(policyMap, 'minSupportedVersion');
+      if (minSupportedVersion != null) {
+        _validateVersion(minSupportedVersion, 'minSupportedVersion');
+      }
+    }
 
     final actions = _requiredList(release, 'actions');
     if (actions.isEmpty) {
@@ -64,6 +75,15 @@ class ManifestSchema {
 
     for (final action in actions) {
       _validateAction(_asMap(action, 'action'));
+    }
+  }
+
+  void _validateVersion(String value, String field) {
+    if (!VersionComparator.isValidVersion(value)) {
+      throw ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: '$field must be a valid semantic version.',
+      );
     }
   }
 
@@ -82,15 +102,18 @@ class ManifestSchema {
       case 'downloadPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
+        _optionalPositiveInt(action, 'packageSizeBytes');
       case 'installPackage':
         _requiredString(action, 'packagePath');
         _optionalString(action, 'packageType');
       case 'downloadAndInstallPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
+        _optionalPositiveInt(action, 'packageSizeBytes');
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
+        _optionalPositiveInt(action, 'installerSizeBytes');
       default:
         throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,
@@ -197,6 +220,20 @@ class ManifestSchema {
     throw ManifestParseException(
       code: UpdateErrorCode.manifestInvalid,
       message: '$field must be a string.',
+    );
+  }
+
+  int? _optionalPositiveInt(Map<String, Object?> map, String field) {
+    final value = map[field];
+    if (value == null) {
+      return null;
+    }
+    if (value is int && value > 0) {
+      return value;
+    }
+    throw ManifestParseException(
+      code: UpdateErrorCode.manifestInvalid,
+      message: '$field must be a positive integer.',
     );
   }
 }

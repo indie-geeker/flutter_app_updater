@@ -1,9 +1,9 @@
 {
   "name": "flutter_app_updater",
-  "version": "1.0.0",
-  "description": "Please describe the basic information.",
+  "version": "3.0.0",
+  "description": "Flutter plugin bridge for manifest-driven application updates.",
   "main": "index.ets",
-  "author": "",
+  "author": "Indie Geeker <indiegeeker@gmail.com>",
   "license": "Apache-2.0",
   "dependencies": {
     "@ohos/flutter_ohos": "file:./har/flutter.har"

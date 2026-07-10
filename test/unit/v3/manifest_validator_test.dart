@@ -22,6 +22,50 @@ void main() {
       );
     });
 
+    test('rejects malformed release versions', () {
+      final manifest = _manifestWithAction({
+        'type': 'openStore',
+        'store': 'googlePlay',
+        'storeUrl': 'https://play.google.com/store/apps/details?id=example',
+      });
+      final release = (manifest['releases']! as List<Object?>).single
+          as Map<String, Object?>;
+      release['version'] = '1..0';
+
+      expect(
+        () => const ManifestParser().parse(manifest),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.manifestInvalid,
+          ),
+        ),
+      );
+    });
+
+    test('rejects malformed minimum supported versions', () {
+      final manifest = _manifestWithAction({
+        'type': 'openStore',
+        'store': 'googlePlay',
+        'storeUrl': 'https://play.google.com/store/apps/details?id=example',
+      });
+      final release = (manifest['releases']! as List<Object?>).single
+          as Map<String, Object?>;
+      release['policy'] = {'minSupportedVersion': '1.2.3.4'};
+
+      expect(
+        () => const ManifestParser().parse(manifest),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.manifestInvalid,
+          ),
+        ),
+      );
+    });
+
     test('rejects legacy downloadUrl fields', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
@@ -120,6 +164,40 @@ void main() {
         })),
         returnsNormally,
       );
+    });
+
+    test('rejects non-positive declared artifact sizes', () {
+      for (final action in [
+        {
+          'type': 'downloadPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+          'packageSizeBytes': 0,
+        },
+        {
+          'type': 'downloadAndInstallPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+          'packageSizeBytes': -1,
+        },
+        {
+          'type': 'openInstaller',
+          'installerUrl': 'https://example.com/app.dmg',
+          'installerType': 'dmg',
+          'installerSizeBytes': 0,
+        },
+      ]) {
+        expect(
+          () => const ManifestParser().parse(_manifestWithAction(action)),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestInvalid,
+            ),
+          ),
+        );
+      }
     });
 
     test('rejects unsupported action types', () {

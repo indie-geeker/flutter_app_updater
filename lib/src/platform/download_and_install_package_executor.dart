@@ -3,9 +3,13 @@ import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
 import 'download_package_executor.dart';
 import 'install_package_executor.dart';
+import 'streaming_update_action_executor.dart';
+import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
+import 'update_action_event.dart';
 
-class DownloadAndInstallPackageExecutor implements UpdateActionExecutor {
+class DownloadAndInstallPackageExecutor
+    implements StreamingUpdateActionExecutor {
   final DownloadPackageExecutor downloadExecutor;
   final InstallPackageExecutor installExecutor;
 
@@ -25,45 +29,107 @@ class DownloadAndInstallPackageExecutor implements UpdateActionExecutor {
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
+    await for (final event in performStream(action)) {
+      if (event case UpdateActionCompleted(:final result)) {
+        return result;
+      }
+    }
+    return const UpdateActionResult.failure(
+      code: UpdateErrorCode.packageDownloadFailed,
+      message: 'Package installation ended without a result.',
+    );
+  }
+
+  @override
+  Stream<UpdateActionEvent> performStream(
+    UpdateAction action, {
+    UpdateActionCancelToken? cancelToken,
+  }) async* {
+    yield UpdateActionStarted(action);
     if (action is! DownloadAndInstallPackageAction) {
-      return const UpdateActionResult.failure(
-        code: UpdateErrorCode.noSupportedAction,
-        message: 'DownloadAndInstallPackageExecutor only supports '
-            'download-and-install package actions.',
+      yield const UpdateActionCompleted(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.noSupportedAction,
+          message: 'DownloadAndInstallPackageExecutor only supports '
+              'download-and-install package actions.',
+        ),
       );
+      return;
+    }
+    if (action.packageType != PackageType.apk) {
+      yield const UpdateActionCompleted(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.manifestInvalid,
+          message: 'Only APK packages can be installed locally.',
+        ),
+      );
+      return;
     }
 
-    final downloadResult = await downloadExecutor.perform(
+    UpdateActionResult? downloadResult;
+    await for (final event in downloadExecutor.performStream(
       DownloadPackageAction(
         packageUrl: action.packageUrl,
         packageType: action.packageType,
         packageSizeBytes: action.packageSizeBytes,
         sha256: action.sha256,
       ),
-    );
+      cancelToken: cancelToken,
+    )) {
+      switch (event) {
+        case UpdateActionProgress(
+            :final downloadedBytes,
+            :final totalBytes,
+          ):
+          yield UpdateActionProgress(
+            action: action,
+            downloadedBytes: downloadedBytes,
+            totalBytes: totalBytes,
+          );
+        case UpdateActionCompleted(:final result):
+          downloadResult = result;
+        case UpdateActionStarted():
+          break;
+      }
+    }
 
-    if (!downloadResult.isSuccess || downloadResult.file == null) {
-      return UpdateActionResult.failure(
-        code: downloadResult.code ?? UpdateErrorCode.packageDownloadFailed,
-        message: downloadResult.message ?? 'Package download failed.',
+    final result = downloadResult;
+    if (result == null || !result.isSuccess || result.file == null) {
+      yield UpdateActionCompleted(
+        UpdateActionResult.failure(
+          code: result?.code ?? UpdateErrorCode.packageDownloadFailed,
+          message: result?.message ?? 'Package download failed.',
+        ),
       );
+      return;
+    }
+    if (cancelToken?.isCanceled ?? false) {
+      yield const UpdateActionCompleted(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.actionCanceled,
+          message: 'Package installation canceled.',
+        ),
+      );
+      return;
     }
 
     final installResult = await installExecutor.perform(
       InstallPackageAction(
-        packagePath: downloadResult.file!.path,
+        packagePath: result.file!.path,
         packageType: action.packageType,
       ),
     );
-
     if (!installResult.isSuccess) {
-      return installResult;
+      yield UpdateActionCompleted(installResult);
+      return;
     }
 
-    return UpdateActionResult.success(
-      file: downloadResult.file,
-      downloadedBytes: downloadResult.downloadedBytes,
-      sha256: downloadResult.sha256,
+    yield UpdateActionCompleted(
+      UpdateActionResult.success(
+        file: result.file,
+        downloadedBytes: result.downloadedBytes,
+        sha256: result.sha256,
+      ),
     );
   }
 }

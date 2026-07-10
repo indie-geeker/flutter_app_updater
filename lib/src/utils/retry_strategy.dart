@@ -175,6 +175,7 @@ class RetryStrategy {
       UpdateErrorCode.packageDownloadFailed =>
         true,
       UpdateErrorCode.manifestInvalid ||
+      UpdateErrorCode.appIdMismatch ||
       UpdateErrorCode.unsupportedSchemaVersion ||
       UpdateErrorCode.unsupportedActionType ||
       UpdateErrorCode.missingRequiredField ||
@@ -184,13 +185,17 @@ class RetryStrategy {
       UpdateErrorCode.storeNotAvailable ||
       UpdateErrorCode.marketNotAvailable ||
       UpdateErrorCode.playInAppUpdateUnavailable ||
+      UpdateErrorCode.packageTooLarge ||
       UpdateErrorCode.packageHashMismatch ||
       UpdateErrorCode.packageSignatureInvalid ||
       UpdateErrorCode.packageInstallPermissionRequired ||
       UpdateErrorCode.packageFileNotFound ||
       UpdateErrorCode.packageInstallFailed ||
       UpdateErrorCode.installerOpenFailed ||
-      UpdateErrorCode.platformNotSupported =>
+      UpdateErrorCode.platformNotSupported ||
+      UpdateErrorCode.downloadInProgress ||
+      UpdateErrorCode.actionFailed ||
+      UpdateErrorCode.actionCanceled =>
         false,
     };
   }

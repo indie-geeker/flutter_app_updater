@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -62,12 +63,13 @@ void main() {
         downloadDirectory: tempDir.path,
         downloader: PackageDownloader(
           client: _FakePackageClient(
-            const PackageDownloadResponse(
+            PackageDownloadResponse(
               statusCode: 500,
               headers: {},
-              bytes: Stream<List<int>>.empty(),
+              bytes: const Stream<List<int>>.empty(),
             ),
           ),
+          retryStrategy: RetryStrategy.disabled,
         ),
       );
 
@@ -105,6 +107,108 @@ void main() {
       expect(result.downloadedBytes, bytes.length);
       expect(result.sha256, isNull);
     });
+
+    test('replaces reserved or mismatched artifact file names', () async {
+      final bytes = utf8.encode('package bytes');
+      final urls = [
+        Uri.parse('https://example.com/CON.apk'),
+        Uri.parse('https://example.com/setup.exe'),
+        Uri.parse('https://example.com/bad%3Aname.apk'),
+      ];
+
+      for (final url in urls) {
+        final action = DownloadPackageAction(
+          packageUrl: url,
+          packageType: PackageType.apk,
+        );
+        final executor = DownloadPackageExecutor(
+          downloadDirectory: tempDir.path,
+          downloader: PackageDownloader(
+            client: _FakePackageClient(
+              PackageDownloadResponse(
+                statusCode: 200,
+                headers: const {},
+                bytes: Stream.value(bytes),
+              ),
+            ),
+          ),
+        );
+
+        final result = await executor.perform(action);
+
+        expect(result.isSuccess, isTrue);
+        expect(
+          result.file!.path,
+          endsWith('${Platform.pathSeparator}package-download.apk'),
+        );
+      }
+    });
+
+    test('streams start, progress, and exactly one completion', () async {
+      final bytes = utf8.encode('package bytes');
+      final action = DownloadPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final executor = DownloadPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(
+          client: _FakePackageClient(
+            PackageDownloadResponse(
+              statusCode: 200,
+              headers: {'content-length': '${bytes.length}'},
+              bytes: Stream<List<int>>.fromIterable([
+                bytes.sublist(0, 4),
+                bytes.sublist(4),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(events.whereType<UpdateActionStarted>(), hasLength(1));
+      expect(events.whereType<UpdateActionProgress>(), hasLength(2));
+      expect(events.whereType<UpdateActionCompleted>(), hasLength(1));
+      expect(
+        (events.last as UpdateActionCompleted).result.isSuccess,
+        isTrue,
+      );
+    });
+
+    test('canceling the stream subscription cancels the active download',
+        () async {
+      final bodyStarted = Completer<void>();
+      final responseClosed = Completer<void>();
+      final body = StreamController<List<int>>(
+        onListen: bodyStarted.complete,
+      );
+      final action = DownloadPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final executor = DownloadPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(
+          client: _FakePackageClient(
+            PackageDownloadResponse(
+              statusCode: 200,
+              headers: const {},
+              bytes: body.stream,
+              onClose: responseClosed.complete,
+            ),
+          ),
+        ),
+      );
+
+      final subscription = executor.performStream(action).listen((_) {});
+      await bodyStarted.future;
+      await subscription.cancel();
+
+      await responseClosed.future.timeout(const Duration(seconds: 1));
+      await body.close();
+    });
   });
 }
 
@@ -117,6 +221,7 @@ class _FakePackageClient implements PackageDownloadClient {
   Future<PackageDownloadResponse> get(
     Uri url, {
     Map<String, String> headers = const {},
+    UpdateActionCancelToken? cancelToken,
   }) async {
     return response;
   }

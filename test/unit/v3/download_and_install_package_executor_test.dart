@@ -38,7 +38,10 @@ void main() {
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,
-        downloader: PackageDownloader(client: client),
+        downloader: PackageDownloader(
+          client: client,
+          retryStrategy: RetryStrategy.disabled,
+        ),
         installExecutor: InstallPackageExecutor(platform: platform),
       );
 
@@ -57,15 +60,18 @@ void main() {
 
     test('does not install when download fails', () async {
       client.enqueue(
-        const PackageDownloadResponse(
+        PackageDownloadResponse(
           statusCode: 500,
           headers: {},
-          bytes: Stream<List<int>>.empty(),
+          bytes: const Stream<List<int>>.empty(),
         ),
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,
-        downloader: PackageDownloader(client: client),
+        downloader: PackageDownloader(
+          client: client,
+          retryStrategy: RetryStrategy.disabled,
+        ),
         installExecutor: InstallPackageExecutor(platform: platform),
       );
 
@@ -79,6 +85,36 @@ void main() {
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
       expect(platform.installedPaths, isEmpty);
+    });
+
+    test('streams download progress before installing', () async {
+      final bytes = utf8.encode('package bytes');
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream<List<int>>.fromIterable([
+            bytes.sublist(0, 4),
+            bytes.sublist(4),
+          ]),
+        ),
+      );
+      final action = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final executor = DownloadAndInstallPackageExecutor(
+        downloadDirectory: tempDir.path,
+        downloader: PackageDownloader(client: client),
+        installExecutor: InstallPackageExecutor(platform: platform),
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(events.whereType<UpdateActionStarted>(), hasLength(1));
+      expect(events.whereType<UpdateActionProgress>(), hasLength(2));
+      expect(events.whereType<UpdateActionCompleted>(), hasLength(1));
+      expect(platform.installedPaths, hasLength(1));
     });
   });
 }
@@ -94,6 +130,7 @@ class _FakePackageClient implements PackageDownloadClient {
   Future<PackageDownloadResponse> get(
     Uri url, {
     Map<String, String> headers = const {},
+    UpdateActionCancelToken? cancelToken,
   }) async {
     if (_responses.isEmpty) {
       throw StateError('No response queued.');

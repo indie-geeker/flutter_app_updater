@@ -27,18 +27,25 @@ class StoreUpdateExecutor implements UpdateActionExecutor {
     }
 
     try {
-      return switch (action) {
-        OpenStoreAction() => _openStore(action),
-        PlayInAppUpdateAction() => _startPlayInAppUpdate(action),
-        _ => const UpdateActionResult.failure(
-            code: UpdateErrorCode.noSupportedAction,
-            message: 'Unsupported store action.',
-          ),
-      };
+      if (action is OpenStoreAction) {
+        return await _openStore(action);
+      }
+      if (action is PlayInAppUpdateAction) {
+        return await _startPlayInAppUpdate(action);
+      }
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.noSupportedAction,
+        message: 'Unsupported store action.',
+      );
     } on PlatformException catch (error) {
       return UpdateActionResult.failure(
         code: _mapPlatformCode(error.code),
         message: error.message ?? error.code,
+      );
+    } on MissingPluginException catch (error) {
+      return UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: error.message ?? 'Store update actions are not supported.',
       );
     }
   }

@@ -29,7 +29,6 @@ void main() {
         // 1.0 应该等于 1.0.0
         expect(VersionComparator.compare('1', '1.0'), equals(0));
         expect(VersionComparator.compare('1.0', '1.0.0'), equals(0));
-        expect(VersionComparator.compare('1.0.0', '1.0.0.0'), equals(0));
 
         // 1.1 应该大于 1.0.9
         expect(VersionComparator.compare('1.1', '1.0.9'), greaterThan(0));
@@ -64,6 +63,8 @@ void main() {
             lessThan(0));
         expect(
             VersionComparator.compare('1.0.0-beta', '1.0.0-rc'), lessThan(0));
+        expect(VersionComparator.compare('1.0.0-rc.2', '1.0.0-rc.10'),
+            lessThan(0));
 
         // 都是预发布版本时，主版本号仍然有效
         expect(VersionComparator.compare('2.0.0-alpha', '1.0.0-beta'),
@@ -71,16 +72,18 @@ void main() {
       });
 
       test('should handle edge cases', () {
-        // 空版本号部分应该被视为0
-        expect(VersionComparator.compare('1..0', '1.0.0'), equals(0));
-
         // 只有主版本号
         expect(VersionComparator.compare('2', '1'), greaterThan(0));
         expect(VersionComparator.compare('1', '2'), lessThan(0));
 
-        // 长版本号
         expect(
-            VersionComparator.compare('1.2.3.4.5', '1.2.3.4.6'), lessThan(0));
+          () => VersionComparator.compare('1..0', '1.0.0'),
+          throwsFormatException,
+        );
+        expect(
+          () => VersionComparator.compare('1.2.3.4', '1.2.3'),
+          throwsFormatException,
+        );
       });
 
       test('should handle real-world version scenarios', () {
@@ -116,6 +119,22 @@ void main() {
 
         // 当前是正式版本，预发布版本不算更新
         expect(VersionComparator.hasUpdate('1.0.0', '1.0.0-beta'), isFalse);
+      });
+    });
+
+    group('isValidVersion', () {
+      test('accepts supported semantic versions', () {
+        expect(VersionComparator.isValidVersion('1'), isTrue);
+        expect(VersionComparator.isValidVersion('1.2'), isTrue);
+        expect(VersionComparator.isValidVersion('v1.2.3-rc.2+45'), isTrue);
+      });
+
+      test('rejects malformed or over-segmented versions', () {
+        expect(VersionComparator.isValidVersion('1..0'), isFalse);
+        expect(VersionComparator.isValidVersion('1.2.3.4'), isFalse);
+        expect(VersionComparator.isValidVersion('1.0.0-alpha..1'), isFalse);
+        expect(VersionComparator.isValidVersion('01.2.3'), isFalse);
+        expect(VersionComparator.isValidVersion('1.0.0-rc.01'), isFalse);
       });
     });
   });
