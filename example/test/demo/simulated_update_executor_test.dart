@@ -16,7 +16,7 @@ void main() {
 
   test('emits start, four progress events, and one successful completion',
       () async {
-    final executor = SimulatedUpdateExecutor(
+    const executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
@@ -37,7 +37,7 @@ void main() {
   });
 
   test('perform returns the terminal stream result', () async {
-    final executor = SimulatedUpdateExecutor(
+    const executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.hashMismatch,
       duration: Duration.zero,
       totalBytes: 100,
@@ -51,7 +51,7 @@ void main() {
 
   test('cancellation emits one structured terminal result', () async {
     final token = UpdateActionCancelToken();
-    final executor = SimulatedUpdateExecutor(
+    const executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
@@ -99,7 +99,7 @@ void main() {
   });
 
   test('supports every action produced by the demo', () {
-    final executor = SimulatedUpdateExecutor(
+    const executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
@@ -109,7 +109,7 @@ void main() {
         store: StoreKind.googlePlay,
         storeUrl: Uri.parse('https://store.example.invalid/app'),
       ),
-      OpenAndroidMarketAction(
+      const OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
         targetPackageName: 'com.example.app',
       ),
