@@ -75,6 +75,7 @@ void main() {
 
   test('README documents v3 without legacy fields', () {
     final readme = File('README.md').readAsStringSync();
+    final exampleReadme = File('example/README.md').readAsStringSync();
 
     expect(readme, contains('AppUpdater.manifest'));
     expect(readme, contains('checkAndPrepare'));
@@ -94,20 +95,33 @@ void main() {
     expect(readme.toLowerCase(), isNot(contains('md5')));
     expect(readme, isNot(contains('Windows | URL handler support')));
     expect(readme, contains('Windows | Unsupported'));
+    expect(readme, contains('configurable update simulator'));
+    expect(exampleReadme, contains('Update Simulator'));
+    expect(exampleReadme, contains('No external side effects'));
+    expect(exampleReadme, isNot(contains('Safe preview')));
+    expect(exampleReadme, isNot(contains('Remote manifest')));
   });
 
   test('example demonstrates the convenience flow through the public API', () {
     final example = File('example/lib/main.dart').readAsStringSync();
+    final controller =
+        File('example/lib/demo/update_demo_controller.dart').readAsStringSync();
+    final manifestFactory =
+        File('example/lib/demo/demo_manifest_factory.dart').readAsStringSync();
+    final simulator = File('example/lib/demo/simulated_update_executor.dart')
+        .readAsStringSync();
     final examplePubspec = File('example/pubspec.yaml').readAsStringSync();
 
-    expect(example, contains('UpdateSource.staticManifest'));
-    expect(example, contains('AppUpdater.manifest'));
-    expect(example, contains('expectedAppId: expectedAppId'));
-    expect(example, contains('await updater.checkAndPrepare()'));
-    expect(example, contains('performRecommendedStream'));
-    expect(example, contains('PreviewUpdateExecutor'));
-    expect(example, contains('UpdateActionCancelToken'));
-    expect(example, contains('DownloadAndInstallPackageAction'));
+    expect(example, contains('UpdateSimulatorPage'));
+    expect(controller, contains('UpdateSource.staticManifest'));
+    expect(controller, contains('await updater.checkAndPrepare()'));
+    expect(controller, contains('performRecommendedStream'));
+    expect(controller, contains('UpdateActionCancelToken'));
+    expect(manifestFactory, contains('DownloadAndInstallPackageAction'));
+    expect(simulator, contains('SimulatedUpdateExecutor'));
+    for (final source in [example, controller, manifestFactory, simulator]) {
+      expect(source, isNot(contains('flutter_app_updater/src/')));
+    }
     expect(examplePubspec, contains('version: 1.0.0+1'));
   });
 
@@ -118,7 +132,7 @@ void main() {
     expect(pubignore, contains('docs/plans/'));
   });
 
-  test('Android package installation permission is opt in', () {
+  test('safe simulator does not request Android package installation', () {
     final pluginManifest =
         File('android/src/main/AndroidManifest.xml').readAsStringSync();
     final exampleManifest =
@@ -126,7 +140,7 @@ void main() {
             .readAsStringSync();
 
     expect(pluginManifest, isNot(contains('REQUEST_INSTALL_PACKAGES')));
-    expect(exampleManifest, contains('REQUEST_INSTALL_PACKAGES'));
+    expect(exampleManifest, isNot(contains('REQUEST_INSTALL_PACKAGES')));
   });
 
   test('publish archive excludes machine-local platform configuration', () {

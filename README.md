@@ -286,11 +286,12 @@ Useful error codes include:
 
 ## Example
 
-The bundled example starts in a safe preview mode that uses a simulated
-executor and never performs network or installer operations. Remote mode
-requires an explicit manifest URL and expected application ID. See
-[`example/README.md`](example/README.md) for runnable commands and platform
-warnings.
+The bundled example is a configurable update simulator. It lets you vary the
+installed version, available release, required-update policy, platform,
+delivery method, execution duration, and terminal outcome. Version selection
+and policy decisions use the real package flow; network, store, download,
+permission, and installer effects remain deterministic simulations. See
+[`example/README.md`](example/README.md) for scenarios and runnable commands.
 
 ## Maintainer Verification
 

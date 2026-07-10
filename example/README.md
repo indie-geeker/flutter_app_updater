@@ -1,41 +1,65 @@
 # Flutter App Updater Example
 
-This app demonstrates the complete v3 flow without adding UI to the package:
+The example is a configurable **Update Simulator**. It models how an
+application checks, presents, downloads, cancels, retries, and completes an
+update without tying the package to a specific product UI.
 
-1. select a static or remote manifest source
-2. validate the manifest application identity
-3. select the release and recommended action
-4. display required/optional policy and structured failures
-5. stream progress, support cancellation, and handle the terminal result
+Version selection, build-number comparison, minimum-supported-version policy,
+recommended action selection, structured results, progress, and cancellation
+use the real `flutter_app_updater` public contracts.
 
-## Safe preview
+## No external side effects
 
-The default mode uses a static manifest plus `PreviewUpdateExecutor`. It emits
-real `UpdateActionEvent` objects but never opens a store, downloads a file, or
-starts an installer. The `.invalid` artifact URL is intentionally unreachable;
-successful preview execution proves that the simulated executor was used.
+The simulator builds an in-memory v3 manifest and injects a deterministic
+streaming executor. Running it does not:
 
-## Remote manifest
+- request a remote manifest
+- open an application store or Android market
+- download or write a file
+- request installation permission
+- start an APK or desktop installer
 
-Remote mode requires a manifest URL, the exact application ID expected in that
-manifest, and the installed version. It uses `defaultTargetPlatform` rather
-than pretending every host is Android.
+Reserved `.invalid` URLs make accidental external execution fail closed.
 
-```dart
-final updater = AppUpdater.manifest(
-  manifestUrl: Uri.parse('https://updates.example.com/manifest.json'),
-  expectedAppId: 'com.example.app',
-  installedVersion: '1.0.0',
-  platform: defaultTargetPlatform,
-  channel: 'stable',
-  downloadDirectory: downloadDirectory,
-);
-```
+## Configure a scenario
 
-Use HTTPS and publish SHA-256 plus exact artifact sizes for commercial direct
-downloads. Direct installation is appropriate only when the target platform
-and distribution channel permit self-hosted updates. Google Play builds should
-use store actions instead of requesting package-install permission.
+The page is divided into three sections:
+
+1. **Installed application** — version, build number, platform, architecture,
+   and channel.
+2. **Available release** — whether an update exists, release metadata,
+   required-update policy, minimum supported version, and delivery method.
+3. **Simulation behavior** — transfer size, duration, and terminal outcome.
+
+Delivery choices follow the selected platform. Android can simulate an
+official store, a Chinese Android market, or APK download and installation.
+iOS uses the App Store. macOS supports the Mac App Store or a desktop
+installer, while Windows uses a desktop installer.
+
+## Observe the flow
+
+Select **Check for update** to run the scenario:
+
+- an equal version/build produces an up-to-date result;
+- a recommended update can be deferred;
+- a required update blocks barrier and back-button dismissal;
+- transfer events update progress and byte counts;
+- cancellation returns `ACTION_CANCELED`;
+- configured failures display their public `UpdateErrorCode` and recovery
+  action;
+- installation permission recovery is visibly simulated and changes no system
+  setting.
+
+The required-update dialog includes a clearly labeled **Reset simulation**
+escape. That control exists only so the example cannot trap the person testing
+it; a real host application decides its own required-update escape policy.
+
+## Package and example boundary
+
+The package remains UI-free. The form, dialogs, controller, generated data, and
+simulated executor live entirely under `example/lib/`. Production applications
+should provide their own presentation and use real manifest and platform
+executors appropriate to their distribution channel.
 
 ## Run and verify
 
@@ -49,13 +73,9 @@ flutter analyze --no-pub
 flutter test --no-pub
 ```
 
-The integration test includes a safe `getPlatformVersion` call through the real
-native method channel. Run it on a configured device or simulator:
+The integration test keeps a native method-channel smoke check and verifies
+that the simulator launches. Run it on a configured device or simulator:
 
 ```bash
 flutter test integration_test/plugin_integration_test.dart
 ```
-
-The example Android manifest opts into `REQUEST_INSTALL_PACKAGES` only because
-remote mode can demonstrate policy-compliant self-hosted APK installation. The
-plugin manifest itself does not impose this permission on consuming apps.
