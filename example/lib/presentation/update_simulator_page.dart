@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../demo/update_demo_controller.dart';
 import 'scenario_form.dart';
+import 'update_result_dialog.dart';
 
 class UpdateSimulatorPage extends StatefulWidget {
   final UpdateDemoController? controller;
@@ -16,13 +17,76 @@ class _UpdateSimulatorPageState extends State<UpdateSimulatorPage> {
   late final UpdateDemoController _controller =
       widget.controller ?? UpdateDemoController();
   late final bool _ownsController = widget.controller == null;
+  bool _dialogVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleControllerChange);
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleControllerChange);
     if (_ownsController) {
       _controller.dispose();
     }
     super.dispose();
+  }
+
+  void _handleControllerChange() {
+    if (_controller.phase == DemoPhase.updateAvailable && !_dialogVisible) {
+      _dialogVisible = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showUpdateDialog();
+        }
+      });
+    }
+  }
+
+  Future<void> _showUpdateDialog() async {
+    final required = _controller.preparedUpdate?.isRequired ?? false;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !required,
+      builder: (dialogContext) {
+        void close() => Navigator.of(dialogContext).pop();
+        return PopScope(
+          canPop: !required,
+          child: UpdateResultDialog(
+            controller: _controller,
+            onLater: () {
+              _controller.deferUpdate();
+              close();
+            },
+            onUpdate: () {
+              _controller.performRecommended();
+            },
+            onReset: () {
+              _controller.reset();
+              close();
+            },
+            onCancel: _controller.cancel,
+            onRetry: () {
+              _controller.performRecommended();
+            },
+            onOpenSettings: _controller.simulateOpenSettings,
+            onClose: close,
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      setState(() {
+        _dialogVisible = false;
+      });
+    }
+    if (mounted &&
+        !required &&
+        _controller.phase == DemoPhase.updateAvailable) {
+      _controller.deferUpdate();
+    }
   }
 
   @override
@@ -56,6 +120,11 @@ class _UpdateSimulatorPageState extends State<UpdateSimulatorPage> {
                         enabled: !_controller.isBusy,
                         onChanged: _controller.updateScenario,
                       ),
+                      if (!_dialogVisible)
+                        if (_statusFor(_controller) case final status?) ...[
+                          const SizedBox(height: 16),
+                          _StatusBanner(status: status),
+                        ],
                       const SizedBox(height: 20),
                       _ActionBar(controller: _controller),
                     ],
@@ -68,6 +137,76 @@ class _UpdateSimulatorPageState extends State<UpdateSimulatorPage> {
       ),
     );
   }
+}
+
+class _StatusBanner extends StatelessWidget {
+  final _StatusContent status;
+
+  const _StatusBanner({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: status.isError
+            ? Theme.of(context).colorScheme.errorContainer
+            : const Color(0xFFDDECE3),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(status.isError
+              ? Icons.error_outline
+              : Icons.check_circle_outline),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(status.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(status.message),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusContent {
+  final String title;
+  final String message;
+  final bool isError;
+
+  const _StatusContent(this.title, this.message, {this.isError = false});
+}
+
+_StatusContent? _statusFor(UpdateDemoController controller) {
+  return switch (controller.phase) {
+    DemoPhase.upToDate => const _StatusContent(
+        'No update available',
+        'The installed version is up to date.',
+      ),
+    DemoPhase.checkFailed => _StatusContent(
+        controller.errorCode?.value ?? 'Check failed',
+        controller.message ?? 'The simulated check failed.',
+        isError: true,
+      ),
+    DemoPhase.succeeded => const _StatusContent(
+        'Simulation complete',
+        'No external action was performed.',
+      ),
+    DemoPhase.failed || DemoPhase.canceled => _StatusContent(
+        controller.errorCode?.value ?? 'Simulation failed',
+        controller.message ?? 'The simulated update did not complete.',
+        isError: true,
+      ),
+    _ => null,
+  };
 }
 
 class _SimulatorIntro extends StatelessWidget {

@@ -328,6 +328,10 @@ class _ScenarioFormState extends State<ScenarioForm> {
                       const InputDecoration(labelText: 'Simulation duration'),
                   items: const [
                     DropdownMenuItem(
+                      value: Duration.zero,
+                      child: Text('Instant'),
+                    ),
+                    DropdownMenuItem(
                       value: Duration(milliseconds: 500),
                       child: Text('0.5 seconds'),
                     ),
