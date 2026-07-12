@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "vectors": {
+    "clean_200_identity_exact": {
+      "request": {"acceptEncoding": "identity"},
+      "response": {"status": 200, "contentEncoding": "identity", "body": "package-bytes", "contentLength": 13},
+      "expected": {"outcome": "complete", "sha256": "9d7ec3059a3be4a437e8028d9a498f2fd4adfa7183af52ecc712704ee1dc8260"}
+    },
+    "clean_200_short_body": {
+      "response": {"status": 200, "body": "hello", "contentLength": 11},
+      "expected": {"outcome": "integrity-failure"}
+    },
+    "clean_200_hash_mismatch": {
+      "response": {"status": 200, "body": "hello"},
+      "expected": {"outcome": "hash-mismatch"}
+    },
+    "strong_etag_resume": {
+      "checkpoint": {"body": "hello", "bytes": 5, "etag": "\"v1\"", "total": 11},
+      "request": {"range": "bytes=5-", "ifRange": "\"v1\""},
+      "response": {"status": 206, "contentRange": "bytes 5-10/11", "contentLength": 6, "body": " world"},
+      "expected": {"outcome": "complete", "body": "hello world", "sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"}
+    },
+    "weak_etag_restart": {
+      "checkpoint": {"body": "hello", "bytes": 5, "etag": "W/\"v1\"", "total": 11},
+      "expected": {"outcome": "clean-restart"}
+    },
+    "resume_wrong_start": {
+      "response": {"status": 206, "contentRange": "bytes 0-5/11", "contentLength": 6, "body": " world"},
+      "expected": {"outcome": "protocol-failure"}
+    },
+    "resume_wrong_body_length": {
+      "response": {"status": 206, "contentRange": "bytes 5-10/11", "contentLength": 5, "body": " world"},
+      "expected": {"outcome": "protocol-failure"}
+    },
+    "resume_changed_total": {
+      "response": {"status": 206, "contentRange": "bytes 5-11/12", "contentLength": 7, "body": " world!"},
+      "expected": {"outcome": "protocol-failure"}
+    },
+    "range_ignored_200": {
+      "response": {"status": 200, "contentLength": 13, "body": "fresh-package"},
+      "expected": {"outcome": "complete", "body": "fresh-package", "sha256": "82c661bf45b0adce1e990b83da4e3f1544bf88be4c7503a4667015a1be7d6d2d"}
+    },
+    "range_416_exact_eof": {
+      "checkpoint": {"body": "hello world", "bytes": 11, "etag": "\"v1\"", "total": 11},
+      "response": {"status": 416, "contentRange": "bytes */11", "body": ""},
+      "expected": {"outcome": "complete", "body": "hello world"}
+    },
+    "range_416_overshoot": {
+      "checkpoint": {"body": "hello world!", "bytes": 12, "etag": "\"v1\"", "total": 12},
+      "response": {"status": 416, "contentRange": "bytes */11", "body": ""},
+      "expected": {"outcome": "one-clean-retry"}
+    },
+    "range_416_malformed": {
+      "response": {"status": 416, "contentRange": "not-a-range", "body": ""},
+      "expected": {"outcome": "one-clean-retry"}
+    },
+    "gzip_rejected": {
+      "response": {"status": 200, "contentEncoding": "gzip", "body": "package-bytes"},
+      "expected": {"outcome": "protocol-failure"}
+    },
+    "redirect_resume": {
+      "response": {"status": 302, "location": "https://cdn.example.com/app.apk"},
+      "expected": {"outcome": "follow", "preserveRange": true, "maxRedirects": 5}
+    },
+    "redirect_https_downgrade": {
+      "response": {"status": 302, "location": "http://cdn.example.com/app.apk"},
+      "expected": {"outcome": "protocol-failure"}
+    },
+    "uncheckpointed_tail": {
+      "checkpoint": {"body": "helloXX", "bytes": 5, "etag": "\"v1\"", "total": 11},
+      "expected": {"outcome": "truncate-to-checkpoint"}
+    },
+    "checkpoint_ahead": {
+      "checkpoint": {"body": "hell", "bytes": 5, "etag": "\"v1\"", "total": 11},
+      "expected": {"outcome": "clean-restart"}
+    }
+  }
+}
