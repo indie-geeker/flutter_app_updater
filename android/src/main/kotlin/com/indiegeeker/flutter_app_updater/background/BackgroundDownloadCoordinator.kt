@@ -59,6 +59,37 @@ internal class BackgroundDownloadCoordinator(
     store.cancelArtifactsAndWriteTombstone(id, current.revision)
   }
 
+  /** Scheduler-owned stop transition, valid from every nonterminal state. */
+  fun pauseBySystem(
+    id: String,
+    rawStopReason: Int?,
+    errorCode: String? = null,
+    errorMessage: String? = null,
+    nativeErrorCode: String? = null,
+  ): BackgroundDownloadRecord = transitionLock.withLock {
+    repeat(4) {
+      val current = store.read(id)
+      if (current.status.isTerminal) return@withLock current
+      try {
+        return@withLock store.write(
+          current.copy(
+            revision = current.revision + 1,
+            status = BackgroundDownloadStatus.pausedBySystem,
+            lastStopReason = rawStopReason,
+            errorCode = errorCode,
+            errorMessage = errorMessage,
+            nativeErrorCode = nativeErrorCode,
+            updatedAtEpochMs = nextUpdatedAt(current),
+          ),
+          current.revision,
+        )
+      } catch (_: BackgroundDownloadRevisionException) {
+        // Artifact reconciliation may have committed outside this lock.
+      }
+    }
+    throw BackgroundDownloadRevisionException("Unable to persist system pause after concurrent transitions")
+  }
+
   fun remove(id: String) = transitionLock.withLock {
     store.remove(id)
   }

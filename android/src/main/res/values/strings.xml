@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flutter_app_updater_download_channel_name">App downloads</string>
+    <string name="flutter_app_updater_download_channel_description">App update package downloads</string>
+    <string name="flutter_app_updater_download_running_title">Downloading update</string>
+    <string name="flutter_app_updater_download_running_text">The update package is downloading.</string>
+    <string name="flutter_app_updater_download_waiting_title">Download paused</string>
+    <string name="flutter_app_updater_download_waiting_text">Tap Retry to continue the update download.</string>
+    <string name="flutter_app_updater_download_completed_title">Update downloaded</string>
+    <string name="flutter_app_updater_download_completed_text">Open the app to continue.</string>
+    <string name="flutter_app_updater_download_failed_title">Download failed</string>
+    <string name="flutter_app_updater_download_failed_text">Open the app to review the update.</string>
+    <string name="flutter_app_updater_download_retry">Retry</string>
+    <string name="flutter_app_updater_download_cancel">Cancel</string>
+</resources>

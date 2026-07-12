@@ -4,4 +4,6 @@
     <external-files-path name="external_files_downloads" path="Download" />
     <cache-path name="cache" path="." />
     <external-cache-path name="external_cache" path="." />
+    <files-path name="flutter_app_updater_background"
+        path="flutter_app_updater/background/" />
 </paths>

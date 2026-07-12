@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flutter_app_updater_download_channel_name">应用下载</string>
+    <string name="flutter_app_updater_download_channel_description">应用更新安装包下载</string>
+    <string name="flutter_app_updater_download_running_title">正在下载更新</string>
+    <string name="flutter_app_updater_download_running_text">正在下载更新安装包。</string>
+    <string name="flutter_app_updater_download_waiting_title">下载已暂停</string>
+    <string name="flutter_app_updater_download_waiting_text">点按“重试”继续下载更新。</string>
+    <string name="flutter_app_updater_download_completed_title">更新已下载</string>
+    <string name="flutter_app_updater_download_completed_text">打开应用以继续。</string>
+    <string name="flutter_app_updater_download_failed_title">下载失败</string>
+    <string name="flutter_app_updater_download_failed_text">打开应用以查看更新。</string>
+    <string name="flutter_app_updater_download_retry">重试</string>
+    <string name="flutter_app_updater_download_cancel">取消</string>
+</resources>
