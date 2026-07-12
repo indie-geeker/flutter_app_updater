@@ -66,6 +66,40 @@ void main() {
     expect(action.packageUrl.path, '/app.apk');
   });
 
+  test('public library exports Android background download API types', () {
+    final task = BackgroundDownloadTask(
+      id: 'task-1',
+      revision: 1,
+      status: BackgroundDownloadStatus.queued,
+      downloadedBytes: 0,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(1000),
+    );
+    final manager = AndroidBackgroundDownloadManager();
+
+    expect(task.isTerminal, isFalse);
+    expect(manager, isA<AndroidBackgroundDownloadManager>());
+    expect(
+      const BackgroundDownloadException(
+        code: UpdateErrorCode.backgroundDownloadUnavailable,
+        message: 'Unavailable.',
+      ),
+      isA<Exception>(),
+    );
+
+    final managerSource = File(
+      'lib/src/background/android_background_download_manager.dart',
+    ).readAsStringSync();
+    expect(
+      managerSource,
+      isNot(contains('final FlutterAppUpdaterPlatform platform;')),
+    );
+    expect(
+      managerSource,
+      isNot(contains('FlutterAppUpdaterPlatform? platform')),
+    );
+  });
+
   test('public barrel does not export v2 API files', () {
     final barrel = File('lib/flutter_app_updater.dart').readAsStringSync();
 

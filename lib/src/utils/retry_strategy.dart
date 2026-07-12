@@ -193,6 +193,11 @@ class RetryStrategy {
       UpdateErrorCode.packageInstallFailed ||
       UpdateErrorCode.installerOpenFailed ||
       UpdateErrorCode.platformNotSupported ||
+      UpdateErrorCode.backgroundDownloadUnavailable ||
+      UpdateErrorCode.backgroundDownloadNotFound ||
+      UpdateErrorCode.backgroundDownloadStartRejected ||
+      UpdateErrorCode.backgroundDownloadInvalidState ||
+      UpdateErrorCode.backgroundStorageUnavailable ||
       UpdateErrorCode.downloadInProgress ||
       UpdateErrorCode.actionFailed ||
       UpdateErrorCode.actionCanceled =>

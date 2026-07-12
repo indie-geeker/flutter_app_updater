@@ -281,6 +281,18 @@ void main() {
             isFalse,
           );
         });
+
+        test('should not retry background download operation failures', () {
+          for (final code in [
+            UpdateErrorCode.backgroundDownloadUnavailable,
+            UpdateErrorCode.backgroundDownloadNotFound,
+            UpdateErrorCode.backgroundDownloadStartRejected,
+            UpdateErrorCode.backgroundDownloadInvalidState,
+            UpdateErrorCode.backgroundStorageUnavailable,
+          ]) {
+            expect(strategy.shouldRetry(code, 0), isFalse, reason: code.value);
+          }
+        });
       });
 
       group('attempt limit', () {

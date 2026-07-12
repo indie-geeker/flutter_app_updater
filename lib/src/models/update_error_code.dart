@@ -20,6 +20,11 @@ enum UpdateErrorCode {
   packageInstallFailed('PACKAGE_INSTALL_FAILED'),
   installerOpenFailed('INSTALLER_OPEN_FAILED'),
   platformNotSupported('PLATFORM_NOT_SUPPORTED'),
+  backgroundDownloadUnavailable('BACKGROUND_DOWNLOAD_UNAVAILABLE'),
+  backgroundDownloadNotFound('BACKGROUND_DOWNLOAD_NOT_FOUND'),
+  backgroundDownloadStartRejected('BACKGROUND_DOWNLOAD_START_REJECTED'),
+  backgroundDownloadInvalidState('BACKGROUND_DOWNLOAD_INVALID_STATE'),
+  backgroundStorageUnavailable('BACKGROUND_STORAGE_UNAVAILABLE'),
   downloadInProgress('DOWNLOAD_IN_PROGRESS'),
   actionFailed('ACTION_FAILED'),
   actionCanceled('ACTION_CANCELED');

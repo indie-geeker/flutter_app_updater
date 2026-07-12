@@ -1,4 +1,6 @@
 export 'src/actions/update_action.dart';
+export 'src/background/android_background_download_manager.dart';
+export 'src/background/background_download_task.dart';
 export 'src/core/app_updater.dart';
 export 'src/core/update_selector.dart';
 export 'src/core/update_source.dart';
