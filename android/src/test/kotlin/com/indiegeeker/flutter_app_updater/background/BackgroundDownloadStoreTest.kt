@@ -1,9 +1,13 @@
 package com.indiegeeker.flutter_app_updater.background
 
 import java.io.File
+import java.io.IOException
 import java.math.BigInteger
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -523,6 +527,66 @@ internal class BackgroundDownloadStoreTest {
     assertEquals(BackgroundDownloadStatus.failed, failed.status)
     assertEquals("artifact_verification_failed", failed.errorCode)
     assertFalse(invalidStore.apkFile("task_1").exists())
+  }
+
+  @Test
+  fun reconcileVerificationIoFailurePreservesStateAndArtifact() {
+    val store = store(
+      newRoot(),
+      TestRecordFileFactory(),
+      verifier = { _, _ -> throw IOException("temporary read failure") },
+    )
+    val verifying = record(status = BackgroundDownloadStatus.verifying)
+    store.create(verifying)
+    store.apkFile(verifying.id).writeBytes(byteArrayOf(1))
+
+    assertFailsWith<IOException> { store.reconcileArtifacts(verifying.id) }
+
+    assertEquals(verifying, store.read(verifying.id))
+    assertTrue(store.apkFile(verifying.id).isFile)
+  }
+
+  @Test
+  fun staleVerificationCannotMutateRecreatedTaskWithSameIdRevisionAndStatus() {
+    val verificationEntered = CountDownLatch(1)
+    val releaseVerification = CountDownLatch(1)
+    val store = store(
+      newRoot(),
+      TestRecordFileFactory(),
+      verifier = { _, _ ->
+        verificationEntered.countDown()
+        assertTrue(releaseVerification.await(5, TimeUnit.SECONDS))
+        false
+      },
+    )
+    val original = record(status = BackgroundDownloadStatus.verifying)
+    store.create(original)
+    store.apkFile(original.id).writeBytes(byteArrayOf(1))
+    val executor = Executors.newSingleThreadExecutor()
+    try {
+      val reconciliation = executor.submit<BackgroundDownloadRecord> {
+        store.reconcileArtifacts(original.id)
+      }
+      assertTrue(verificationEntered.await(5, TimeUnit.SECONDS))
+
+      store.cancelArtifactsAndWriteTombstone(original.id, original.revision)
+      store.remove(original.id)
+      val recreated = original.copy(
+        packageUrl = "https://downloads.example.test/recreated.apk",
+        expectedSha256 = "b".repeat(64),
+        createdAtEpochMs = original.createdAtEpochMs + 1,
+      )
+      store.create(recreated)
+      store.apkFile(recreated.id).writeBytes(byteArrayOf(2))
+
+      releaseVerification.countDown()
+      assertEquals(recreated, reconciliation.get(5, TimeUnit.SECONDS))
+      assertEquals(recreated, store.read(recreated.id))
+      assertContentEquals(byteArrayOf(2), store.apkFile(recreated.id).readBytes())
+    } finally {
+      releaseVerification.countDown()
+      executor.shutdownNow()
+    }
   }
 
   @Test

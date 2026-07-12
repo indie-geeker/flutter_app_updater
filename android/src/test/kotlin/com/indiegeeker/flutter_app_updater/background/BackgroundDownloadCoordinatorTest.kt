@@ -353,6 +353,23 @@ internal class BackgroundDownloadCoordinatorTest {
   }
 
   @Test
+  fun progressMailboxOfferIsOrderedBeforeCancelTombstoneAndNeverInvokesCode() {
+    val holder = coordinatorWithStore()
+    val active = record(status = BackgroundDownloadStatus.running)
+    holder.store.create(active)
+    val offered = holder.coordinator.offerProgress(active.id, 10, active.expectedSizeBytes)
+    assertEquals(active.revision, offered?.revision)
+
+    val canceled = holder.coordinator.cancel(active.id)
+    assertEquals(BackgroundDownloadStatus.canceled, canceled.status)
+    assertEquals(null, holder.coordinator.offerProgress(active.id, 11, active.expectedSizeBytes))
+
+    val stale = holder.coordinator.pollProgress()
+    assertEquals(active.revision, stale?.revision)
+    assertTrue(checkNotNull(stale).revision < canceled.revision)
+  }
+
+  @Test
   fun genericTransitionCannotBypassCancelArtifactCleanup() {
     val holder = coordinatorWithStore()
     val initial = record(status = BackgroundDownloadStatus.running)
@@ -412,15 +429,66 @@ internal class BackgroundDownloadCoordinatorTest {
     assertEquals(2_000, records.single().updatedAtEpochMs)
   }
 
+  @Test
+  fun startupArtifactHashDoesNotHoldCoordinatorOrTaskLocks() {
+    val verificationEntered = CountDownLatch(1)
+    val releaseVerification = CountDownLatch(1)
+    val holder = coordinatorWithStore(verifier = { _, _ ->
+      verificationEntered.countDown()
+      assertTrue(releaseVerification.await(5, TimeUnit.SECONDS))
+      true
+    })
+    val verifying = record(status = BackgroundDownloadStatus.verifying)
+    holder.store.create(verifying)
+    holder.store.apkFile(verifying.id).writeBytes(byteArrayOf(1))
+    val executor = Executors.newFixedThreadPool(2)
+    try {
+      val reconciliation = executor.submit<List<BackgroundDownloadRecord>> {
+        holder.coordinator.reconcileOnStartup(emptySet())
+      }
+      assertTrue(verificationEntered.await(5, TimeUnit.SECONDS))
+
+      val cancel = executor.submit<BackgroundDownloadRecord> {
+        holder.coordinator.cancel(verifying.id)
+      }
+      assertEquals(BackgroundDownloadStatus.canceled, cancel.get(1, TimeUnit.SECONDS).status)
+
+      releaseVerification.countDown()
+      assertEquals(BackgroundDownloadStatus.canceled, reconciliation.get(5, TimeUnit.SECONDS).single().status)
+    } finally {
+      releaseVerification.countDown()
+      executor.shutdownNow()
+    }
+  }
+
+  @Test
+  fun startupReconciliationReturnsExistingTaskWhenArtifactCleanupFails() {
+    val holder = coordinatorWithStore(verifier = { file, _ ->
+      assertTrue(file.delete())
+      assertTrue(file.mkdir())
+      file.resolve("child").writeText("still in use")
+      false
+    })
+    val verifying = record(status = BackgroundDownloadStatus.verifying)
+    holder.store.create(verifying)
+    holder.store.apkFile(verifying.id).writeBytes(byteArrayOf(1))
+
+    val records = holder.coordinator.reconcileOnStartup(emptySet())
+
+    assertEquals(listOf(verifying), records)
+    assertEquals(verifying, holder.store.read(verifying.id))
+  }
+
   private fun coordinator(now: () -> Long = { 1_000 }): BackgroundDownloadCoordinator =
     coordinatorWithStore(now).coordinator
 
   private fun coordinatorWithStore(
     now: () -> Long = { 1_000 },
     factory: BackgroundRecordFileFactory = TestCoordinatorRecordFileFactory(),
+    verifier: (File, BackgroundDownloadRecord) -> Boolean = { _, _ -> true },
   ): CoordinatorHolder {
     val root = Files.createTempDirectory("background-coordinator-").toFile().also(roots::add)
-    val store = BackgroundDownloadStore(root, factory, { _, _ -> true }, now)
+    val store = BackgroundDownloadStore(root, factory, verifier, now)
     return CoordinatorHolder(store, BackgroundDownloadCoordinator(store, now))
   }
 }

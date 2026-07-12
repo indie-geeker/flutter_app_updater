@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.AtomicFile
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.locks.ReentrantLock
@@ -133,63 +134,92 @@ internal class BackgroundDownloadStore(
 
   fun apkFile(id: String): File = checkedTaskFile(id, APK_FILE_NAME)
 
-  fun reconcileArtifacts(id: String): BackgroundDownloadRecord = withTaskLock(id) {
-    if (hasUnsupportedBackingSchema(id)) {
-      return@withTaskLock readUnlocked(id)
-    }
-    var record = readUnlocked(id)
-    val apk = apkFile(id)
-
-    if (record.status == BackgroundDownloadStatus.canceled) {
-      deleteArtifact(partialFile(id))
-      deleteArtifact(apk)
-      return@withTaskLock record
-    }
-
-    if (record.status == BackgroundDownloadStatus.verifying && apk.isFile) {
-      record = if (verifyArtifact(apk, record)) {
-        writeUnlocked(
-          record.copy(
-            revision = record.revision + 1,
-            status = BackgroundDownloadStatus.completed,
-            errorCode = null,
-            errorMessage = null,
-            nativeErrorCode = null,
-            updatedAtEpochMs = nextUpdatedAt(record),
-          ),
-          record.revision,
-        )
+  fun reconcileArtifacts(id: String): BackgroundDownloadRecord {
+    val verification = withTaskLock(id) {
+      if (hasUnsupportedBackingSchema(id)) return readUnlocked(id)
+      val record = readUnlocked(id)
+      val apk = apkFile(id)
+      if (record.status == BackgroundDownloadStatus.canceled) {
+        deleteArtifact(partialFile(id))
+        deleteArtifact(apk)
+        return record
+      }
+      if (apk.isFile &&
+        (record.status == BackgroundDownloadStatus.verifying ||
+          record.status == BackgroundDownloadStatus.completed)
+      ) {
+        ArtifactVerificationCandidate(record, apk)
       } else {
-        deleteArtifact(apk)
-        failRecord(record, "artifact_verification_failed")
+        return reconcileWithoutArtifactVerificationUnlocked(record)
       }
-      return@withTaskLock record
     }
 
+    // Hashing a 1 GiB APK must not hold either the coordinator-wide lock or a
+    // task lock. Revalidate the durable revision/status before committing.
+    val valid = verifyArtifact(verification.apk, verification.record)
+    return withTaskLock(id) {
+      val current = readUnlocked(id)
+      if (current.revision != verification.record.revision ||
+        current.status != verification.record.status ||
+        !current.hasSameArtifactIdentity(verification.record) ||
+        !current.hasSameImmutableConfiguration(verification.record)
+      ) {
+        return@withTaskLock current
+      }
+      val apk = apkFile(id)
+      when (current.status) {
+        BackgroundDownloadStatus.canceled -> {
+          deleteArtifact(partialFile(id))
+          deleteArtifact(apk)
+          current
+        }
+        BackgroundDownloadStatus.verifying -> if (valid && apk.isFile) {
+          writeUnlocked(
+            current.copy(
+              revision = current.revision + 1,
+              status = BackgroundDownloadStatus.completed,
+              errorCode = null,
+              errorMessage = null,
+              nativeErrorCode = null,
+              updatedAtEpochMs = nextUpdatedAt(current),
+            ),
+            current.revision,
+          )
+        } else {
+          deleteArtifact(apk)
+          failRecord(current, "artifact_verification_failed")
+        }
+        BackgroundDownloadStatus.completed -> if (valid && apk.isFile) {
+          current
+        } else {
+          deleteArtifact(apk)
+          failRecord(current, "completed_artifact_invalid")
+        }
+        else -> current
+      }
+    }
+  }
+
+  private fun reconcileWithoutArtifactVerificationUnlocked(
+    initial: BackgroundDownloadRecord,
+  ): BackgroundDownloadRecord {
+    var record = initial
+    val apk = apkFile(record.id)
     if (record.status == BackgroundDownloadStatus.completed) {
-      val failureCode = when {
-        !apk.isFile -> "completed_artifact_missing"
-        !verifyArtifact(apk, record) -> "completed_artifact_invalid"
-        else -> null
-      }
-      if (failureCode != null) {
-        deleteArtifact(apk)
-        record = failRecord(record, failureCode)
-      }
-      return@withTaskLock record
+      deleteArtifact(apk)
+      return failRecord(record, "completed_artifact_missing")
     }
-
-    val partial = partialFile(id)
+    val partial = partialFile(record.id)
     if (record.status == BackgroundDownloadStatus.verifying) {
       if (!partial.isFile) {
-        return@withTaskLock failRecord(record, "PACKAGE_DOWNLOAD_FAILED")
+        return failRecord(record, "PACKAGE_DOWNLOAD_FAILED")
       }
       if (partial.length() > record.downloadedBytes) {
         RandomAccessFile(partial, "rw").use { it.setLength(record.downloadedBytes) }
       }
       if (partial.length() < record.downloadedBytes) {
         deleteArtifact(partial)
-        return@withTaskLock writeUnlocked(
+        return writeUnlocked(
           record.copy(
             revision = record.revision + 1,
             status = BackgroundDownloadStatus.pausedBySystem,
@@ -200,7 +230,7 @@ internal class BackgroundDownloadStore(
           record.revision,
         )
       }
-      return@withTaskLock writeUnlocked(
+      return writeUnlocked(
         record.copy(
           revision = record.revision + 1,
           status = BackgroundDownloadStatus.pausedBySystem,
@@ -225,7 +255,7 @@ internal class BackgroundDownloadStore(
         record.revision,
       )
     }
-    record
+    return record
   }
 
   fun cancelArtifactsAndWriteTombstone(
@@ -368,9 +398,16 @@ internal class BackgroundDownloadStore(
   private fun verifyArtifact(file: File, record: BackgroundDownloadRecord): Boolean =
     try {
       artifactVerifier(file, record)
+    } catch (error: IOException) {
+      throw error
     } catch (_: Exception) {
       false
     }
+
+  private data class ArtifactVerificationCandidate(
+    val record: BackgroundDownloadRecord,
+    val apk: File,
+  )
 
   private fun nextUpdatedAt(record: BackgroundDownloadRecord): Long =
     maxOf(nowEpochMs(), record.updatedAtEpochMs)
