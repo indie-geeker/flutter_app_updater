@@ -43,6 +43,7 @@ android {
     sourceSets {
         main.java.srcDirs += "src/main/kotlin"
         test.java.srcDirs += "src/test/kotlin"
+        test.resources.srcDirs += "${project.projectDir}/../test/fixtures"
     }
 
     defaultConfig {
@@ -65,6 +66,7 @@ android {
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
+    testImplementation("org.json:json:20240303")
 
     implementation 'androidx.annotation:annotation:1.9.1'
     implementation 'androidx.core:core-ktx:1.16.0'
