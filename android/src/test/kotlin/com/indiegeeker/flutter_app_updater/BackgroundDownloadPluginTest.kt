@@ -4,6 +4,7 @@ import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadPluginDe
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadPluginCompletion
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadStreamHandler
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadStartupReconciliation
+import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadStartupReconciliationAttempt
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadUrlPolicy
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadEventBus
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadProgress
@@ -125,6 +126,7 @@ internal class BackgroundDownloadPluginTest {
       val reconciliation = BackgroundDownloadStartupReconciliation(worker) {
         entered.countDown()
         release.await(5, TimeUnit.SECONDS)
+        BackgroundDownloadStartupReconciliationAttempt()
       }
       assertTrue(entered.await(5, TimeUnit.SECONDS))
       val awaited = waiter.submit { reconciliation.await() }
@@ -276,6 +278,69 @@ internal class BackgroundDownloadPluginTest {
       assertFailsWith<Exception> { reconciliation.await() }
     } finally {
       worker.shutdownNow()
+    }
+  }
+
+  @Test
+  fun retryableStartupReconciliationDoesNotPoisonInitialWaiters() {
+    val worker = Executors.newSingleThreadExecutor()
+    val timer = Executors.newSingleThreadScheduledExecutor()
+    val attempts = AtomicInteger()
+    val retried = CountDownLatch(1)
+    try {
+      val reconciliation = BackgroundDownloadStartupReconciliation(
+        executor = worker,
+        scheduledExecutor = timer,
+        retryDelayMs = 1,
+      ) {
+        if (attempts.incrementAndGet() == 1) {
+          BackgroundDownloadStartupReconciliationAttempt(setOf("task-1"))
+        } else {
+          retried.countDown()
+          BackgroundDownloadStartupReconciliationAttempt()
+        }
+      }
+
+      reconciliation.await()
+
+      assertTrue(retried.await(5, TimeUnit.SECONDS))
+      assertEquals(2, attempts.get())
+    } finally {
+      worker.shutdownNow()
+      timer.shutdownNow()
+    }
+  }
+
+  @Test
+  fun startupRetryExhaustionIsReportedExactlyOnce() {
+    val worker = Executors.newSingleThreadExecutor()
+    val timer = Executors.newSingleThreadScheduledExecutor()
+    val exhausted = CountDownLatch(1)
+    val attempts = AtomicInteger()
+    val exhaustedIds = mutableListOf<Set<String>>()
+    try {
+      val reconciliation = BackgroundDownloadStartupReconciliation(
+        executor = worker,
+        scheduledExecutor = timer,
+        retryDelayMs = 1,
+        maxRetries = 1,
+        onExhausted = { attempt ->
+          exhaustedIds += attempt.retryableTaskIds
+          exhausted.countDown()
+        },
+      ) {
+        attempts.incrementAndGet()
+        BackgroundDownloadStartupReconciliationAttempt(setOf("task-1"))
+      }
+
+      reconciliation.await()
+
+      assertTrue(exhausted.await(5, TimeUnit.SECONDS))
+      assertEquals(2, attempts.get())
+      assertEquals(listOf(setOf("task-1")), exhaustedIds)
+    } finally {
+      worker.shutdownNow()
+      timer.shutdownNow()
     }
   }
 

@@ -1,5 +1,6 @@
 package com.indiegeeker.flutter_app_updater.background
 
+import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.withLock
@@ -94,6 +95,19 @@ internal class BackgroundDownloadCoordinator(
     store.remove(id)
   }
 
+  fun failStartupVerification(id: String): BackgroundDownloadRecord? = transitionLock.withLock {
+    val current = store.read(id)
+    if (current.status != BackgroundDownloadStatus.verifying) return@withLock null
+    transitionUnlocked(id, current.revision) {
+      it.copy(
+        status = BackgroundDownloadStatus.failed,
+        errorCode = "BACKGROUND_STORAGE_UNAVAILABLE",
+        errorMessage = "Unable to read the package during startup verification",
+        nativeErrorCode = "startup_verification_io_exhausted",
+      )
+    }
+  }
+
   /** Atomically offers one replaceable progress value without invoking user code. */
   fun offerProgress(
     id: String,
@@ -115,7 +129,10 @@ internal class BackgroundDownloadCoordinator(
   /** Drains the size-one mailbox outside the coordinator lock. */
   fun pollProgress(): BackgroundDownloadProgress? = progressMailbox.getAndSet(null)
 
-  fun reconcileOnStartup(activeExecutionIds: Set<String>): List<BackgroundDownloadRecord> =
+  fun reconcileOnStartup(
+    activeExecutionIds: Set<String>,
+    onRetryableFailure: (String, IOException) -> Unit = { _, _ -> },
+  ): List<BackgroundDownloadRecord> =
     store.list().mapNotNull { listed ->
       if (listed.errorCode == "corrupt_state" || listed.errorCode == "unsupported_schema") {
         return@mapNotNull listed
@@ -125,6 +142,14 @@ internal class BackgroundDownloadCoordinator(
       }
       val reconciled = try {
         store.reconcileArtifacts(listed.id)
+      } catch (error: IOException) {
+        // One unreadable APK must not poison process-wide startup. Preserve
+        // the durable snapshot, reconcile other tasks, and let the runtime
+        // schedule a bounded retry.
+        if (listed.status == BackgroundDownloadStatus.verifying) {
+          onRetryableFailure(listed.id, error)
+        }
+        return@mapNotNull listed
       } catch (_: BackgroundDownloadStateException) {
         // Keep a task that still exists; omit only a task concurrently removed
         // while verification was running outside locks.

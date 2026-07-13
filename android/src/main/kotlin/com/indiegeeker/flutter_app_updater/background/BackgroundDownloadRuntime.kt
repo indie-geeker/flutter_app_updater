@@ -83,15 +83,37 @@ internal class BackgroundDownloadRuntime private constructor(
     return record.toMap(path)
   }
 
-  fun reconcileProcessState() {
-    coordinator.reconcileOnStartup(emptySet()).forEach(::publish)
+  fun reconcileProcessState(): BackgroundDownloadStartupReconciliationAttempt {
+    val retryableTaskIds = linkedSetOf<String>()
+    val records = try {
+      coordinator.reconcileOnStartup(emptySet()) { id, _ -> retryableTaskIds += id }
+    } catch (_: IOException) {
+      // A transient record-directory read failure is retryable too. Startup
+      // waiters must remain usable instead of inheriting a permanently failed
+      // process-wide Future.
+      return BackgroundDownloadStartupReconciliationAttempt(retryWholeStore = true)
+    }
+    records.forEach(::publish)
+    return BackgroundDownloadStartupReconciliationAttempt(retryableTaskIds)
   }
 
   private fun startReconciliation() {
     startupReconciliation = BackgroundDownloadStartupReconciliation(
-      workerExecutor,
-      ::reconcileProcessState,
+      executor = workerExecutor,
+      scheduledExecutor = scheduledExecutor,
+      onExhausted = ::failExhaustedStartupVerifications,
+      reconcile = ::reconcileProcessState,
     )
+  }
+
+  private fun failExhaustedStartupVerifications(
+    attempt: BackgroundDownloadStartupReconciliationAttempt,
+  ) {
+    attempt.retryableTaskIds.forEach { id ->
+      runCatching { coordinator.failStartupVerification(id) }
+        .getOrNull()
+        ?.let(::publish)
+    }
   }
 
   private fun publishDurableSnapshots() {
@@ -172,14 +194,62 @@ internal class BackgroundDownloadRuntime private constructor(
   }
 }
 
-internal class BackgroundDownloadStartupReconciliation(
-  executor: ExecutorService,
-  reconcile: () -> Unit,
+internal data class BackgroundDownloadStartupReconciliationAttempt(
+  val retryableTaskIds: Set<String> = emptySet(),
+  val retryWholeStore: Boolean = false,
 ) {
-  private val future: Future<*> = executor.submit(reconcile)
+  val shouldRetry: Boolean get() = retryWholeStore || retryableTaskIds.isNotEmpty()
+}
+
+internal class BackgroundDownloadStartupReconciliation(
+  private val executor: ExecutorService,
+  private val scheduledExecutor: ScheduledExecutorService? = null,
+  private val retryDelayMs: Long = 1_000,
+  private val maxRetries: Int = 3,
+  private val onExhausted: (BackgroundDownloadStartupReconciliationAttempt) -> Unit = {},
+  private val reconcile: () -> BackgroundDownloadStartupReconciliationAttempt,
+) {
+  private val future: Future<*> = executor.submit { runAttempt(0) }
 
   fun await() {
     future.get()
+  }
+
+  private fun runAttempt(retryCount: Int) {
+    val attempt = try {
+      reconcile()
+    } catch (_: IOException) {
+      BackgroundDownloadStartupReconciliationAttempt(retryWholeStore = true)
+    }
+    if (!attempt.shouldRetry) return
+    if (retryCount >= maxRetries) {
+      reportExhausted(attempt)
+      return
+    }
+    val timer = scheduledExecutor
+    if (timer == null) {
+      reportExhausted(attempt)
+      return
+    }
+    try {
+      timer.schedule(
+        {
+          try {
+            executor.execute { runAttempt(retryCount + 1) }
+          } catch (_: Exception) {
+            reportExhausted(attempt)
+          }
+        },
+        retryDelayMs * (retryCount + 1L),
+        TimeUnit.MILLISECONDS,
+      )
+    } catch (_: Exception) {
+      reportExhausted(attempt)
+    }
+  }
+
+  private fun reportExhausted(attempt: BackgroundDownloadStartupReconciliationAttempt) {
+    runCatching { onExhausted(attempt) }
   }
 }
 

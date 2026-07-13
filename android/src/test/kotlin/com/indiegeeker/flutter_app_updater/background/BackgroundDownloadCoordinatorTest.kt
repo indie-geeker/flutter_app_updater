@@ -1,11 +1,13 @@
 package com.indiegeeker.flutter_app_updater.background
 
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -477,6 +479,49 @@ internal class BackgroundDownloadCoordinatorTest {
 
     assertEquals(listOf(verifying), records)
     assertEquals(verifying, holder.store.read(verifying.id))
+  }
+
+  @Test
+  fun startupVerificationIoFailureIsIsolatedAndCanBeRetried() {
+    val verificationAttempts = AtomicInteger()
+    val holder = coordinatorWithStore(verifier = { _, candidate ->
+      if (candidate.id == "task_1" && verificationAttempts.getAndIncrement() == 0) {
+        throw IOException("temporary read failure")
+      }
+      true
+    })
+    val verifying = record(status = BackgroundDownloadStatus.verifying)
+    val running = record(id = "task_2", status = BackgroundDownloadStatus.running)
+    holder.store.create(verifying)
+    holder.store.apkFile(verifying.id).writeBytes(byteArrayOf(1))
+    holder.store.create(running)
+    val retryableIds = mutableListOf<String>()
+
+    val first = holder.coordinator.reconcileOnStartup(emptySet()) { id, _ ->
+      retryableIds += id
+    }
+
+    assertEquals(listOf("task_1"), retryableIds)
+    assertEquals(BackgroundDownloadStatus.verifying, first.single { it.id == "task_1" }.status)
+    assertEquals(BackgroundDownloadStatus.pausedBySystem, first.single { it.id == "task_2" }.status)
+
+    val retried = holder.coordinator.reconcileOnStartup(emptySet())
+    assertEquals(BackgroundDownloadStatus.completed, retried.single { it.id == "task_1" }.status)
+  }
+
+  @Test
+  fun startupVerificationCanFailTerminallyAfterRetryExhaustion() {
+    val holder = coordinatorWithStore()
+    val verifying = record(status = BackgroundDownloadStatus.verifying)
+    holder.store.create(verifying)
+    holder.store.apkFile(verifying.id).writeBytes(byteArrayOf(1))
+
+    val failed = holder.coordinator.failStartupVerification(verifying.id)
+
+    assertEquals(BackgroundDownloadStatus.failed, failed?.status)
+    assertEquals("BACKGROUND_STORAGE_UNAVAILABLE", failed?.errorCode)
+    assertEquals("startup_verification_io_exhausted", failed?.nativeErrorCode)
+    assertEquals(failed, holder.store.read(verifying.id))
   }
 
   private fun coordinator(now: () -> Long = { 1_000 }): BackgroundDownloadCoordinator =
