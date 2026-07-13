@@ -177,7 +177,10 @@ internal class BackgroundDownloadPluginTest {
       firstSubscription.close()
       bus.publish(eventRecord(5, BackgroundDownloadStatus.completed, 100))
     }
-    bus.publish(eventRecord(4, BackgroundDownloadStatus.completed, 100))
+    bus.publish(
+      eventRecord(4, BackgroundDownloadStatus.completed, 100),
+      "/internal/artifact.apk",
+    )
 
     val reattached = mutableListOf<Map<String, Any?>>()
     bus.addListener { reattached += it }
@@ -185,6 +188,7 @@ internal class BackgroundDownloadPluginTest {
     assertEquals(1, calls.get())
     assertEquals(listOf(4L), reattached.map { it["revision"] })
     assertEquals("completed", reattached.single()["status"])
+    assertEquals("/internal/artifact.apk", reattached.single()["filePath"])
   }
 
   @Test

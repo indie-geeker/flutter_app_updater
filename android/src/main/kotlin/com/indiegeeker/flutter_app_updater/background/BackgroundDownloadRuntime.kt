@@ -133,7 +133,14 @@ internal class BackgroundDownloadRuntime private constructor(
             .getOrNull()
             ?.let { eventBus.publishProgress(progress, it) }
         },
-        checkpointListener = { eventBus.publish(it) },
+        checkpointListener = { record ->
+          val path = if (record.status == BackgroundDownloadStatus.completed) {
+            runCatching { store.apkFile(record.id).takeIf(File::isFile)?.absolutePath }.getOrNull()
+          } else {
+            null
+          }
+          eventBus.publish(record, path)
+        },
         artifactMover = AndroidBackgroundDownloadArtifactMover,
       )
       return BackgroundDownloadRuntime(
