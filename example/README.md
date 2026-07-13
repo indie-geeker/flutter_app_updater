@@ -20,6 +20,9 @@ streaming executor. Running it does not:
 - start an APK or desktop installer
 
 Reserved `.invalid` URLs make accidental external execution fail closed.
+The simulator does not imitate process death, JobScheduler, foreground-service
+lifecycle, force-stop, reboot, or OEM background restrictions. Use the Android
+device integration suite below for the real native background path.
 
 ## Configure a scenario
 
@@ -79,3 +82,42 @@ that the simulator launches. Run it on a configured device or simulator:
 ```bash
 flutter test integration_test/plugin_integration_test.dart
 ```
+
+## Android background download device suite
+
+The example Android manifest opts into the permissions, services, and receiver
+required by the advanced Android-only background API. This is test-host setup,
+not a permission or component automatically added by the plugin.
+
+First run the native plugin gate from `example/android`:
+
+```bash
+../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
+```
+
+The full device suite, including install preparation, must use a real APK with
+the same package name and signing identity as the app installed by the test.
+From the package root:
+
+```bash
+cd example
+flutter build apk --debug
+cd ..
+dart run tool/verification/android_background_download_server.dart \
+  --port 18080 \
+  --artifact example/build/app/outputs/flutter-apk/app-debug.apk
+```
+
+In another terminal, forward the loopback server and run the integration test:
+
+```bash
+adb reverse tcp:18080 tcp:18080
+cd example
+flutter test integration_test/android_background_download_test.dart -d <device-id>
+```
+
+The server's built-in deterministic payload is only for host-side protocol
+tests; it is not a valid artifact for the device integration suite. Record the
+device model, API level, ROM/build, battery mode, and notification state as
+described in
+[`tool/verification/android_background_download.md`](../tool/verification/android_background_download.md).

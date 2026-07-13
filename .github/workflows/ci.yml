@@ -80,6 +80,9 @@ jobs:
       - name: Install dependencies
         working-directory: example
         run: flutter pub get
+      - name: Test and lint Android plugin
+        working-directory: example/android
+        run: ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
       - name: Build Android example
         working-directory: example
         run: flutter build apk --debug --no-pub

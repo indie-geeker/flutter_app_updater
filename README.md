@@ -215,6 +215,129 @@ Use separate actions when your app wants to download now and install later:
 }
 ```
 
+## Advanced Android-only background downloads
+
+`AndroidBackgroundDownloadManager` is an opt-in API for one durable,
+user-visible APK transfer at a time. It is separate from the default
+`AppUpdater` action flow and is available only on Android. A start request must
+come from a visible, user-initiated host flow and must include an HTTPS URL, the
+exact content length, and a lowercase or uppercase SHA-256 digest:
+
+```dart
+final downloads = AndroidBackgroundDownloadManager();
+final task = await downloads.start(
+  DownloadPackageAction(
+    packageUrl: Uri.parse('https://downloads.example.com/app.apk'),
+    packageType: PackageType.apk,
+    packageSizeBytes: 25600000,
+    sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  ),
+);
+
+await for (final snapshot in downloads.watch(task.id)) {
+  updateBackgroundDownloadUi(snapshot);
+}
+```
+
+Use `list()`, `listUnfinished()`, and `get()` after startup to reconcile your
+UI with durable native state. Call `resume()` only in response to a user action
+when a task is waiting or paused. `cancel()` is terminal. Call `remove()` only
+after cancel or another terminal result; it then deletes the durable task and
+its private artifact.
+
+### Required host manifest
+
+The plugin manifest deliberately does not opt applications into background
+execution. Merge all of the following declarations into the host app's
+`android/app/src/main/AndroidManifest.xml`, keeping the app's existing
+activities, providers, metadata, and other components:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
+
+    <application>
+        <!-- Keep the host's existing activity and application declarations. -->
+        <service
+            android:name="com.indiegeeker.flutter_app_updater.background.UserInitiatedDownloadJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+        <service
+            android:name="com.indiegeeker.flutter_app_updater.background.BackgroundDownloadForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+        <receiver
+            android:name="com.indiegeeker.flutter_app_updater.background.BackgroundDownloadActionReceiver"
+            android:exported="false" />
+    </application>
+</manifest>
+```
+
+The host application owns notification permission: it decides when and how to
+request `POST_NOTIFICATIONS` at runtime on Android 13+, explains the visible
+transfer to the user, and handles denial. The package declares neither this
+runtime request nor a battery-exemption prompt. A manifest declaration alone
+does not grant notification permission.
+
+On API 21-25 the package enters the visible foreground-service lifecycle after
+`startService`; on API 26-33 it does so after `startForegroundService`. The
+`dataSync` foreground-service type has platform meaning on API 29+. A process
+stop or network loss can leave durable state that the host shows after reopen;
+recovery is explicit through `resume()` or the user-visible notification
+action. There is no unattended API 21-33 network recovery guarantee.
+On API 34+ the package submits a user-initiated data transfer job with an internet
+requirement. Android still controls admission, stop reasons, and execution
+time, so the host must handle scheduling rejection and expose retry.
+
+Google Play distribution does not make self-hosted APK updates or foreground
+services policy-compliant. Play apps should normally use store delivery, and
+the publisher remains responsible for current foreground-service and
+user-initiated-transfer declarations, eligibility, and review requirements.
+Do not add `REQUEST_INSTALL_PACKAGES` solely to self-update a Play build.
+
+### Server and installation contracts
+
+Production artifacts must use HTTPS and immutable bytes. Supply the exact
+content length and SHA-256 to `start()`. Safe and efficient resume requires the
+server to support `Range: bytes=N-`, return a precise `206 Content-Range`, and
+keep a strong ETag stable for those bytes so `If-Range` cannot append a changed
+artifact. A server that ignores Range may cause a clean restart; weak or
+changing validators are not resume evidence.
+
+Download completion and installation are deliberately separate:
+
+```dart
+final installAction = await downloads.createInstallAction(task.id);
+// createInstallAction revalidates the private APK but does not install the APK.
+final installResult = await updater.perform(installAction);
+```
+
+`createInstallAction()` rechecks the private file, expected size, SHA-256,
+package name, and signing lineage, then returns an `InstallPackageAction`.
+Only the later explicit `AppUpdater.perform()` call can open Android's package
+installer, which remains the final installation authority. The plugin does not
+provide silent installation.
+
+### Recovery limits
+
+Native records and partial bytes survive Flutter engine detach and ordinary
+process recreation. They do not make Android continue work after force-stop,
+and jobs are not persisted across reboot. Reopen the app, call `listUnfinished()`,
+and let the user choose `resume()` where the state permits it. Recents swipe,
+Task Manager Stop, battery restriction, background-start limits, storage
+pressure, and OEM process management can stop or reject execution.
+
+The implementation does not use or promise WorkManager or DownloadManager,
+does not request battery exemptions, and does not promise uninterrupted
+background execution on any OEM family. Record exact model, API level,
+ROM/build, battery mode, and notification state during device qualification.
+See [the verification matrix](tool/verification/android_background_download.md)
+for reproducible protocol and device checks.
+
 ### iOS App Store
 
 ```json
@@ -305,6 +428,12 @@ flutter analyze example
 (cd example && flutter test)
 (cd example && flutter build apk --debug)
 (cd example && flutter build macos --debug)
+```
+
+The Android-native reliability gate runs from `example/android`:
+
+```bash
+../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
 ```
 
 CI also builds the Windows example. Store opening, Android package permission,

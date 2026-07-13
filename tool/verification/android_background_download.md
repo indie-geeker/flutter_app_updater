@@ -9,15 +9,18 @@ not provide authentication, TLS, or access controls.
 
 ## Start the server
 
-For protocol-only checks, start it with the deterministic built-in payload:
+For manual host-side protocol checks only, start it with the deterministic
+built-in payload:
 
 ```bash
 dart run tool/verification/android_background_download_server.dart --port 18080
 ```
 
-For the install-preparation integration case, serve an APK whose package and
-signing identity match the app installed on the device. The example debug APK
-is suitable when the integration test is running from the same checkout:
+Do not use that built-in payload for the device integration suite. The full
+`android_background_download_test.dart` suite must serve a real APK whose
+package and signing identity match the app installed on the device. The example
+debug APK is suitable when the integration test is running from the same
+checkout:
 
 ```bash
 cd example
@@ -199,6 +202,72 @@ strong/weak/changing ETags, exact and malformed 416, controlled disconnect,
 full-payload incomplete chunk termination, slow chunks, oversized chunked
 bodies, control validation, health state, and CLI validation.
 
+Run the native Android unit, lint, and merged-manifest gate from
+`example/android`:
+
+```bash
+../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
+```
+
+Then build the matching APK, start the server with `--artifact`, apply
+`adb reverse`, and run the complete device suite as shown above. A passing
+host-side server suite with the built-in payload is not a substitute for the
+same-package, same-signature APK device run.
+
+## Device evidence matrix
+
+Do not generalize from an emulator or a single vendor. Before release, record
+at least one Pixel/AOSP reference, one API 33-or-lower physical device, one API
+34-or-higher physical device, and two Chinese OEM families. Use exact model,
+API level, ROM name/build, patch level, battery mode, notification state, and
+the commit tested; leave a row marked `not run` rather than inferring a result.
+
+| Device/model | API | ROM/build | Battery mode | Notifications | Commit | Result/notes |
+| --- | ---: | --- | --- | --- | --- | --- |
+| Pixel/AOSP reference |  |  | default/restricted | allowed/denied |  | not run |
+| API 33 or lower |  |  | default/restricted | allowed/denied |  | not run |
+| API 34 or higher |  |  | default/restricted | allowed/denied |  | not run |
+| Chinese OEM family 1 |  |  | default/restricted | allowed/denied |  | not run |
+| Chinese OEM family 2 |  |  | default/restricted | allowed/denied |  | not run |
+
+Use one row per actual scenario run rather than collapsing a device into one
+summary result:
+
+| Run ID | Device/API/ROM | Battery mode | Notifications | Scenario | Control JSON or setup | Expected state | Observed state | Result | Evidence link |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  | default/restricted | allowed/denied |  |  |  |  | not run |  |
+
+Minimum platform evidence:
+
+| API | Evidence to record |
+| ---: | --- |
+| 21 | minSdk build plus user-visible start-service behavior |
+| 26 | foreground channel, icon, notification, and immediate foreground transition |
+| 33 | visible user start with notification allowed and denied |
+| 34 | UIDT internet network, notification, and schedule rejection handling |
+| 35 | UIDT behavior without assuming a `dataSync` foreground fallback |
+| 36 | stop reason and job lifecycle when an API 36 device is available |
+
+For every applicable device, exercise background and locked-screen transfer,
+network switch/loss, Flutter engine detach, process kill, recents swipe, Task
+Manager Stop, force-stop, reboot, notification denial, retry/cancel, Range with
+strong ETag, validator change, exact and malformed 416, disk full, hash
+failure, and explicit user-triggered install. Query `/control` after each
+protocol case and retain its request/response observations with the result.
+For non-server faults, record the exact fixture too: for example the storage
+quota or fill procedure used for disk-full, the byte/hash mutation used for
+integrity failure, and the exact adb or system UI action used for process kill,
+Task Manager Stop, or force-stop.
+
 Record the device model, Android API level, ROM/build, battery mode, notification
 permission state, and the exact control JSON used for every device run. A passing
 host-side suite does not prove OEM background-execution reliability.
+
+Only after the matrix contains real results may release notes say:
+
+> On the devices and ROM versions listed in the verification matrix,
+> interruption did not corrupt the artifact, and the task could be recovered
+> after the user reopened the app.
+
+This is evidence for those recorded devices and versions, not a guarantee of
+uninterrupted background execution across an OEM family.

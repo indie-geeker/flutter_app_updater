@@ -23,11 +23,20 @@ flutter analyze --no-pub
 flutter test --no-pub
 dart doc --dry-run
 (cd example && flutter analyze --no-pub && flutter test --no-pub)
-flutter pub publish --dry-run
+(cd example/android && ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest)
+(cd example && flutter build apk --debug --no-pub)
 ```
 
 Add a failing test before changing behavior. Native changes should also include
 the relevant Android, iOS, macOS, or Windows build/device verification.
+
+Run `flutter pub publish --dry-run` from a temporary package copy that does not
+contain `.git`; the release gate expects zero warnings. For Android background
+download changes, also run the controllable server tests and the full device
+suite documented in
+`tool/verification/android_background_download.md`. The device suite requires
+a real APK matching the installed test app's package and signing identity; the
+server's built-in payload is only for host-side protocol tests.
 
 ## Pull requests
 

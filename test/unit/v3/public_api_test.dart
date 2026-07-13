@@ -98,6 +98,84 @@ void main() {
       managerSource,
       isNot(contains('FlutterAppUpdaterPlatform? platform')),
     );
+
+    Future<BackgroundDownloadTask> Function(DownloadPackageAction) start =
+        manager.start;
+    Future<BackgroundDownloadTask> Function(String) get = manager.get;
+    Future<List<BackgroundDownloadTask>> Function() list = manager.list;
+    Future<List<BackgroundDownloadTask>> Function() listUnfinished =
+        manager.listUnfinished;
+    Stream<BackgroundDownloadTask> Function(String) watch = manager.watch;
+    Future<BackgroundDownloadTask> Function(String) resume = manager.resume;
+    Future<BackgroundDownloadTask> Function(String) cancel = manager.cancel;
+    Future<void> Function(String) remove = manager.remove;
+    Future<InstallPackageAction> Function(String) prepareInstall =
+        manager.createInstallAction;
+    expect(start, isA<Function>());
+    expect(get, isA<Function>());
+    expect(list, isA<Function>());
+    expect(listUnfinished, isA<Function>());
+    expect(watch, isA<Function>());
+    expect(resume, isA<Function>());
+    expect(cancel, isA<Function>());
+    expect(remove, isA<Function>());
+    expect(prepareInstall, isA<Function>());
+  });
+
+  test('docs lock the Android background download support boundary', () {
+    final readme = File('README.md').readAsStringSync();
+    final exampleReadme = File('example/README.md').readAsStringSync();
+    final contributing = File('CONTRIBUTING.md').readAsStringSync();
+    final verification =
+        File('tool/verification/android_background_download.md')
+            .readAsStringSync();
+
+    expect(readme, contains('Advanced Android-only background downloads'));
+    expect(readme, contains('AndroidBackgroundDownloadManager'));
+    for (final declaration in [
+      'android.permission.ACCESS_NETWORK_STATE',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+      'android.permission.RUN_USER_INITIATED_JOBS',
+      'UserInitiatedDownloadJobService',
+      'BackgroundDownloadForegroundService',
+      'BackgroundDownloadActionReceiver',
+    ]) {
+      expect(readme, contains(declaration));
+    }
+    for (final contract in [
+      'HTTPS',
+      'exact content length',
+      'SHA-256',
+      'Range',
+      'strong ETag',
+      'API 21-25',
+      'API 26-33',
+      'API 21-33',
+      'API 34+',
+      'force-stop',
+      'reboot',
+      'WorkManager',
+      'DownloadManager',
+      'silent installation',
+    ]) {
+      expect(readme, contains(contract));
+    }
+    expect(readme, contains('host application owns notification permission'));
+    expect(readme, contains('createInstallAction'));
+    expect(readme, contains('does not install the APK'));
+    expect(readme, isNot(contains('all Chinese ROMs')));
+
+    for (final doc in [exampleReadme, contributing, verification]) {
+      expect(
+        doc,
+        contains(
+          '../../android/gradlew :flutter_app_updater:testDebugUnitTest '
+          ':flutter_app_updater:lintDebug :app:processDebugMainManifest',
+        ),
+      );
+    }
   });
 
   test('public barrel does not export v2 API files', () {
@@ -238,6 +316,14 @@ void main() {
     expect(workflow, contains('flutter build macos --debug'));
     expect(workflow, contains('windows-latest'));
     expect(workflow, contains('flutter build windows --debug'));
+    expect(workflow, contains('working-directory: example/android'));
+    expect(
+      workflow,
+      contains(
+        '../../android/gradlew :flutter_app_updater:testDebugUnitTest '
+        ':flutter_app_updater:lintDebug :app:processDebugMainManifest',
+      ),
+    );
   });
 
   test('repository includes lightweight open-source governance', () {

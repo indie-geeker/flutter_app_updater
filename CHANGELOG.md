@@ -1,3 +1,12 @@
+## Unreleased
+
+* **Feature**: Add an advanced Android-only API for one persistent, user-visible APK download with durable status, progress observation, explicit resume, cancel, and removal.
+* **Reliability**: Add native checkpoint recovery, strict HTTP Range and strong-validator handling, byte/disk limits, SHA-256 verification, and process-start reconciliation.
+* **Android**: Use a host-opted-in visible foreground service started through the API-appropriate service entry point on API 21-33, and user-initiated data transfer jobs on API 34+, with visible retry and cancel actions.
+* **Safety**: Keep installation separate from download completion and revalidate file size, hash, package identity, and signing lineage before returning an install action.
+* **Testing**: Add Android unit/lint/merged-manifest CI gates plus a controllable protocol harness and an evidence template for future real-device qualification.
+* **Documentation**: Document host-owned manifest and notification setup, server requirements, Play policy implications, and force-stop, reboot, and OEM execution limits.
+
 ## 3.0.0 - 2026-07-10
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
