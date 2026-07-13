@@ -9,12 +9,14 @@ import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadEventBus
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadProgress
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadRecord
 import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadStatus
+import com.indiegeeker.flutter_app_updater.background.ApkIdentityVerificationException
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.mockito.Mockito
 import java.util.concurrent.CountDownLatch
@@ -186,6 +188,27 @@ internal class BackgroundDownloadPluginTest {
   }
 
   @Test
+  fun forgottenTaskRejectsLateRecordAndProgressAndIsNotReplayed() {
+    val bus = BackgroundDownloadEventBus()
+    val received = mutableListOf<Map<String, Any?>>()
+    val subscription = bus.addListener { received += it }
+    val stale = eventRecord(4, BackgroundDownloadStatus.running, 40)
+    bus.publish(stale)
+    subscription.close()
+
+    bus.forget(stale.id)
+    bus.publish(stale.copy(revision = 5, downloadedBytes = 50))
+    bus.publishProgress(
+      BackgroundDownloadProgress(stale.id, 4, 60, 100),
+      stale,
+    )
+
+    val reattached = mutableListOf<Map<String, Any?>>()
+    bus.addListener { reattached += it }
+    assertTrue(reattached.isEmpty())
+  }
+
+  @Test
   fun blockingReplayAndConcurrentPublishStayOrderedPerListener() {
     val bus = BackgroundDownloadEventBus()
     bus.publish(eventRecord(1, BackgroundDownloadStatus.running, 10))
@@ -236,6 +259,38 @@ internal class BackgroundDownloadPluginTest {
       assertFalse(BackgroundDownloadUrlPolicy.isAllowed(url), url)
     }
   }
+
+  @Test
+  fun startupReconciliationFailureIsPropagatedToEveryWaiter() {
+    val worker = Executors.newSingleThreadExecutor()
+    try {
+      val reconciliation = BackgroundDownloadStartupReconciliation(worker) {
+        error("reconcile failed")
+      }
+
+      assertFailsWith<Exception> { reconciliation.await() }
+      assertFailsWith<Exception> { reconciliation.await() }
+    } finally {
+      worker.shutdownNow()
+    }
+  }
+
+  @Test
+  fun installDoesNotLaunchWhenManagedPathRevalidationFails() {
+    val delegate = FakeDelegate(
+      installVerificationFailure = ApkIdentityVerificationException(
+        "PACKAGE_HASH_MISMATCH",
+        "The completed APK hash changed.",
+      ),
+    )
+    val plugin = FlutterAppUpdaterPlugin(delegate)
+    val result = RecordingResult()
+
+    plugin.onMethodCall(MethodCall("installApp", "/internal/artifact.apk"), result)
+
+    assertEquals(listOf("PACKAGE_HASH_MISMATCH"), result.errors)
+    assertTrue(result.successes.isEmpty())
+  }
 }
 
 private fun eventRecord(
@@ -255,7 +310,10 @@ private fun eventRecord(
   updatedAtEpochMs = revision,
 )
 
-private class FakeDelegate(private val autoComplete: Boolean = true) : BackgroundDownloadPluginDelegate {
+private class FakeDelegate(
+  private val autoComplete: Boolean = true,
+  private val installVerificationFailure: Throwable? = null,
+) : BackgroundDownloadPluginDelegate {
   val calls = mutableListOf<Pair<String, Any?>>()
   val listeners = mutableListOf<(Map<String, Any?>) -> Unit>()
   var unregisterCount = 0
@@ -287,6 +345,12 @@ private class FakeDelegate(private val autoComplete: Boolean = true) : Backgroun
       listeners -= listener
       unregisterCount += 1
     }
+  }
+
+  override fun verifyInstallPath(path: String, completion: BackgroundDownloadPluginCompletion) {
+    completion.complete(
+      installVerificationFailure?.let { Result.failure(it) } ?: Result.success(path),
+    )
   }
 
   fun emit(event: Map<String, Any?>) {

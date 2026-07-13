@@ -11,6 +11,7 @@ internal class BackgroundDownloadEventBus {
   private val lock = Any()
   private val listeners = linkedMapOf<Long, ListenerRegistration>()
   private val latestByTask = mutableMapOf<String, PublishedState>()
+  private val forgottenTaskIds = mutableSetOf<String>()
   private var nextListenerId = 1L
 
   val listenerCount: Int
@@ -75,12 +76,19 @@ internal class BackgroundDownloadEventBus {
   }
 
   fun forget(id: String) {
-    synchronized(lock) { latestByTask.remove(id) }
+    synchronized(lock) {
+      latestByTask.remove(id)
+      // Native task IDs are random UUIDs and are never reused. Keep a
+      // process-local tombstone so an in-flight poll/progress callback cannot
+      // resurrect a task after remove.
+      forgottenTaskIds += id
+    }
   }
 
   private fun publishSnapshot(snapshot: Map<String, Any?>, next: PublishedState) {
     val id = snapshot["id"] as? String ?: return
     val targets = synchronized(lock) {
+      if (id in forgottenTaskIds) return
       val latest = latestByTask[id]
       if (latest?.terminal == true ||
         (latest != null && next.revision < latest.revision) ||
@@ -192,6 +200,7 @@ internal fun interface BackgroundDownloadPluginCompletion {
 
 internal interface BackgroundDownloadPluginDelegate {
   fun execute(method: String, arguments: Any?, completion: BackgroundDownloadPluginCompletion)
+  fun verifyInstallPath(path: String, completion: BackgroundDownloadPluginCompletion)
   fun observe(listener: (Map<String, Any?>) -> Unit): AutoCloseable
 }
 
@@ -229,6 +238,27 @@ internal class RuntimeBackgroundDownloadPluginDelegate(
 
   override fun observe(listener: (Map<String, Any?>) -> Unit): AutoCloseable =
     runtime.observe(listener)
+
+  override fun verifyInstallPath(
+    path: String,
+    completion: BackgroundDownloadPluginCompletion,
+  ) {
+    try {
+      runtime.commandExecutor.execute {
+        completion.complete(runCatching {
+          apkVerifier.verifyManagedPath(path)?.absolutePath ?: path
+        })
+      }
+    } catch (error: Exception) {
+      completion.complete(Result.failure(
+        BackgroundDownloadPluginException(
+          "BACKGROUND_DOWNLOAD_UNAVAILABLE",
+          "The background download command executor is unavailable.",
+          error,
+        ),
+      ))
+    }
+  }
 
   private fun invoke(method: String, arguments: Any?): Any? = when (method) {
     "startBackgroundDownload" -> start(arguments)

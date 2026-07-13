@@ -94,6 +94,20 @@ internal class ApkIdentityVerifier(
     return apk
   }
 
+  /** Revalidates managed artifacts immediately before the installer handoff. */
+  fun verifyManagedPath(path: String): File? {
+    val id = try {
+      store.managedApkTaskId(path)
+    } catch (error: Exception) {
+      throw ApkIdentityVerificationException(
+        "PACKAGE_FILE_NOT_FOUND",
+        "The managed APK path is no longer safe.",
+        error,
+      )
+    } ?: return null
+    return verifyCompleted(id)
+  }
+
   private fun sha256(file: File): String = try {
     val digest = MessageDigest.getInstance("SHA-256")
     file.inputStream().buffered().use { input ->

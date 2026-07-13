@@ -134,6 +134,28 @@ internal class BackgroundDownloadStore(
 
   fun apkFile(id: String): File = checkedTaskFile(id, APK_FILE_NAME)
 
+  /** Returns the owning task for a lexical path inside managed APK storage. */
+  fun managedApkTaskId(path: String): String? {
+    // URI normalization removes dot segments without following symlinks and is
+    // available on every supported Android API level.
+    val candidate = File(File(path).absoluteFile.toURI().normalize()).absoluteFile
+    val rootPath = rootDirectory.absolutePath
+    val candidatePath = candidate.absolutePath
+    if (candidatePath != rootPath && !candidatePath.startsWith("$rootPath${File.separator}")) {
+      return null
+    }
+    val directory = candidate.parentFile
+    if (directory?.parentFile != rootDirectory || candidate.name != APK_FILE_NAME) {
+      throw InvalidBackgroundDownloadPathException("Managed APK path is not an exact task artifact")
+    }
+    val id = BackgroundDownloadContract.requireValidId(directory.name)
+    val expected = apkFile(id).absoluteFile
+    if (candidate != expected) {
+      throw InvalidBackgroundDownloadPathException("Managed APK path is not an exact task artifact")
+    }
+    return id
+  }
+
   fun reconcileArtifacts(id: String): BackgroundDownloadRecord {
     val verification = withTaskLock(id) {
       if (hasUnsupportedBackingSchema(id)) return readUnlocked(id)

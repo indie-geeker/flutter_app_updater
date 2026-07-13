@@ -286,6 +286,7 @@ class UserInitiatedDownloadJobService : JobService() {
   ) {
     BackgroundDownloadWorkerBoundary.run(
       work = work@{
+        runtime.awaitStartupReconciliation()
         // Install the control before linearizing the start. If onStopJob wins,
         // begin() returns false and no engine/network work starts.
         val initialControl = BackgroundDownloadExecutionControl()

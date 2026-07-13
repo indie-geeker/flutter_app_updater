@@ -43,7 +43,7 @@ internal class ApkIdentityVerifierTest {
   @Test
   fun rejectsHashPackageAndSignerMismatchWithStableCodes() {
     val fixture = fixture("signed apk".toByteArray())
-    fixture.apk.writeText("tampered")
+    fixture.apk.writeText("tamper apk")
     assertCode("PACKAGE_HASH_MISMATCH") {
       verifier(fixture, packageName = "com.example.app", signer = "host").verifyCompleted(fixture.record.id)
     }
@@ -109,6 +109,18 @@ internal class ApkIdentityVerifierTest {
     )
     assertCode("BACKGROUND_DOWNLOAD_INVALID_STATE") {
       verifierWith(setOf("one", "three")).verifyCompleted(fixture.record.id)
+    }
+  }
+
+  @Test
+  fun managedInstallPathIsReverifiedAfterPreparation() {
+    val fixture = fixture("signed apk".toByteArray())
+    val verifier = verifier(fixture, packageName = "com.example.app", signer = "host")
+    val prepared = verifier.verifyCompleted(fixture.record.id)
+    fixture.apk.writeText("tamper apk")
+
+    assertCode("PACKAGE_HASH_MISMATCH") {
+      verifier.verifyManagedPath(prepared.absolutePath)
     }
   }
 

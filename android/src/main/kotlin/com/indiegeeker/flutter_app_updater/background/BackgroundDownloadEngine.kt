@@ -818,7 +818,9 @@ internal class BackgroundDownloadEngine(
       requireAllowedUrl(current)
       val from = URI(originalUrl)
       val to = URI(current)
-      if (from.scheme.equals("https", true) && to.scheme.equals("http", true) && !isLoopback(to.host)) {
+      if (from.scheme.equals("https", true) && to.scheme.equals("http", true) &&
+        !BackgroundDownloadUrlPolicy.isAllowed(to.toString())
+      ) {
         throw BackgroundDownloadProtocolException("HTTPS redirect downgrade is not allowed")
       }
     }
@@ -1196,18 +1198,9 @@ internal class BackgroundDownloadEngine(
   }
 
   private fun requireAllowedUrl(value: String) {
-    val uri = try {
-      URI(value)
-    } catch (_: Exception) {
-      throw BackgroundDownloadProtocolException("Invalid download URL")
-    }
-    val scheme = uri.scheme?.lowercase()
-    if (scheme == "https") return
-    if (scheme == "http" && isLoopback(uri.host)) return
+    if (BackgroundDownloadUrlPolicy.isAllowed(value)) return
     throw BackgroundDownloadProtocolException("Download URL must use HTTPS")
   }
-
-  private fun isLoopback(host: String?): Boolean = host?.lowercase() in setOf("localhost", "127.0.0.1", "::1", "[::1]")
 
   private fun isStrongEtag(value: String): Boolean =
     !value.startsWith("W/", ignoreCase = true) && value.length >= 2 && value.first() == '"' && value.last() == '"'

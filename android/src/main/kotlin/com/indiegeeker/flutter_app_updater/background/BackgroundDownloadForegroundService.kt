@@ -228,6 +228,7 @@ class BackgroundDownloadForegroundService : Service() {
         var failureRecord: BackgroundDownloadRecord? = null
         BackgroundDownloadWorkerBoundary.run(
           work = {
+            runtime.awaitStartupReconciliation()
             result = runtime.engine.execute(id, control = control)
           },
           onFailure = {

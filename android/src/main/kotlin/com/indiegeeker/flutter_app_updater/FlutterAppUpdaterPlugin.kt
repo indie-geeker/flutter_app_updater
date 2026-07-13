@@ -112,21 +112,21 @@ class FlutterAppUpdaterPlugin private constructor(
       dispatchToMain {
         outcome.fold(
           onSuccess = result::success,
-          onFailure = { error ->
-            when (error) {
-              is BackgroundDownloadPluginException ->
-                result.error(error.code, error.message, null)
-              is ApkIdentityVerificationException ->
-                result.error(error.code, error.message, null)
-              else -> result.error(
-                "BACKGROUND_DOWNLOAD_UNAVAILABLE",
-                "The background download operation failed.",
-                null,
-              )
-            }
-          },
+          onFailure = { error -> reportBackgroundError(result, error) },
         )
       }
+    }
+  }
+
+  private fun reportBackgroundError(result: Result, error: Throwable) {
+    when (error) {
+      is BackgroundDownloadPluginException -> result.error(error.code, error.message, null)
+      is ApkIdentityVerificationException -> result.error(error.code, error.message, null)
+      else -> result.error(
+        "BACKGROUND_DOWNLOAD_UNAVAILABLE",
+        "The background download operation failed.",
+        null,
+      )
     }
   }
 
@@ -153,6 +153,33 @@ class FlutterAppUpdaterPlugin private constructor(
   }
 
   private fun installApp(filePath: String, result: Result) {
+    val delegate = backgroundDelegate
+    if (delegate == null) {
+      result.error(
+        "BACKGROUND_DOWNLOAD_UNAVAILABLE",
+        "Package verification is unavailable before plugin attachment.",
+        null,
+      )
+      return
+    }
+    delegate.verifyInstallPath(filePath) { outcome ->
+      dispatchToMain {
+        outcome.fold(
+          onSuccess = { verifiedPath ->
+            val path = verifiedPath as? String
+            if (path.isNullOrBlank()) {
+              result.error("FILE_NOT_FOUND", "安装文件不存在", null)
+            } else {
+              launchInstaller(path, result)
+            }
+          },
+          onFailure = { error -> reportBackgroundError(result, error) },
+        )
+      }
+    }
+  }
+
+  private fun launchInstaller(filePath: String, result: Result) {
     try {
       val file = File(filePath)
       if (!file.exists()) {

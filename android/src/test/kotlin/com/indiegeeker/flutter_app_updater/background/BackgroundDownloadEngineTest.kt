@@ -463,6 +463,18 @@ internal class BackgroundDownloadEngineTest {
   }
 
   @Test
+  fun engineUsesTheSameIpv4LoopbackPolicyAsThePluginBoundary() {
+    val body = "package".toByteArray()
+    val env = environment(
+      expected = body,
+      responses = listOf(response(200, body)),
+      packageUrl = "http://127.255.1.2/app.apk",
+    )
+
+    assertEquals(BackgroundDownloadExecutionOutcome.completed, env.engine.execute(TASK_ID).outcome)
+  }
+
+  @Test
   fun retryableStreamFailuresCheckpointLatestStrongEtagTail() {
     val mib = 1024 * 1024
     val body = ByteArray(4 * mib) { 9 }
@@ -1285,6 +1297,7 @@ internal class BackgroundDownloadEngineTest {
   private fun environment(
     expected: ByteArray,
     responses: List<Any>,
+    packageUrl: String = "https://example.test/app.apk",
     downloaded: ByteArray = byteArrayOf(),
     checkpointBytes: Long = downloaded.size.toLong(),
     etag: String? = null,
@@ -1315,7 +1328,7 @@ internal class BackgroundDownloadEngineTest {
     val record = BackgroundDownloadRecord(
       revision = 1,
       id = TASK_ID,
-      packageUrl = "https://example.test/app.apk",
+      packageUrl = packageUrl,
       status = BackgroundDownloadStatus.queued,
       downloadedBytes = if (createInvalidRecordDirectly) 0 else checkpointBytes,
       totalBytes = if (checkpointBytes > 0) recordExpectedSize else null,
