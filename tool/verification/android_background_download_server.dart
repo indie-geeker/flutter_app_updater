@@ -6,6 +6,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+const maximumVerificationArtifactBytes = 512 * 1024 * 1024;
+
 const _usage = '''
 Usage: dart run tool/verification/android_background_download_server.dart [options]
 
@@ -34,13 +36,17 @@ Future<void> main(List<String> arguments) async {
 
   late final List<int> payload;
   if (options.artifactPath case final path?) {
-    final artifact = File(path);
-    if (!artifact.existsSync()) {
-      stderr.writeln('Error: artifact does not exist: $path');
+    try {
+      payload = await readArtifactBytes(path);
+    } on ArtifactInputException catch (error) {
+      stderr.writeln('Error: ${error.message}');
+      exitCode = 66;
+      return;
+    } on FileSystemException catch (error) {
+      stderr.writeln('Error: could not read artifact: ${error.message}');
       exitCode = 66;
       return;
     }
-    payload = await artifact.readAsBytes();
   } else {
     payload = List<int>.generate(256 * 1024, (index) => index & 0xff);
   }
@@ -80,6 +86,47 @@ Future<void> main(List<String> arguments) async {
     await subscription.cancel();
   }
   stdout.writeln('Server stopped.');
+}
+
+final class ArtifactInputException implements Exception {
+  const ArtifactInputException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'ArtifactInputException: $message';
+}
+
+Future<Uint8List> readArtifactBytes(
+  String path, {
+  int maximumBytes = maximumVerificationArtifactBytes,
+}) async {
+  if (maximumBytes <= 0) {
+    throw ArgumentError.value(maximumBytes, 'maximumBytes', 'must be positive');
+  }
+  final type = await FileSystemEntity.type(path, followLinks: true);
+  if (type != FileSystemEntityType.file) {
+    throw ArtifactInputException('artifact must be a regular file: $path');
+  }
+
+  final file = File(path);
+  final size = await file.length();
+  if (size > maximumBytes) {
+    throw ArtifactInputException(
+      'artifact exceeds the safety limit of $maximumBytes bytes: $size bytes',
+    );
+  }
+
+  final bytes = BytesBuilder(copy: false);
+  await for (final chunk in file.openRead()) {
+    if (bytes.length + chunk.length > maximumBytes) {
+      throw ArtifactInputException(
+        'artifact exceeds the safety limit of $maximumBytes bytes while reading',
+      );
+    }
+    bytes.add(chunk);
+  }
+  return bytes.takeBytes();
 }
 
 final class ServerCliOptions {
@@ -137,7 +184,7 @@ final class ServerCliOptions {
 
 final class AndroidBackgroundDownloadServer {
   AndroidBackgroundDownloadServer._(this._server, List<int> payload)
-      : _payload = Uint8List.fromList(payload),
+      : _payload = payload is Uint8List ? payload : Uint8List.fromList(payload),
         _sha256 = sha256.convert(payload).toString(),
         _configuration = _ServerConfiguration.defaults(payload.length);
 
@@ -146,6 +193,7 @@ final class AndroidBackgroundDownloadServer {
   final String _sha256;
   late _ServerConfiguration _configuration;
   var _artifactRequestSequence = 0;
+  final List<Map<String, Object?>> _observations = [];
 
   Uri get uri => Uri(
         scheme: 'http',
@@ -241,6 +289,7 @@ final class AndroidBackgroundDownloadServer {
       final updated = _configuration.apply(decoded, _payload.length);
       _configuration = updated;
       _artifactRequestSequence = 0;
+      _observations.clear();
       await _writeJson(request.response, _controlJson());
     } on FormatException catch (error) {
       await _badRequest(request.response, error.message);
@@ -252,6 +301,10 @@ final class AndroidBackgroundDownloadServer {
         'artifactUrl': uri.resolve('/artifact').toString(),
         'length': _payload.length,
         'sha256': _sha256,
+        'observations': [
+          for (final observation in _observations)
+            Map<String, Object?>.of(observation),
+        ],
       };
 
   Future<void> _serveArtifact(HttpRequest request) async {
@@ -269,19 +322,67 @@ final class AndroidBackgroundDownloadServer {
 
     switch (configuration.mode) {
       case _ResponseMode.exact416:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.requestedRangeNotSatisfiable,
+          responseContentRange: 'bytes */${_payload.length}',
+          responseEtag: etag,
+          sentBytes: 0,
+        );
         await _writeRangeNotSatisfiable(response, exact: true);
       case _ResponseMode.malformed416:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.requestedRangeNotSatisfiable,
+          responseContentRange: 'bytes */not-a-number',
+          responseEtag: etag,
+          sentBytes: 0,
+        );
         await _writeRangeNotSatisfiable(response, exact: false);
       case _ResponseMode.disconnect:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.ok,
+          responseContentRange: null,
+          responseEtag: etag,
+          sentBytes: configuration.disconnectAfterBytes,
+        );
         await _writeDisconnect(response, configuration.disconnectAfterBytes);
       case _ResponseMode.slow:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.ok,
+          responseContentRange: null,
+          responseEtag: etag,
+          sentBytes: _payload.length,
+        );
         await _writeSlow(response, configuration);
       case _ResponseMode.oversizedChunked:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.ok,
+          responseContentRange: null,
+          responseEtag: etag,
+          sentBytes: _payload.length + configuration.oversizedBytes,
+        );
         await _writeOversizedChunked(response, configuration);
       case _ResponseMode.ignoreRange:
+        _recordObservation(
+          request,
+          sequence: sequence,
+          responseStatus: HttpStatus.ok,
+          responseContentRange: null,
+          responseEtag: etag,
+          sentBytes: _payload.length,
+        );
         await _writeFull(response);
       case _ResponseMode.range:
-        await _writeRangeAware(request, response, etag);
+        await _writeRangeAware(request, response, etag, sequence);
     }
   }
 
@@ -289,9 +390,18 @@ final class AndroidBackgroundDownloadServer {
     HttpRequest request,
     HttpResponse response,
     String etag,
+    int sequence,
   ) async {
     final range = request.headers.value(HttpHeaders.rangeHeader);
     if (range == null) {
+      _recordObservation(
+        request,
+        sequence: sequence,
+        responseStatus: HttpStatus.ok,
+        responseContentRange: null,
+        responseEtag: etag,
+        sentBytes: _payload.length,
+      );
       await _writeFull(response);
       return;
     }
@@ -299,6 +409,14 @@ final class AndroidBackgroundDownloadServer {
     final ifRange = request.headers.value(HttpHeaders.ifRangeHeader);
     final strongMatch = !etag.startsWith('W/') && ifRange == etag;
     if (ifRange != null && !strongMatch) {
+      _recordObservation(
+        request,
+        sequence: sequence,
+        responseStatus: HttpStatus.ok,
+        responseContentRange: null,
+        responseEtag: etag,
+        sentBytes: _payload.length,
+      );
       await _writeFull(response);
       return;
     }
@@ -306,21 +424,57 @@ final class AndroidBackgroundDownloadServer {
     final match = RegExp(r'^bytes=(\d+)-$').firstMatch(range);
     final offset = match == null ? null : int.tryParse(match.group(1)!);
     if (offset == null || offset >= _payload.length) {
+      _recordObservation(
+        request,
+        sequence: sequence,
+        responseStatus: HttpStatus.requestedRangeNotSatisfiable,
+        responseContentRange: 'bytes */${_payload.length}',
+        responseEtag: etag,
+        sentBytes: 0,
+      );
       await _writeRangeNotSatisfiable(response, exact: true);
       return;
     }
 
     final end = _payload.length - 1;
     final body = _payload.sublist(offset);
+    final contentRange = 'bytes $offset-$end/${_payload.length}';
+    _recordObservation(
+      request,
+      sequence: sequence,
+      responseStatus: HttpStatus.partialContent,
+      responseContentRange: contentRange,
+      responseEtag: etag,
+      sentBytes: body.length,
+    );
     response
       ..statusCode = HttpStatus.partialContent
       ..contentLength = body.length;
     response.headers.set(
       HttpHeaders.contentRangeHeader,
-      'bytes $offset-$end/${_payload.length}',
+      contentRange,
     );
     response.add(body);
     await response.close();
+  }
+
+  void _recordObservation(
+    HttpRequest request, {
+    required int sequence,
+    required int responseStatus,
+    required String? responseContentRange,
+    required String responseEtag,
+    required int sentBytes,
+  }) {
+    _observations.add({
+      'sequence': sequence,
+      'requestRange': request.headers.value(HttpHeaders.rangeHeader),
+      'requestIfRange': request.headers.value(HttpHeaders.ifRangeHeader),
+      'responseStatus': responseStatus,
+      'responseContentRange': responseContentRange,
+      'responseEtag': responseEtag,
+      'sentBytes': sentBytes,
+    });
   }
 
   Future<void> _writeFull(HttpResponse response) async {

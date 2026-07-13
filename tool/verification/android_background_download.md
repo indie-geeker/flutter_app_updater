@@ -45,12 +45,14 @@ CLI options:
 - `--host <ip>` accepts loopback IP addresses only (default `127.0.0.1`).
 - `--port <0-65535>` selects the port (default `18080`; `0` chooses a free
   port).
-- `--artifact <path>` loads the exact bytes served by `/artifact`. Without this
-  option the server generates a deterministic 256 KiB payload.
+- `--artifact <path>` loads the exact bytes served by `/artifact`. The path must
+  be a regular file and is limited to 512 MiB because the harness keeps the
+  artifact in memory. Without this option the server generates a deterministic
+  256 KiB payload.
 - `--help` prints usage.
 
-Invalid arguments exit with code 64. A missing artifact exits with code 66, and
-an empty artifact exits with code 65.
+Invalid arguments exit with code 64. A missing, non-file, or oversized artifact
+exits with code 66, and an empty artifact exits with code 65.
 
 ## Stable HTTP interface
 
@@ -67,8 +69,8 @@ returned:
 | --- | --- |
 | `GET /healthz` | Returns `{"status":"ok","length":...,"sha256":"..."}`. |
 | `GET /artifact` | Serves the artifact using the active failure mode. |
-| `GET /control` | Returns the active configuration, artifact URL, and length. |
-| `POST /control` | Atomically applies a JSON configuration patch. |
+| `GET /control` | Returns the active configuration, artifact identity, and response observations. |
+| `POST /control` | Atomically applies a JSON configuration patch and clears observations. |
 
 `POST /control` requires `Content-Type: application/json`. Unknown fields,
 invalid enum values, out-of-range numbers, non-object bodies, and bodies larger
@@ -82,10 +84,34 @@ curl -fsS http://127.0.0.1:18080/control \
   -d '{"mode":"range","etagMode":"strong","etagValue":"verification-v1"}'
 ```
 
-Every successful control update resets the changing-ETag request counter. The
-response includes all effective values, plus `artifactUrl`, `length`, and the
-lowercase hex `sha256`, so a test can pass the exact artifact identity to the
-public download API and record the server state it used.
+Every successful control update resets the changing-ETag request counter and
+clears `observations`; the POST response therefore contains an empty
+`observations` array. A rejected update changes neither configuration nor
+observations. The response includes all effective values, plus `artifactUrl`,
+`length`, and the lowercase hex `sha256`, so a test can pass the exact artifact
+identity to the public download API and record the server state it used.
+
+Each `/artifact` response appends one observation synchronously when its
+response decision is made:
+
+```json
+{
+  "sequence": 1,
+  "requestRange": "bytes=65536-",
+  "requestIfRange": "\"verification-v1\"",
+  "responseStatus": 206,
+  "responseContentRange": "bytes 65536-99999/100000",
+  "responseEtag": "\"verification-v1\"",
+  "sentBytes": 34464
+}
+```
+
+`requestRange`, `requestIfRange`, and `responseContentRange` are `null` when
+absent. `sequence` resets to 1 after every successful control update.
+`sentBytes` records the body-byte count selected at that linear response
+decision; it is zero for 416 and equals the configured cutoff for disconnect.
+Tests can read `observations` with `GET /control` to prove that a device issued
+the expected Range/If-Range request and received the expected branch.
 
 ## Failure modes
 

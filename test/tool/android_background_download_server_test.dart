@@ -267,6 +267,89 @@ void main() {
       expect(invalidNumber.statusCode, HttpStatus.badRequest);
       expect(await _readControl(server), before);
     });
+
+    test('records response decisions and clears observations on control update',
+        () async {
+      final initial = await _readControl(server);
+      expect(initial['observations'], isEmpty);
+
+      await _request(
+        server,
+        '/artifact',
+        headers: {
+          HttpHeaders.rangeHeader: 'bytes=11-',
+          HttpHeaders.ifRangeHeader: '"verification-v1"',
+        },
+      );
+      await _request(
+        server,
+        '/artifact',
+        headers: {
+          HttpHeaders.rangeHeader: 'bytes=13-',
+          HttpHeaders.ifRangeHeader: '"stale"',
+        },
+      );
+
+      final rangeObservations =
+          (await _readControl(server))['observations'] as List<dynamic>;
+      expect(rangeObservations, [
+        {
+          'sequence': 1,
+          'requestRange': 'bytes=11-',
+          'requestIfRange': '"verification-v1"',
+          'responseStatus': HttpStatus.partialContent,
+          'responseContentRange': 'bytes 11-31/32',
+          'responseEtag': '"verification-v1"',
+          'sentBytes': 21,
+        },
+        {
+          'sequence': 2,
+          'requestRange': 'bytes=13-',
+          'requestIfRange': '"stale"',
+          'responseStatus': HttpStatus.ok,
+          'responseContentRange': null,
+          'responseEtag': '"verification-v1"',
+          'sentBytes': payload.length,
+        },
+      ]);
+
+      final reset = await _control(server, {'mode': 'exact416'});
+      expect(reset['observations'], isEmpty);
+      await _request(server, '/artifact');
+      expect((await _readControl(server))['observations'], [
+        {
+          'sequence': 1,
+          'requestRange': null,
+          'requestIfRange': null,
+          'responseStatus': HttpStatus.requestedRangeNotSatisfiable,
+          'responseContentRange': 'bytes */32',
+          'responseEtag': '"verification-v1"',
+          'sentBytes': 0,
+        },
+      ]);
+
+      await _control(server, {
+        'mode': 'disconnect',
+        'disconnectAfterBytes': 7,
+      });
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final request = await client.getUrl(server.uri.resolve('/artifact'));
+      final response = await request.close();
+      await expectLater(response.drain<void>(), throwsA(anything));
+
+      expect((await _readControl(server))['observations'], [
+        {
+          'sequence': 1,
+          'requestRange': null,
+          'requestIfRange': null,
+          'responseStatus': HttpStatus.ok,
+          'responseContentRange': null,
+          'responseEtag': '"verification-v1"',
+          'sentBytes': 7,
+        },
+      ]);
+    });
   });
 
   group('ServerCliOptions', () {
@@ -305,6 +388,42 @@ void main() {
       expect(
         () => ServerCliOptions.parse(const ['--wat']),
         throwsFormatException,
+      );
+    });
+  });
+
+  group('readArtifactBytes', () {
+    test('rejects directories even when the path exists', () async {
+      final directory = await Directory.systemTemp.createTemp('updater-server');
+      addTearDown(() => directory.delete(recursive: true));
+
+      await expectLater(
+        readArtifactBytes(directory.path),
+        throwsA(
+          isA<ArtifactInputException>().having(
+            (error) => error.message,
+            'message',
+            contains('regular file'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects files larger than the configured safety limit', () async {
+      final directory = await Directory.systemTemp.createTemp('updater-server');
+      addTearDown(() => directory.delete(recursive: true));
+      final artifact = File('${directory.path}/app.apk');
+      await artifact.writeAsBytes([1, 2]);
+
+      await expectLater(
+        readArtifactBytes(artifact.path, maximumBytes: 1),
+        throwsA(
+          isA<ArtifactInputException>().having(
+            (error) => error.message,
+            'message',
+            contains('1 bytes'),
+          ),
+        ),
       );
     });
   });

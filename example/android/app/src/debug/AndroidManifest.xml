@@ -10,7 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
 
-    <application>
+    <!-- Verification traffic reaches the host-only harness through adb
+         reverse. Release/profile manifests do not opt into cleartext. -->
+    <application android:usesCleartextTraffic="true">
         <service
             android:name="com.indiegeeker.flutter_app_updater.background.BackgroundDownloadForegroundService"
             android:exported="false"

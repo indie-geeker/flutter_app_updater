@@ -18,7 +18,11 @@ void main() {
   final manager = AndroidBackgroundDownloadManager();
 
   setUp(() async {
-    await server.configure(mode: 'range', etagMode: 'strong');
+    await server.configure(
+      mode: 'range',
+      etagMode: 'strong',
+      etagValue: 'verification-v1',
+    );
     await _removeAllTasks(manager);
   });
 
@@ -33,7 +37,7 @@ void main() {
         chunkSize: 64 * 1024,
         delayPerChunkMs: 5,
       );
-      final started = await manager.start(spec.action);
+      final started = await manager.start(spec.action).timeout(_taskTimeout);
       final firstProgress = await manager
           .watch(started.id)
           .firstWhere((task) => task.downloadedBytes > 0 && !task.isTerminal)
@@ -54,7 +58,8 @@ void main() {
       );
       expect(completed.filePath, isNotEmpty);
 
-      final action = await manager.createInstallAction(started.id);
+      final action =
+          await manager.createInstallAction(started.id).timeout(_taskTimeout);
       expect(action.packageType, PackageType.apk);
       expect(action.packagePath, completed.filePath);
       // createInstallAction deliberately does not execute InstallPackageExecutor,
@@ -71,17 +76,19 @@ void main() {
         chunkSize: 16 * 1024,
         delayPerChunkMs: 20,
       );
-      final started = await manager.start(spec.action);
+      final started = await manager.start(spec.action).timeout(_taskTimeout);
       await manager
           .watch(started.id)
           .firstWhere((task) => task.status == BackgroundDownloadStatus.running)
           .timeout(_taskTimeout);
 
-      final canceled = await manager.cancel(started.id);
+      final canceled = await manager.cancel(started.id).timeout(_taskTimeout);
 
       expect(canceled.status, BackgroundDownloadStatus.canceled);
-      expect((await manager.get(started.id)).status,
-          BackgroundDownloadStatus.canceled);
+      expect(
+        (await manager.get(started.id).timeout(_taskTimeout)).status,
+        BackgroundDownloadStatus.canceled,
+      );
     },
     skip: !Platform.isAndroid,
   );
@@ -95,7 +102,8 @@ void main() {
         etagMode: 'strong',
         disconnectAfterBytes: _disconnectPoint(metadata.length),
       );
-      final started = await manager.start(interrupted.action);
+      final started =
+          await manager.start(interrupted.action).timeout(_taskTimeout);
       final waiting = await _waitForStatus(
         manager,
         started.id,
@@ -107,7 +115,7 @@ void main() {
       expect(waiting.downloadedBytes, greaterThan(0));
 
       await server.configure(mode: 'range', etagMode: 'strong');
-      await manager.resume(started.id);
+      await manager.resume(started.id).timeout(_taskTimeout);
 
       final completed = await _waitForStatus(
         manager,
@@ -115,6 +123,19 @@ void main() {
         {BackgroundDownloadStatus.completed},
       );
       expect(completed.downloadedBytes, interrupted.length);
+      final observations = (await server.read()).observations;
+      expect(
+        observations,
+        contains(
+          isA<_ArtifactObservation>()
+              .having((item) => item.requestRange, 'Range',
+                  'bytes=${waiting.downloadedBytes}-')
+              .having((item) => item.requestIfRange, 'If-Range',
+                  '"verification-v1"')
+              .having((item) => item.responseStatus, 'status',
+                  HttpStatus.partialContent),
+        ),
+      );
     },
     skip: !Platform.isAndroid,
   );
@@ -129,8 +150,9 @@ void main() {
         etagValue: 'before-change',
         disconnectAfterBytes: _disconnectPoint(metadata.length),
       );
-      final started = await manager.start(interrupted.action);
-      await _waitForStatus(
+      final started =
+          await manager.start(interrupted.action).timeout(_taskTimeout);
+      final waiting = await _waitForStatus(
         manager,
         started.id,
         {
@@ -144,7 +166,7 @@ void main() {
         etagMode: 'strong',
         etagValue: 'after-change',
       );
-      await manager.resume(started.id);
+      await manager.resume(started.id).timeout(_taskTimeout);
 
       final completed = await _waitForStatus(
         manager,
@@ -152,6 +174,19 @@ void main() {
         {BackgroundDownloadStatus.completed},
       );
       expect(completed.downloadedBytes, interrupted.length);
+      final observations = (await server.read()).observations;
+      expect(
+        observations,
+        contains(
+          isA<_ArtifactObservation>()
+              .having((item) => item.requestRange, 'Range',
+                  'bytes=${waiting.downloadedBytes}-')
+              .having(
+                  (item) => item.requestIfRange, 'If-Range', '"before-change"')
+              .having((item) => item.responseStatus, 'status', HttpStatus.ok)
+              .having((item) => item.responseEtag, 'ETag', '"after-change"'),
+        ),
+      );
     },
     skip: !Platform.isAndroid,
   );
@@ -165,7 +200,8 @@ void main() {
         etagMode: 'strong',
         disconnectAfterBytes: metadata.length,
       );
-      final started = await manager.start(interrupted.action);
+      final started =
+          await manager.start(interrupted.action).timeout(_taskTimeout);
       final waiting = await _waitForStatus(
         manager,
         started.id,
@@ -177,7 +213,7 @@ void main() {
       expect(waiting.downloadedBytes, interrupted.length);
 
       await server.configure(mode: 'exact416', etagMode: 'strong');
-      await manager.resume(started.id);
+      await manager.resume(started.id).timeout(_taskTimeout);
 
       final completed = await _waitForStatus(
         manager,
@@ -185,6 +221,19 @@ void main() {
         {BackgroundDownloadStatus.completed},
       );
       expect(completed.downloadedBytes, interrupted.length);
+      final observations = (await server.read()).observations;
+      expect(
+        observations,
+        contains(
+          isA<_ArtifactObservation>()
+              .having((item) => item.requestRange, 'Range',
+                  'bytes=${interrupted.length}-')
+              .having((item) => item.responseStatus, 'status',
+                  HttpStatus.requestedRangeNotSatisfiable)
+              .having((item) => item.responseContentRange, 'Content-Range',
+                  'bytes */${interrupted.length}'),
+        ),
+      );
     },
     skip: !Platform.isAndroid,
   );
@@ -197,7 +246,7 @@ Future<BackgroundDownloadTask> _waitForStatus(
   String taskId,
   Set<BackgroundDownloadStatus> statuses,
 ) async {
-  final snapshot = await manager.get(taskId);
+  final snapshot = await manager.get(taskId).timeout(_taskTimeout);
   if (statuses.contains(snapshot.status)) return snapshot;
   return manager
       .watch(taskId)
@@ -206,14 +255,14 @@ Future<BackgroundDownloadTask> _waitForStatus(
 }
 
 Future<void> _removeAllTasks(AndroidBackgroundDownloadManager manager) async {
-  final tasks = await manager.list();
+  final tasks = await manager.list().timeout(_taskTimeout);
   for (final task in tasks) {
     var terminal = task;
     if (!task.isTerminal) {
-      terminal = await manager.cancel(task.id);
+      terminal = await manager.cancel(task.id).timeout(_taskTimeout);
     }
     if (terminal.isTerminal) {
-      await manager.remove(terminal.id);
+      await manager.remove(terminal.id).timeout(_taskTimeout);
     }
   }
 }
@@ -249,6 +298,7 @@ final class _VerificationServer {
     Map<String, Object?>? body,
   ]) async {
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 10);
     try {
       final url = origin.resolve('/control');
       final request = method == 'POST'
@@ -258,8 +308,12 @@ final class _VerificationServer {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode(body));
       }
-      final response = await request.close();
-      final text = await utf8.decoder.bind(response).join();
+      final response =
+          await request.close().timeout(const Duration(seconds: 15));
+      final text = await utf8.decoder
+          .bind(response)
+          .join()
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode != HttpStatus.ok) {
         throw StateError('Verification server returned '
             '${response.statusCode}: $text');
@@ -269,6 +323,10 @@ final class _VerificationServer {
         url: Uri.parse(json['artifactUrl'] as String),
         length: json['length'] as int,
         sha256: json['sha256'] as String,
+        observations: (json['observations'] as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(_ArtifactObservation.fromJson)
+            .toList(growable: false),
       );
     } finally {
       client.close(force: true);
@@ -281,11 +339,13 @@ final class _ArtifactSpec {
     required this.url,
     required this.length,
     required this.sha256,
+    required this.observations,
   });
 
   final Uri url;
   final int length;
   final String sha256;
+  final List<_ArtifactObservation> observations;
 
   DownloadPackageAction get action => DownloadPackageAction(
         packageUrl: url,
@@ -293,4 +353,29 @@ final class _ArtifactSpec {
         packageSizeBytes: length,
         sha256: sha256,
       );
+}
+
+final class _ArtifactObservation {
+  const _ArtifactObservation({
+    required this.requestRange,
+    required this.requestIfRange,
+    required this.responseStatus,
+    required this.responseContentRange,
+    required this.responseEtag,
+  });
+
+  factory _ArtifactObservation.fromJson(Map<String, dynamic> json) =>
+      _ArtifactObservation(
+        requestRange: json['requestRange'] as String?,
+        requestIfRange: json['requestIfRange'] as String?,
+        responseStatus: json['responseStatus'] as int,
+        responseContentRange: json['responseContentRange'] as String?,
+        responseEtag: json['responseEtag'] as String?,
+      );
+
+  final String? requestRange;
+  final String? requestIfRange;
+  final int responseStatus;
+  final String? responseContentRange;
+  final String? responseEtag;
 }
