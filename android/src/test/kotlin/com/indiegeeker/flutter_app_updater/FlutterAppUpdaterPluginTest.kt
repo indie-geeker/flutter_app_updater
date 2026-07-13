@@ -3,6 +3,7 @@ package com.indiegeeker.flutter_app_updater
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import org.mockito.Mockito
 
 /*
@@ -23,5 +24,13 @@ internal class FlutterAppUpdaterPluginTest {
     plugin.onMethodCall(call, mockResult)
 
     Mockito.verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE)
+  }
+
+  @Test
+  fun exposesTheStableBackgroundEventChannelName() {
+    assertEquals(
+      "flutter_app_updater/background_downloads",
+      FlutterAppUpdaterPlugin.BACKGROUND_DOWNLOAD_EVENT_CHANNEL,
+    )
   }
 }

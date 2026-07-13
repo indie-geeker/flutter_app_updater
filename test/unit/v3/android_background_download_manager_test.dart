@@ -142,6 +142,7 @@ void main() {
     expect(installAction.packagePath, '/downloads/completed.apk');
     expect(installAction.packageType, PackageType.apk);
     expect(platform.removedTaskIds, ['completed']);
+    expect(platform.installAppPaths, isEmpty);
   });
 
   test('maps missing plugin and typed platform errors with raw details',
@@ -500,6 +501,7 @@ class _FakeBackgroundPlatform extends Fake
   final canceledTaskIds = <String>[];
   final removedTaskIds = <String>[];
   final preparedTaskIds = <String>[];
+  final installAppPaths = <String>[];
   int watchBackgroundDownloadsCalls = 0;
   int activeEventListeners = 0;
   int eventListenerCancelCount = 0;
@@ -589,6 +591,11 @@ class _FakeBackgroundPlatform extends Fake
   Future<String> prepareBackgroundDownloadInstall(String taskId) async {
     preparedTaskIds.add(taskId);
     return installPath;
+  }
+
+  @override
+  Future<void> installApp({required String path}) async {
+    installAppPaths.add(path);
   }
 
   @override

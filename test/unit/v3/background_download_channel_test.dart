@@ -80,6 +80,28 @@ void main() {
     }
   });
 
+  test('install preparation only requests a verified path from native',
+      () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (call) async {
+      calls.add(call);
+      return '/internal/flutter_app_updater/background/task-1/artifact.apk';
+    });
+
+    final path = await MethodChannelFlutterAppUpdater()
+        .prepareBackgroundDownloadInstall('task-1');
+
+    expect(
+      path,
+      '/internal/flutter_app_updater/background/task-1/artifact.apk',
+    );
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'prepareBackgroundDownloadInstall');
+    expect(calls.single.arguments, {'taskId': 'task-1'});
+    expect(calls.where((call) => call.method == 'installApp'), isEmpty);
+  });
+
   test('strict decoder accepts large num values from StandardMessageCodec',
       () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -6,6 +6,17 @@ import '../background/background_download_task.dart';
 import '../models/update_error_code.dart';
 import 'flutter_app_updater_platform_interface.dart';
 
+const _backgroundDownloadEventChannelName =
+    'flutter_app_updater/background_downloads';
+const _startBackgroundDownloadMethod = 'startBackgroundDownload';
+const _getBackgroundDownloadMethod = 'getBackgroundDownload';
+const _listBackgroundDownloadsMethod = 'listBackgroundDownloads';
+const _resumeBackgroundDownloadMethod = 'resumeBackgroundDownload';
+const _cancelBackgroundDownloadMethod = 'cancelBackgroundDownload';
+const _removeBackgroundDownloadMethod = 'removeBackgroundDownload';
+const _prepareBackgroundDownloadInstallMethod =
+    'prepareBackgroundDownloadInstall';
+
 /// An implementation of [FlutterAppUpdaterPlatform] that uses method channels.
 class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   /// The method channel used to interact with the native platform.
@@ -26,7 +37,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   })  : methodChannel =
             methodChannel ?? const MethodChannel('flutter_app_updater'),
         backgroundDownloadEventChannel = backgroundDownloadEventChannel ??
-            const EventChannel('flutter_app_updater/background_downloads');
+            const EventChannel(_backgroundDownloadEventChannelName);
 
   @override
   Future<String?> getPlatformVersion() async {
@@ -107,7 +118,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
     required String sha256,
   }) async {
     final result = await methodChannel.invokeMethod<Object?>(
-      'startBackgroundDownload',
+      _startBackgroundDownloadMethod,
       {
         'packageUrl': packageUrl.toString(),
         'packageType': packageType.name,
@@ -121,7 +132,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<BackgroundDownloadTask> getBackgroundDownload(String taskId) async {
     final result = await methodChannel.invokeMethod<Object?>(
-      'getBackgroundDownload',
+      _getBackgroundDownloadMethod,
       {'taskId': taskId},
     );
     return _decodeBackgroundDownloadTask(result);
@@ -130,7 +141,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<List<BackgroundDownloadTask>> listBackgroundDownloads() async {
     final result = await methodChannel.invokeMethod<Object?>(
-      'listBackgroundDownloads',
+      _listBackgroundDownloadsMethod,
     );
     if (result is! List) {
       return [_decodeBackgroundDownloadTask(result)];
@@ -143,7 +154,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<BackgroundDownloadTask> resumeBackgroundDownload(String taskId) async {
     final result = await methodChannel.invokeMethod<Object?>(
-      'resumeBackgroundDownload',
+      _resumeBackgroundDownloadMethod,
       {'taskId': taskId},
     );
     return _decodeBackgroundDownloadTask(result);
@@ -152,7 +163,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<BackgroundDownloadTask> cancelBackgroundDownload(String taskId) async {
     final result = await methodChannel.invokeMethod<Object?>(
-      'cancelBackgroundDownload',
+      _cancelBackgroundDownloadMethod,
       {'taskId': taskId},
     );
     return _decodeBackgroundDownloadTask(result);
@@ -161,7 +172,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<void> removeBackgroundDownload(String taskId) async {
     await methodChannel.invokeMethod<void>(
-      'removeBackgroundDownload',
+      _removeBackgroundDownloadMethod,
       {'taskId': taskId},
     );
   }
@@ -169,7 +180,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @override
   Future<String> prepareBackgroundDownloadInstall(String taskId) async {
     final result = await methodChannel.invokeMethod<String>(
-      'prepareBackgroundDownloadInstall',
+      _prepareBackgroundDownloadInstallMethod,
       {'taskId': taskId},
     );
     if (result == null) {

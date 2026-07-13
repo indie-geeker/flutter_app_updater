@@ -5,9 +5,18 @@ import android.content.Intent
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.FileProvider
 
+import com.indiegeeker.flutter_app_updater.background.ApkIdentityVerificationException
+import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadPluginDelegate
+import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadPluginException
+import com.indiegeeker.flutter_app_updater.background.BackgroundDownloadStreamHandler
+import com.indiegeeker.flutter_app_updater.background.RuntimeBackgroundDownloadPluginDelegate
+
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -15,23 +24,60 @@ import io.flutter.plugin.common.MethodChannel.Result
 import java.io.File
 
 /** FlutterAppUpdaterPlugin */
-class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
+class FlutterAppUpdaterPlugin private constructor(
+  injectedBackgroundDelegate: BackgroundDownloadPluginDelegate?,
+  injectedMainDispatcher: (((() -> Unit) -> Unit))?,
+  @Suppress("UNUSED_PARAMETER") testInjection: Boolean,
+): FlutterPlugin, MethodCallHandler {
 
-  private lateinit var channel : MethodChannel
+  constructor() : this(null, null, false)
+
+  internal constructor(
+    backgroundDelegate: BackgroundDownloadPluginDelegate,
+    mainDispatcher: ((() -> Unit) -> Unit) = { action -> action() },
+  ) : this(backgroundDelegate, mainDispatcher, true)
+
+  private var channel: MethodChannel? = null
+  private var backgroundEventChannel: EventChannel? = null
   private lateinit var applicationContext: Context
+  private var backgroundDelegate: BackgroundDownloadPluginDelegate? = injectedBackgroundDelegate
+  private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+  private var dispatchToMain: ((() -> Unit) -> Unit) =
+    injectedMainDispatcher ?: { action -> mainHandler.post(action) }
+  private var backgroundStreamHandler: BackgroundDownloadStreamHandler? = null
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_app_updater")
-    channel.setMethodCallHandler(this)
-
     applicationContext = flutterPluginBinding.applicationContext
+    if (backgroundDelegate == null) {
+      backgroundDelegate = RuntimeBackgroundDownloadPluginDelegate(applicationContext)
+    }
+    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_app_updater").also {
+      it.setMethodCallHandler(this)
+    }
+    backgroundStreamHandler = BackgroundDownloadStreamHandler(
+      delegateProvider = { backgroundDelegate },
+      dispatchToMain = dispatchToMain,
+    )
+    backgroundEventChannel = EventChannel(
+      flutterPluginBinding.binaryMessenger,
+      BACKGROUND_DOWNLOAD_EVENT_CHANNEL,
+    ).also { it.setStreamHandler(backgroundStreamHandler) }
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-    channel.setMethodCallHandler(null)
+    backgroundStreamHandler?.detach()
+    backgroundEventChannel?.setStreamHandler(null)
+    backgroundEventChannel = null
+    backgroundStreamHandler = null
+    channel?.setMethodCallHandler(null)
+    channel = null
   }
 
   override fun onMethodCall(call: MethodCall, result: Result) {
+    if (call.method in BACKGROUND_DOWNLOAD_METHODS) {
+      handleBackgroundMethod(call, result)
+      return
+    }
     when (call.method) {
       "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
       "getAppVersionCode" -> getAppVersionCode(result)
@@ -52,6 +98,37 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     }
   }
 
+  private fun handleBackgroundMethod(call: MethodCall, result: Result) {
+    val delegate = backgroundDelegate
+    if (delegate == null) {
+      result.error(
+        "BACKGROUND_DOWNLOAD_UNAVAILABLE",
+        "Background downloads are unavailable before plugin attachment.",
+        null,
+      )
+      return
+    }
+    delegate.execute(call.method, call.arguments) { outcome ->
+      dispatchToMain {
+        outcome.fold(
+          onSuccess = result::success,
+          onFailure = { error ->
+            when (error) {
+              is BackgroundDownloadPluginException ->
+                result.error(error.code, error.message, null)
+              is ApkIdentityVerificationException ->
+                result.error(error.code, error.message, null)
+              else -> result.error(
+                "BACKGROUND_DOWNLOAD_UNAVAILABLE",
+                "The background download operation failed.",
+                null,
+              )
+            }
+          },
+        )
+      }
+    }
+  }
 
   private fun getAppVersionCode(result: Result) {
     try {
@@ -238,5 +315,18 @@ class FlutterAppUpdaterPlugin: FlutterPlugin, MethodCallHandler {
     }
 
     result.error("MARKET_NOT_AVAILABLE", "没有可用应用市场可以打开目标应用", null)
+  }
+
+  internal companion object {
+    const val BACKGROUND_DOWNLOAD_EVENT_CHANNEL = "flutter_app_updater/background_downloads"
+    val BACKGROUND_DOWNLOAD_METHODS = setOf(
+      "startBackgroundDownload",
+      "getBackgroundDownload",
+      "listBackgroundDownloads",
+      "resumeBackgroundDownload",
+      "cancelBackgroundDownload",
+      "removeBackgroundDownload",
+      "prepareBackgroundDownloadInstall",
+    )
   }
 }

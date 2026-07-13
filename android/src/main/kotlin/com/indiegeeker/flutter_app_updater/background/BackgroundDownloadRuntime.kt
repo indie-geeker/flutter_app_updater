@@ -10,7 +10,10 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /** Process-local native runtime. It deliberately has no Flutter attachment dependency. */
 internal class BackgroundDownloadRuntime private constructor(
@@ -19,8 +22,82 @@ internal class BackgroundDownloadRuntime private constructor(
   val coordinator: BackgroundDownloadCoordinator,
   val engine: BackgroundDownloadEngine,
   val workerExecutor: ExecutorService,
+  val commandExecutor: ExecutorService,
   val scheduledExecutor: ScheduledExecutorService,
+  val eventBus: BackgroundDownloadEventBus,
 ) {
+  private val observationLock = Any()
+  private var observationPoll: ScheduledFuture<*>? = null
+  @Volatile private var startupReconciliation: BackgroundDownloadStartupReconciliation? = null
+
+  fun awaitStartupReconciliation() {
+    try {
+      startupReconciliation?.await()
+    } catch (error: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw BackgroundDownloadStateException("Background download reconciliation was interrupted")
+    } catch (error: Exception) {
+      throw BackgroundDownloadStateException("Background download reconciliation failed: ${error.message}")
+    }
+  }
+
+  fun observe(listener: (Map<String, Any?>) -> Unit): AutoCloseable {
+    val subscription = eventBus.addListener(listener)
+    synchronized(observationLock) {
+      if (observationPoll == null) {
+        observationPoll = scheduledExecutor.scheduleWithFixedDelay(
+          { publishDurableSnapshots() },
+          0,
+          250,
+          TimeUnit.MILLISECONDS,
+        )
+      }
+    }
+    publishDurableSnapshots()
+    return AutoCloseable {
+      subscription.close()
+      synchronized(observationLock) {
+        if (!eventBus.hasListeners) {
+          observationPoll?.cancel(false)
+          observationPoll = null
+        }
+      }
+    }
+  }
+
+  fun publish(record: BackgroundDownloadRecord) {
+    val path = if (record.status == BackgroundDownloadStatus.completed) {
+      runCatching { store.apkFile(record.id).takeIf(File::isFile)?.absolutePath }.getOrNull()
+    } else {
+      null
+    }
+    eventBus.publish(record, path)
+  }
+
+  fun snapshot(record: BackgroundDownloadRecord): Map<String, Any?> {
+    val path = if (record.status == BackgroundDownloadStatus.completed) {
+      runCatching { store.apkFile(record.id).takeIf(File::isFile)?.absolutePath }.getOrNull()
+    } else {
+      null
+    }
+    return record.toMap(path)
+  }
+
+  fun reconcileProcessState() {
+    coordinator.reconcileOnStartup(emptySet()).forEach(::publish)
+  }
+
+  private fun startReconciliation() {
+    startupReconciliation = BackgroundDownloadStartupReconciliation(
+      workerExecutor,
+      ::reconcileProcessState,
+    )
+  }
+
+  private fun publishDurableSnapshots() {
+    runCatching { store.list() }.getOrDefault(emptyList()).forEach(::publish)
+  }
+
   companion object {
     @Volatile private var instance: BackgroundDownloadRuntime? = null
 
@@ -34,6 +111,16 @@ internal class BackgroundDownloadRuntime private constructor(
     private fun create(context: Context): BackgroundDownloadRuntime {
       val store = BackgroundDownloadStore(context, artifactVerifier = ::verifyArtifact)
       val coordinator = BackgroundDownloadCoordinator(store)
+      val eventBus = BackgroundDownloadEventBus()
+      val workerExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "flutter-app-updater-download")
+      }
+      val commandExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "flutter-app-updater-command")
+      }
+      val scheduledExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "flutter-app-updater-timer")
+      }
       val engine = BackgroundDownloadEngine(
         store = store,
         coordinator = coordinator,
@@ -41,6 +128,12 @@ internal class BackgroundDownloadRuntime private constructor(
         availableSpaceProvider = BackgroundDownloadAvailableSpaceProvider { directory ->
           StatFs(directory.absolutePath).availableBytes
         },
+        progressListener = { progress ->
+          runCatching { store.read(progress.id) }
+            .getOrNull()
+            ?.let { eventBus.publishProgress(progress, it) }
+        },
+        checkpointListener = { eventBus.publish(it) },
         artifactMover = AndroidBackgroundDownloadArtifactMover,
       )
       return BackgroundDownloadRuntime(
@@ -48,13 +141,11 @@ internal class BackgroundDownloadRuntime private constructor(
         store = store,
         coordinator = coordinator,
         engine = engine,
-        workerExecutor = Executors.newSingleThreadExecutor { runnable ->
-          Thread(runnable, "flutter-app-updater-download")
-        },
-        scheduledExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
-          Thread(runnable, "flutter-app-updater-timer")
-        },
-      )
+        workerExecutor = workerExecutor,
+        commandExecutor = commandExecutor,
+        scheduledExecutor = scheduledExecutor,
+        eventBus = eventBus,
+      ).also { it.startReconciliation() }
     }
 
     private fun verifyArtifact(file: File, record: BackgroundDownloadRecord): Boolean {
@@ -71,6 +162,17 @@ internal class BackgroundDownloadRuntime private constructor(
       val hash = digest.digest().joinToString("") { "%02x".format(it) }
       return hash == record.expectedSha256
     }
+  }
+}
+
+internal class BackgroundDownloadStartupReconciliation(
+  executor: ExecutorService,
+  reconcile: () -> Unit,
+) {
+  private val future: Future<*> = executor.submit(reconcile)
+
+  fun await() {
+    future.get()
   }
 }
 
