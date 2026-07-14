@@ -6,13 +6,29 @@ import '../models/update_error_code.dart';
 import '../models/update_policy.dart';
 import '../utils/version_comparator.dart';
 
+/// Selects the newest compatible release for one installed application.
+///
+/// Platform and channel must match exactly. A release with a specific
+/// architecture matches only when [architecture] is known and equal; otherwise
+/// only a universal release can match. When both exist, the exact architecture
+/// wins over the universal release at the same version and build number.
 class UpdateSelector {
+  /// The currently installed semantic version.
   final String installedVersion;
+
+  /// The current build number used to break equal-version ties.
   final String? installedBuildNumber;
+
+  /// The runtime platform that a release must target.
   final TargetPlatform platform;
+
+  /// The runtime architecture, or `null` when it cannot be determined.
   final String? architecture;
+
+  /// The runtime release channel that a candidate must match.
   final String channel;
 
+  /// Creates a selector for the installed application state.
   const UpdateSelector({
     required this.installedVersion,
     this.installedBuildNumber,
@@ -21,6 +37,12 @@ class UpdateSelector {
     required this.channel,
   });
 
+  /// Selects a newer compatible release from [releases].
+  ///
+  /// Returns [UpdateNotAvailable] when no compatible newer release exists.
+  /// The returned recommendation is the first action in manifest order;
+  /// `AppUpdater` subsequently applies distribution and executor capabilities.
+  /// Throws [FormatException] when an input version or build number is invalid.
   UpdateCheckResult select(List<UpdateCandidate> releases) {
     final newerTargetReleases = releases
         .where(_matchesPlatformAndChannel)
@@ -129,16 +151,26 @@ class UpdateSelector {
   }
 }
 
+/// Result of checking and selecting an update without performing side effects.
 sealed class UpdateCheckResult {
   const UpdateCheckResult();
 }
 
+/// A compatible newer release and its currently executable actions.
 class UpdateAvailable extends UpdateCheckResult {
+  /// The selected release candidate.
   final UpdateCandidate candidate;
+
+  /// The first supported action in publisher-defined order.
   final UpdateAction recommendedAction;
+
+  /// All supported actions, preserving publisher-defined order.
   final List<UpdateAction> actions;
+
+  /// Whether release policy requires the host to enforce this update.
   final bool isRequired;
 
+  /// Creates a successful update-selection result.
   const UpdateAvailable({
     required this.candidate,
     required this.recommendedAction,
@@ -147,14 +179,21 @@ class UpdateAvailable extends UpdateCheckResult {
   });
 }
 
+/// Indicates that no compatible release is newer than the installed build.
 class UpdateNotAvailable extends UpdateCheckResult {
+  /// Creates a no-update result.
   const UpdateNotAvailable();
 }
 
+/// Describes a configuration, trust, fetch, parse, or selection failure.
 class UpdateCheckFailed extends UpdateCheckResult {
+  /// Stable machine-readable failure code.
   final UpdateErrorCode code;
+
+  /// Human-readable diagnostic suitable for logging or host UI.
   final String message;
 
+  /// Creates a structured check failure.
   const UpdateCheckFailed({
     required this.code,
     required this.message,

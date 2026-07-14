@@ -1,5 +1,6 @@
 import 'dart:io';
 
+/// Whether [host] names a loopback address or `localhost`.
 bool isLoopbackHost(String host) {
   final normalizedHost = host.toLowerCase();
   if (normalizedHost == 'localhost') {
@@ -8,6 +9,11 @@ bool isLoopbackHost(String host) {
   return InternetAddress.tryParse(normalizedHost)?.isLoopback ?? false;
 }
 
+/// Requires an absolute HTTPS URI without embedded user information.
+///
+/// Plain HTTP is accepted only for loopback hosts when
+/// [allowInsecureLoopback] is explicitly enabled. Throws [ArgumentError] with
+/// [field] as the invalid argument name when the URI is untrusted.
 void requireTrustedHttpsUri(
   Uri uri, {
   required bool allowInsecureLoopback,
@@ -35,6 +41,7 @@ void requireTrustedHttpsUri(
   );
 }
 
+/// Whether two URIs have equal scheme, host, and effective port.
 bool isSameOrigin(Uri left, Uri right) {
   return left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
       left.host.toLowerCase() == right.host.toLowerCase() &&

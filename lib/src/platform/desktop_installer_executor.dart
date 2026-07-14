@@ -13,12 +13,25 @@ import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
 import 'update_action_event.dart';
 
+/// Downloads, verifies, and opens supported desktop installers.
+///
+/// The executor supports Windows, macOS, and Linux installer types appropriate
+/// for [platform]. It never opens an artifact until exact size and SHA-256
+/// verification succeeds.
 class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
+  /// Target desktop platform.
   final TargetPlatform platform;
+
+  /// Native boundary used to open the verified installer.
   final FlutterAppUpdaterPlatform platformChannel;
+
+  /// Transfer and integrity-verification implementation.
   final PackageDownloader downloader;
+
+  /// Directory used for verified installer artifacts.
   final Directory downloadDirectory;
 
+  /// Creates a desktop installer executor with injectable boundaries.
   DesktopInstallerExecutor({
     required this.platform,
     FlutterAppUpdaterPlatform? platformChannel,

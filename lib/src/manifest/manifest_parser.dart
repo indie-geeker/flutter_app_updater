@@ -10,13 +10,20 @@ import 'update_manifest.dart';
 export 'manifest_validator.dart' show ManifestParseException;
 export 'update_manifest.dart' show UpdateManifest;
 
+/// Converts schema-valid manifest JSON into immutable v3 models.
 class ManifestParser {
+  /// Structural validator run before any field is interpreted.
   final ManifestValidator validator;
 
+  /// Creates a parser with an injectable validator.
   const ManifestParser({
     this.validator = const ManifestValidator(),
   });
 
+  /// Validates and parses [json].
+  ///
+  /// Throws [ManifestParseException] for invalid schema, enum values, URLs,
+  /// versions, timestamps, or action metadata.
   UpdateManifest parse(Map<String, Object?> json) {
     validator.validate(json);
 

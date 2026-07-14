@@ -7,14 +7,24 @@ import '../utils/retry_strategy.dart';
 import '../utils/trusted_update_uri.dart';
 import 'fetched_manifest.dart';
 
+/// Transport boundary for retrieving exact remote manifest bytes.
 abstract interface class ManifestFetcher {
+  /// Fetches [source] without decoding its response body.
+  ///
+  /// Implementations should throw [ManifestFetchException] for transport
+  /// failures so callers can return a structured update-check result.
   Future<FetchedManifest> fetch(ManifestUpdateSource source);
 }
 
+/// Describes a remote manifest transport failure.
 class ManifestFetchException implements Exception {
+  /// Human-readable transport diagnostic.
   final String message;
+
+  /// HTTP status code, when a response was received.
   final int? statusCode;
 
+  /// Creates a transport failure with an optional HTTP [statusCode].
   const ManifestFetchException({
     required this.message,
     this.statusCode,
@@ -27,14 +37,31 @@ class ManifestFetchException implements Exception {
   }
 }
 
+/// Secure `dart:io` implementation of [ManifestFetcher].
+///
+/// It requires trusted HTTPS by default, follows at most [maxRedirects]
+/// manually, rejects HTTPS downgrade, removes caller headers after a
+/// cross-origin redirect, bounds the full request duration and response size,
+/// and retries only transient failures.
 class IoManifestFetcher implements ManifestFetcher {
+  /// Maximum number of validated redirects per request.
   static const maxRedirects = 5;
 
+  /// Maximum time allowed to establish a network connection.
   final Duration connectionTimeout;
+
+  /// Maximum duration for the complete fetch, including response streaming.
   final Duration requestTimeout;
+
+  /// Maximum accepted response body size.
   final int maxResponseBytes;
+
+  /// Backoff policy for transient network and server failures.
   final RetryStrategy retryStrategy;
 
+  /// Creates a bounded secure fetcher.
+  ///
+  /// [fetch] throws [ArgumentError] if either timeout is not positive.
   const IoManifestFetcher({
     this.connectionTimeout = const Duration(seconds: 10),
     this.requestTimeout = const Duration(seconds: 20),

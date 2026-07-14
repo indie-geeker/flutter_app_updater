@@ -1,7 +1,9 @@
 import '../actions/update_action.dart';
 import 'android_market.dart';
 
+/// Built-in descriptors and fallback resolution for Android markets.
 class AndroidMarketRegistry {
+  /// Supported native Android market descriptors.
   static final descriptors = <AndroidMarketDescriptor>[
     AndroidMarketDescriptor(
       market: AndroidMarketKind.huawei,
@@ -54,6 +56,7 @@ class AndroidMarketRegistry {
 
   const AndroidMarketRegistry._();
 
+  /// Returns the descriptor for [market], if registered.
   static AndroidMarketDescriptor? descriptorFor(AndroidMarketKind market) {
     for (final descriptor in descriptors) {
       if (descriptor.market == market) {
@@ -63,6 +66,7 @@ class AndroidMarketRegistry {
     return null;
   }
 
+  /// Returns the descriptor for [market] or throws [ArgumentError].
   static AndroidMarketDescriptor requireDescriptor(AndroidMarketKind market) {
     final descriptor = descriptorFor(market);
     if (descriptor == null) {
@@ -71,6 +75,7 @@ class AndroidMarketRegistry {
     return descriptor;
   }
 
+  /// Resolves the action override or market-specific trusted fallback URL.
   static Uri? fallbackUrlFor(OpenAndroidMarketAction action) {
     if (action.fallbackUrl != null) {
       return action.fallbackUrl;

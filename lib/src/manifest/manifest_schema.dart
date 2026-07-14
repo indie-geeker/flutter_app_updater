@@ -1,10 +1,15 @@
 import '../models/update_error_code.dart';
 import '../utils/version_comparator.dart';
 
+/// Structured schema or manifest parsing failure.
 class ManifestParseException implements Exception {
+  /// Stable failure category.
   final UpdateErrorCode code;
+
+  /// Human-readable field or schema diagnostic.
   final String message;
 
+  /// Creates a manifest parse failure.
   const ManifestParseException({
     required this.code,
     required this.message,
@@ -14,6 +19,10 @@ class ManifestParseException implements Exception {
   String toString() => '${code.value}: $message';
 }
 
+/// Strict structural validator for remote manifest schema version 3.
+///
+/// It rejects removed legacy fields and requires exact size and SHA-256
+/// metadata for every remotely downloadable artifact.
 class ManifestSchema {
   static const _legacyFields = {
     'downloadUrl',
@@ -21,8 +30,10 @@ class ManifestSchema {
     'artifactUri',
   };
 
+  /// Creates a stateless v3 schema validator.
   const ManifestSchema();
 
+  /// Validates [manifest] or throws [ManifestParseException].
   void validate(Map<String, Object?> manifest) {
     _rejectLegacyFields(manifest);
     _validateRoot(manifest);

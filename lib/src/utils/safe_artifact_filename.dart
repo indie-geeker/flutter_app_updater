@@ -1,3 +1,7 @@
+/// Returns a portable artifact filename from [uri], or `null` if unsafe.
+///
+/// The result excludes path separators, traversal syntax, Windows reserved
+/// names, trailing spaces/dots, and extensions other than [expectedExtension].
 String? safeArtifactFilename(
   Uri uri, {
   required String expectedExtension,

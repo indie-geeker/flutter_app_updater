@@ -10,14 +10,24 @@ import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
 import 'background_download_task.dart';
 
+/// Controls durable, OS-owned Android package downloads.
+///
+/// The manager is Android-only. It persists task state through the platform
+/// implementation so a host can reconcile work after process restart. Public
+/// operations throw [BackgroundDownloadException] with structured codes for
+/// native or state failures, and [UnsupportedError] on other platforms.
 class AndroidBackgroundDownloadManager {
   FlutterAppUpdaterPlatform get _platform => FlutterAppUpdaterPlatform.instance;
 
   late final Stream<BackgroundDownloadTask> _backgroundDownloads =
       _platform.watchBackgroundDownloads();
 
+  /// Creates a manager bound to the active platform implementation.
   AndroidBackgroundDownloadManager();
 
+  /// Starts a verified background download for [action].
+  ///
+  /// The action must contain trusted HTTPS, exact size, and SHA-256 metadata.
   Future<BackgroundDownloadTask> start(DownloadPackageAction action) async {
     _ensureAndroid();
     _validateAction(action);
@@ -32,6 +42,7 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Returns the latest snapshot for [taskId].
   Future<BackgroundDownloadTask> get(String taskId) async {
     _ensureAndroid();
     final id = _validateTaskId(taskId);
@@ -41,6 +52,7 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Returns snapshots for all retained background download tasks.
   Future<List<BackgroundDownloadTask>> list() async {
     _ensureAndroid();
     return _perform(
@@ -49,16 +61,22 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Returns retained tasks that have not reached a terminal state.
   Future<List<BackgroundDownloadTask>> listUnfinished() async {
     final tasks = await list();
     return tasks.where((task) => !task.isTerminal).toList(growable: false);
   }
 
+  /// Watches revision-ordered snapshots for [taskId] until it is terminal.
+  ///
+  /// The initial persisted snapshot is reconciled with events that arrive while
+  /// it is loading; duplicate or older revisions are suppressed.
   Stream<BackgroundDownloadTask> watch(String taskId) {
     _ensureAndroid();
     return _watch(_validateTaskId(taskId));
   }
 
+  /// Requests that a resumable task continue.
   Future<BackgroundDownloadTask> resume(String taskId) async {
     _ensureAndroid();
     final id = _validateTaskId(taskId);
@@ -68,6 +86,7 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Requests cancellation and returns the resulting task snapshot.
   Future<BackgroundDownloadTask> cancel(String taskId) async {
     _ensureAndroid();
     final id = _validateTaskId(taskId);
@@ -77,6 +96,7 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Removes retained task state for [taskId].
   Future<void> remove(String taskId) async {
     _ensureAndroid();
     final id = _validateTaskId(taskId);
@@ -86,6 +106,9 @@ class AndroidBackgroundDownloadManager {
     );
   }
 
+  /// Creates a local APK install action for a completed verified task.
+  ///
+  /// This method does not launch the installer.
   Future<InstallPackageAction> createInstallAction(String taskId) async {
     _ensureAndroid();
     final id = _validateTaskId(taskId);

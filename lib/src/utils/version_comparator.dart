@@ -1,27 +1,31 @@
 import 'package:pub_semver/pub_semver.dart';
 
-/// 应用版本比较工具类。
+/// Utilities for comparing application versions.
 ///
-/// 支持语义化版本、构建元数据、预发布标识以及可选的 `v` 前缀。为了兼容
-/// 常见应用版本输入，`1` 和 `1.2` 会分别标准化为 `1.0.0` 和 `1.2.0`。
+/// Supports semantic versions, prerelease identifiers, build metadata, and an
+/// optional `v` prefix. Common shortened versions such as `1` and `1.2`
+/// are normalized to `1.0.0` and `1.2.0`.
 class VersionComparator {
-  /// 比较两个版本号。
+  /// Compares [currentVersion] with [newVersion].
   ///
-  /// 返回负数表示 [newVersion] 更新，零表示相等，正数表示
-  /// [currentVersion] 更新。构建元数据不参与版本优先级比较。
+  /// Returns a negative value when the new version is newer, zero when equal,
+  /// and a positive value when the current version is newer. Build metadata
+  /// does not affect precedence.
   static int compare(String currentVersion, String newVersion) {
     final current = _parseVersion(currentVersion, includeBuild: false);
     final newer = _parseVersion(newVersion, includeBuild: false);
     return current.compareTo(newer);
   }
 
+  /// Whether [newVersion] has higher precedence than [currentVersion].
   static bool hasUpdate(String currentVersion, String newVersion) {
     return compare(currentVersion, newVersion) < 0;
   }
 
-  /// 判断版本号是否为支持的语义化格式。
+  /// Whether [version] is a supported semantic-version input.
   ///
-  /// 超过三个数字段、空数字段或畸形的预发布/构建标识符会被拒绝。
+  /// More than three numeric segments, empty segments, leading zeroes, and
+  /// malformed prerelease or build identifiers are rejected.
   static bool isValidVersion(String version) {
     try {
       if (_hasLeadingZeroNumericIdentifiers(version)) {

@@ -23,6 +23,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   @visibleForTesting
   final MethodChannel methodChannel;
 
+  /// Event channel that carries durable download snapshots.
   @visibleForTesting
   final EventChannel backgroundDownloadEventChannel;
 
@@ -31,6 +32,7 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
           .receiveBroadcastStream()
           .map(_decodeBackgroundDownloadTask);
 
+  /// Creates a method-channel implementation with injectable channels.
   MethodChannelFlutterAppUpdater({
     MethodChannel? methodChannel,
     EventChannel? backgroundDownloadEventChannel,

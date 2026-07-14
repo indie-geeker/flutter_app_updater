@@ -4,9 +4,12 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import 'manifest_command.dart';
 
+/// Computes release-compatible SHA-256 artifact digests.
 class HashCommand {
+  /// Creates a stateless hash command.
   const HashCommand();
 
+  /// Streams the file at [path] and returns its lowercase SHA-256 digest.
   Future<String> compute(String path) async {
     final file = File(path);
     return crypto.sha256.bind(file.openRead()).first.then((digest) {
@@ -14,6 +17,7 @@ class HashCommand {
     });
   }
 
+  /// Runs the CLI command and returns captured output and an exit code.
   Future<CliCommandResult> run(List<String> args) async {
     if (args.isEmpty) {
       return const CliCommandResult(

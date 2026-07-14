@@ -5,11 +5,18 @@ import '../manifest/manifest_parser.dart';
 import '../manifest/remote_manifest_policy.dart';
 import '../manifest/manifest_signature.dart';
 
+/// Captured process result returned by package CLI commands.
 class CliCommandResult {
+  /// Conventional process exit code.
   final int exitCode;
+
+  /// Text intended for standard output.
   final String stdout;
+
+  /// Text intended for standard error.
   final String stderr;
 
+  /// Creates a captured CLI result.
   const CliCommandResult({
     required this.exitCode,
     this.stdout = '',
@@ -17,18 +24,24 @@ class CliCommandResult {
   });
 }
 
+/// Generates, validates, and signs v3 update manifests.
 class ManifestCommand {
   static const _privateKeyEnvironment =
       'FLUTTER_APP_UPDATER_ED25519_PRIVATE_KEY_BASE64';
 
+  /// Environment used to read the private signing seed.
   final Map<String, String>? environment;
+
+  /// Injectable clock used to issue deterministic envelope timestamps.
   final DateTime Function()? clock;
 
+  /// Creates a manifest command with injectable release boundaries.
   const ManifestCommand({
     this.environment,
     this.clock,
   });
 
+  /// Returns an indented example v3 manifest.
   String generate() {
     const encoder = JsonEncoder.withIndent('  ');
     return encoder.convert({
@@ -62,6 +75,7 @@ class ManifestCommand {
     });
   }
 
+  /// Validates the manifest at [path] with runtime schema and remote policy.
   Future<CliCommandResult> verify(String path) async {
     try {
       final file = File(path);
@@ -98,6 +112,7 @@ class ManifestCommand {
     }
   }
 
+  /// Dispatches generate, verify, or sign subcommands.
   Future<CliCommandResult> run(List<String> args) async {
     if (args.isEmpty || args.first == 'help') {
       return const CliCommandResult(

@@ -28,17 +28,41 @@ import 'update_action_selector.dart';
 import 'update_selector.dart';
 import 'update_source.dart';
 
+/// Coordinates update trust checks, release selection, and explicit actions.
+///
+/// Checking is UI-free and never executes an action. Remote manifests are
+/// fetched, signature-verified when required, bound to the expected application
+/// identifier, and validated before selection. Actions execute only through
+/// [perform], [performStream], or their recommended-action counterparts.
 class AppUpdater {
+  /// The remote or trusted in-memory release source.
   final UpdateSource source;
+
+  /// The default installed-application selector, if configured.
   final UpdateSelector? selector;
+
+  /// The transport boundary used by remote sources.
   final ManifestFetcher manifestFetcher;
+
+  /// Host-provided action executors, or `null` to use platform defaults.
   final List<UpdateActionExecutor>? executors;
+
+  /// Directory used by default download and installer executors.
   final String? downloadDirectory;
+
+  /// Platform used to configure default executors.
   final TargetPlatform? platform;
+
+  /// Maximum package size accepted by default download executors.
   final int maxDownloadBytes;
+
+  /// Retry policy used by default foreground package downloads.
   final RetryStrategy downloadRetryStrategy;
+
+  /// Host restriction applied to candidate delivery actions.
   final UpdateDistributionPolicy distributionPolicy;
 
+  /// Creates an updater from explicit source and runtime boundaries.
   const AppUpdater({
     required this.source,
     this.selector,
@@ -51,6 +75,12 @@ class AppUpdater {
     this.distributionPolicy = UpdateDistributionPolicy.any,
   });
 
+  /// Creates an updater backed by a remote v3 manifest.
+  ///
+  /// [expectedAppId] binds fetched metadata to the host application.
+  /// Self-hosted actions require an authenticated Ed25519 envelope as well as
+  /// exact package size and SHA-256 metadata. A blank identifier throws
+  /// [ArgumentError]; runtime failures are returned as structured results.
   factory AppUpdater.manifest({
     required Uri manifestUrl,
     required String expectedAppId,
@@ -92,6 +122,11 @@ class AppUpdater {
     );
   }
 
+  /// Fetches, validates, and selects an update without executing an action.
+  ///
+  /// [selector] overrides the default selector for this call. Configuration,
+  /// network, signature, identity, schema, policy, and capability failures are
+  /// returned as [UpdateCheckFailed] rather than thrown.
   Future<UpdateCheckResult> check({
     UpdateSelector? selector,
   }) async {
@@ -119,6 +154,10 @@ class AppUpdater {
     };
   }
 
+  /// Checks for an update and converts the result to the preparation model.
+  ///
+  /// A [PreparedUpdateAvailable] is inert until the host explicitly calls an
+  /// action method, making it safe to inspect and ask the user for consent.
   Future<UpdateFlowResult> checkAndPrepare({
     UpdateSelector? selector,
   }) async {
@@ -273,6 +312,9 @@ class AppUpdater {
     return null;
   }
 
+  /// Executes [action] and returns its single terminal result.
+  ///
+  /// Executor exceptions are converted to [UpdateActionResult.failure].
   Future<UpdateActionResult> perform(UpdateAction action) async {
     await for (final event in performStream(action)) {
       if (event case UpdateActionCompleted(:final result)) {
@@ -285,6 +327,12 @@ class AppUpdater {
     );
   }
 
+  /// Executes [action] and emits lifecycle events.
+  ///
+  /// The stream emits one [UpdateActionStarted], zero or more progress events,
+  /// and exactly one [UpdateActionCompleted]. A cooperative [cancelToken] is
+  /// forwarded to streaming executors; cancellation is reported as a terminal
+  /// structured failure.
   Stream<UpdateActionEvent> performStream(
     UpdateAction action, {
     UpdateActionCancelToken? cancelToken,
@@ -341,12 +389,14 @@ class AppUpdater {
     );
   }
 
+  /// Executes the recommended action from [update].
   Future<UpdateActionResult> performRecommended(
     PreparedUpdateAvailable update,
   ) {
     return perform(update.recommendedAction);
   }
 
+  /// Streams execution of the recommended action from [update].
   Stream<UpdateActionEvent> performRecommendedStream(
     PreparedUpdateAvailable update, {
     UpdateActionCancelToken? cancelToken,
@@ -392,16 +442,26 @@ class AppUpdater {
   }
 }
 
+/// Inert result returned by [AppUpdater.checkAndPrepare].
 sealed class UpdateFlowResult {
   const UpdateFlowResult();
 }
 
+/// A validated update awaiting explicit host confirmation and execution.
 class PreparedUpdateAvailable extends UpdateFlowResult {
+  /// The selected release candidate.
   final UpdateCandidate candidate;
+
+  /// The first action allowed by policy and an available executor.
   final UpdateAction recommendedAction;
+
+  /// Allowed executable actions in publisher-defined order.
   final List<UpdateAction> actions;
+
+  /// Whether the host should enforce the publisher's support policy.
   final bool isRequired;
 
+  /// Creates an inert prepared-update result.
   const PreparedUpdateAvailable({
     required this.candidate,
     required this.recommendedAction,
@@ -410,14 +470,21 @@ class PreparedUpdateAvailable extends UpdateFlowResult {
   });
 }
 
+/// Indicates that preparation found no compatible newer release.
 class PreparedUpdateNotAvailable extends UpdateFlowResult {
+  /// Creates a no-update preparation result.
   const PreparedUpdateNotAvailable();
 }
 
+/// Describes why update preparation could not complete.
 class PreparedUpdateCheckFailed extends UpdateFlowResult {
+  /// Stable machine-readable failure code.
   final UpdateErrorCode code;
+
+  /// Human-readable diagnostic suitable for logs or host UI.
   final String message;
 
+  /// Creates a structured preparation failure.
   const PreparedUpdateCheckFailed({
     required this.code,
     required this.message,

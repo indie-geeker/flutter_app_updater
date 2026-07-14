@@ -7,10 +7,15 @@ import '../models/update_error_code.dart';
 import 'android_market_registry.dart';
 import 'update_action_executor.dart';
 
+/// Opens a validated Android market listing through the platform channel.
 class AndroidMarketExecutor implements UpdateActionExecutor {
+  /// Injectable platform boundary.
   final FlutterAppUpdaterPlatform platform;
+
+  /// Runtime platform used for capability checks.
   final TargetPlatform targetPlatform;
 
+  /// Creates an Android-market executor.
   AndroidMarketExecutor({
     FlutterAppUpdaterPlatform? platform,
     TargetPlatform? targetPlatform,

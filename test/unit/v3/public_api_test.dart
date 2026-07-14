@@ -5,6 +5,12 @@ import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('analysis requires documentation for every public API member', () {
+    final options = File('analysis_options.yaml').readAsStringSync();
+
+    expect(options, contains('public_member_api_docs: true'));
+  });
+
   test('public library exports v3 updater model types', () {
     final updater = AppUpdater(
       source: UpdateSource.manifest(

@@ -3,10 +3,15 @@ import '../models/update_error_code.dart';
 import '../utils/trusted_update_uri.dart';
 import 'update_manifest.dart';
 
+/// Structured cross-field or trust-policy failure for remote manifests.
 class RemoteManifestPolicyException implements Exception {
+  /// Stable trust or validation failure category.
   final UpdateErrorCode code;
+
+  /// Human-readable policy diagnostic.
   final String message;
 
+  /// Creates a remote-policy failure.
   const RemoteManifestPolicyException({
     required this.code,
     required this.message,
@@ -16,11 +21,21 @@ class RemoteManifestPolicyException implements Exception {
   String toString() => '${code.value}: $message';
 }
 
+/// Enforces security rules that require typed cross-field context.
+///
+/// Self-hosted artifacts require a signed envelope, trusted HTTPS, a positive
+/// exact size, and SHA-256. Remote local-path installs are prohibited. Store
+/// and market destinations are restricted, and Android market package identity
+/// must equal the manifest application identifier.
 class RemoteManifestPolicy {
   static const _appleStoreHosts = {'apps.apple.com', 'itunes.apple.com'};
 
+  /// Creates a stateless remote manifest policy.
   const RemoteManifestPolicy();
 
+  /// Validates every action in [manifest].
+  ///
+  /// Set [isSigned] only after successful envelope verification.
   void validate(
     UpdateManifest manifest, {
     bool isSigned = true,

@@ -6,10 +6,19 @@ import '../channel/flutter_app_updater_platform_interface.dart';
 import '../models/update_error_code.dart';
 import 'update_action_executor.dart';
 
+/// Verifies and opens a trusted local Android APK for installation.
+///
+/// When size and SHA-256 metadata are supplied, they must be supplied together.
+/// Native verification checks the current host package identity and compatible
+/// signing lineage immediately before launching the installer.
 class InstallPackageExecutor implements UpdateActionExecutor {
+  /// Injectable platform boundary.
   final FlutterAppUpdaterPlatform platform;
+
+  /// Runtime platform used for capability checks.
   final TargetPlatform targetPlatform;
 
+  /// Creates an Android APK install executor.
   InstallPackageExecutor({
     FlutterAppUpdaterPlatform? platform,
     TargetPlatform? targetPlatform,

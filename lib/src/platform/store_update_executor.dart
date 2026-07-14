@@ -6,10 +6,15 @@ import '../channel/flutter_app_updater_platform_interface.dart';
 import '../models/update_error_code.dart';
 import 'update_action_executor.dart';
 
+/// Opens the platform's validated official-store listing.
 class StoreUpdateExecutor implements UpdateActionExecutor {
+  /// Injectable platform boundary.
   final FlutterAppUpdaterPlatform platform;
+
+  /// Runtime platform used to match the store kind.
   final TargetPlatform targetPlatform;
 
+  /// Creates an official-store executor.
   StoreUpdateExecutor({
     FlutterAppUpdaterPlatform? platform,
     TargetPlatform? targetPlatform,

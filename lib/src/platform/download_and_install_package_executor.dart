@@ -10,12 +10,23 @@ import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
 import 'update_action_event.dart';
 
+/// Downloads, verifies, and hands an Android APK to the installer.
+///
+/// Exact size and SHA-256 are checked during download and passed to the native
+/// installer boundary, where APK package identity and signing lineage are
+/// verified immediately before installer handoff.
 class DownloadAndInstallPackageExecutor
     implements StreamingUpdateActionExecutor {
+  /// Verified foreground download boundary.
   final DownloadPackageExecutor downloadExecutor;
+
+  /// Android APK installation boundary.
   final InstallPackageExecutor installExecutor;
+
+  /// Runtime platform used for capability checks.
   final TargetPlatform targetPlatform;
 
+  /// Creates an Android download-and-install pipeline.
   DownloadAndInstallPackageExecutor({
     required String downloadDirectory,
     PackageDownloader? downloader,

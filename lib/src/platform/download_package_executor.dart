@@ -10,10 +10,18 @@ import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
 import 'update_action_event.dart';
 
+/// Executes bounded HTTPS package downloads with integrity verification.
+///
+/// Progress is streamed, cancellation is cooperative, and only a package whose
+/// exact byte count and SHA-256 match the action metadata is returned.
 class DownloadPackageExecutor implements StreamingUpdateActionExecutor {
+  /// Download implementation used for transfer and verification.
   final PackageDownloader downloader;
+
+  /// Directory into which verified artifacts are moved.
   final String downloadDirectory;
 
+  /// Creates a package download executor.
   DownloadPackageExecutor({
     required this.downloadDirectory,
     PackageDownloader? downloader,

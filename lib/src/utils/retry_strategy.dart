@@ -4,15 +4,13 @@ import 'dart:math' as math;
 
 import '../models/update_error_code.dart';
 
-/// 重试策略配置类
+/// Immutable exponential-backoff policy for transient updater failures.
 ///
-/// 提供智能重试机制，支持：
-/// - 可配置的重试次数
-/// - 指数退避算法
-/// - 最大延迟限制
-/// - 基于错误类型的智能判断
+/// A retry number is zero-based and counts retries after the initial attempt.
+/// Integrity, signature, schema, identity, permission, and configuration
+/// failures are deliberately non-retryable.
 ///
-/// 示例:
+/// Example:
 /// ```dart
 /// final strategy = RetryStrategy(
 ///   maxAttempts: 3,
@@ -23,48 +21,37 @@ import '../models/update_error_code.dart';
 /// for (int attempt = 0; attempt < strategy.maxAttempts; attempt++) {
 ///   try {
 ///     await doSomething();
-///     break; // 成功，退出重试循环
+///     break;
 ///   } catch (e) {
 ///     if (strategy.shouldRetry(e, attempt)) {
 ///       final delay = strategy.getDelay(attempt);
 ///       await Future.delayed(delay);
-///       continue; // 继续重试
+///       continue;
 ///     }
-///     rethrow; // 不应该重试，抛出异常
+///     rethrow;
 ///   }
 /// }
 /// ```
 class RetryStrategy {
-  /// 最大重试次数（不包括首次尝试）
+  /// Maximum retries after the initial attempt.
   final int maxAttempts;
 
-  /// 首次重试的初始延迟
+  /// Delay before the first retry.
   final Duration initialDelay;
 
-  /// 指数退避因子
-  ///
-  /// 每次重试的延迟时间 = initialDelay * (backoffFactor ^ attemptNumber)
-  /// 例如：backoffFactor=2.0 时，延迟序列为 1s, 2s, 4s, 8s...
+  /// Multiplier applied for each subsequent retry.
   final double backoffFactor;
 
-  /// 最大延迟时间
-  ///
-  /// 防止延迟时间无限增长
+  /// Upper bound for a computed retry delay.
   final Duration maxDelay;
 
-  /// 是否启用抖动
-  ///
-  /// 抖动可以防止大量客户端同时重试，分散服务器负载
-  /// 启用时会在延迟时间上添加0-25%的随机偏移
+  /// Whether to add a random zero-to-25-percent delay to spread client load.
   final bool enableJitter;
 
-  /// 创建重试策略
+  /// Creates a retry policy.
   ///
-  /// [maxAttempts] 最大重试次数，默认3次
-  /// [initialDelay] 初始延迟，默认1秒
-  /// [backoffFactor] 退避因子，默认2.0（指数增长）
-  /// [maxDelay] 最大延迟，默认30秒
-  /// [enableJitter] 是否启用抖动，默认true
+  /// Assertions require a nonnegative [maxAttempts] and positive
+  /// [backoffFactor].
   const RetryStrategy({
     this.maxAttempts = 3,
     this.initialDelay = const Duration(seconds: 1),
@@ -74,10 +61,10 @@ class RetryStrategy {
   })  : assert(maxAttempts >= 0, '最大重试次数不能为负数'),
         assert(backoffFactor > 0, '退避因子必须大于0');
 
-  /// 禁用重试的策略
+  /// Policy that never retries.
   static const disabled = RetryStrategy(maxAttempts: 0);
 
-  /// 快速重试策略（适用于临时网络问题）
+  /// Fast policy for short-lived network interruptions.
   static const fast = RetryStrategy(
     maxAttempts: 5,
     initialDelay: Duration(milliseconds: 500),
@@ -85,7 +72,7 @@ class RetryStrategy {
     maxDelay: Duration(seconds: 10),
   );
 
-  /// 标准重试策略（默认推荐）
+  /// General-purpose default retry policy.
   static const standard = RetryStrategy(
     maxAttempts: 3,
     initialDelay: Duration(seconds: 1),
@@ -93,7 +80,7 @@ class RetryStrategy {
     maxDelay: Duration(seconds: 30),
   );
 
-  /// 保守重试策略（适用于服务器压力大的情况）
+  /// Conservative policy for a service under sustained load.
   static const conservative = RetryStrategy(
     maxAttempts: 2,
     initialDelay: Duration(seconds: 3),
@@ -101,12 +88,9 @@ class RetryStrategy {
     maxDelay: Duration(minutes: 2),
   );
 
-  /// 计算指定重试次数的延迟时间
+  /// Returns the bounded exponential delay for [attemptNumber].
   ///
-  /// 使用指数退避算法：delay = initialDelay * (backoffFactor ^ attemptNumber)
-  ///
-  /// [attemptNumber] 当前重试次数（从0开始，0表示第一次重试）
-  /// 返回计算后的延迟时间，不会超过maxDelay
+  /// A negative retry number returns [Duration.zero].
   Duration getDelay(int attemptNumber) {
     if (attemptNumber < 0) {
       return Duration.zero;
@@ -128,26 +112,16 @@ class RetryStrategy {
     return Duration(milliseconds: delayMs.round());
   }
 
-  /// 判断是否可以继续重试
-  ///
-  /// [attemptNumber] 当前重试次数（从0开始）
-  /// 返回true表示还可以继续重试
+  /// Whether [attemptNumber] is within [maxAttempts].
   bool canRetry(int attemptNumber) {
     return attemptNumber < maxAttempts;
   }
 
-  /// 判断是否应该对给定的错误进行重试
+  /// Whether [error] is transient and another retry remains.
   ///
-  /// 根据错误类型智能判断：
-  /// - 网络错误（SocketException, TimeoutException）: 可重试
-  /// - 服务器错误（5xx）: 可重试
-  /// - 客户端错误（4xx）: 不可重试
-  /// - 解析错误: 不可重试
-  /// - 文件错误: 不可重试
-  ///
-  /// [error] 发生的错误
-  /// [attemptNumber] 当前重试次数（从0开始）
-  /// 返回true表示应该重试
+  /// Network timeouts, socket/TLS failures, selected server errors, manifest
+  /// fetch failures, and package download failures may retry. Trust and local
+  /// deterministic failures do not.
   bool shouldRetry(Object error, int attemptNumber) {
     // 检查是否还有重试次数
     if (!canRetry(attemptNumber)) {
@@ -168,7 +142,7 @@ class RetryStrategy {
     return false;
   }
 
-  /// 判断v3结构化错误码是否应该重试
+  /// Classifies structured updater failure codes.
   bool _shouldRetryUpdateErrorCode(UpdateErrorCode code) {
     return switch (code) {
       UpdateErrorCode.manifestFetchFailed ||
@@ -207,7 +181,7 @@ class RetryStrategy {
     };
   }
 
-  /// 判断原始异常是否应该重试
+  /// Classifies raw transport and filesystem exceptions.
   bool _shouldRetryException(Object exception) {
     // 网络相关异常 - 可重试
     if (exception is SocketException) {

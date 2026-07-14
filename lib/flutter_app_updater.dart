@@ -1,3 +1,7 @@
+/// UI-independent update selection, authenticated manifests, verified package
+/// delivery, and explicit platform actions for Flutter applications.
+library;
+
 export 'src/actions/update_action.dart';
 export 'src/background/android_background_download_manager.dart';
 export 'src/background/background_download_task.dart';

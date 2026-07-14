@@ -13,7 +13,9 @@ import 'package_download_result.dart';
 
 export 'package_download_result.dart';
 
+/// Injectable HTTP boundary used by [PackageDownloader].
 abstract class PackageDownloadClient {
+  /// Opens [url] with [headers] and optional cooperative cancellation.
   Future<PackageDownloadResponse> get(
     Uri url, {
     Map<String, String> headers = const {},
@@ -21,13 +23,20 @@ abstract class PackageDownloadClient {
   });
 }
 
+/// Streaming HTTP response owned by a package download client.
 class PackageDownloadResponse {
+  /// HTTP response status.
   final int statusCode;
+
+  /// Response headers.
   final Map<String, String> headers;
+
+  /// Uncompressed response byte stream.
   final Stream<List<int>> bytes;
   final FutureOr<void> Function()? _onClose;
   bool _isClosed = false;
 
+  /// Creates a streaming response with an optional cleanup callback.
   PackageDownloadResponse({
     required this.statusCode,
     required this.headers,
@@ -35,21 +44,28 @@ class PackageDownloadResponse {
     FutureOr<void> Function()? onClose,
   }) : _onClose = onClose;
 
+  /// Entity tag used to validate a resumable transfer.
   String? get etag => _header('etag');
 
+  /// Last-modified validator used to validate a resumable transfer.
   String? get lastModified => _header('last-modified');
 
+  /// Raw HTTP content-range header.
   String? get contentRange => _header('content-range');
 
+  /// Raw HTTP content-encoding header.
   String? get contentEncoding => _header('content-encoding');
 
+  /// Raw redirect location header.
   String? get location => _header('location');
 
+  /// Parsed content length, or `null` when absent or invalid.
   int? get contentLength {
     final value = _header('content-length');
     return value == null ? null : int.tryParse(value);
   }
 
+  /// Idempotently releases response and client resources.
   Future<void> close() async {
     if (_isClosed) {
       return;
@@ -69,10 +85,15 @@ class PackageDownloadResponse {
   }
 }
 
+/// `dart:io` HTTP client that exposes redirects and raw response bytes.
 class IoPackageDownloadClient implements PackageDownloadClient {
+  /// Maximum time allowed to establish a connection.
   final Duration connectionTimeout;
+
+  /// Maximum time allowed to receive the initial response.
   final Duration requestTimeout;
 
+  /// Creates an IO download client with bounded timeouts.
   const IoPackageDownloadClient({
     this.connectionTimeout = const Duration(seconds: 10),
     this.requestTimeout = const Duration(seconds: 30),
@@ -144,27 +165,39 @@ class IoPackageDownloadClient implements PackageDownloadClient {
   }
 }
 
+/// Injectable filesystem operations used for checkpoint cleanup.
 class PackageDownloadFileOperations {
+  /// Creates the default filesystem boundary.
   const PackageDownloadFileOperations();
 
+  /// Reads [file] as text.
   Future<String> readAsString(File file) => file.readAsString();
 
+  /// Deletes [file].
   Future<void> delete(File file) => file.delete();
 }
 
+/// Controls how frequently resumable checkpoint metadata is persisted.
 class PackageDownloadCheckpointPolicy {
+  /// Minimum additional bytes between checkpoints.
   final int byteInterval;
+
+  /// Maximum elapsed time between checkpoints while data is arriving.
   final Duration timeInterval;
 
+  /// Creates a checkpoint persistence policy.
   const PackageDownloadCheckpointPolicy({
     this.byteInterval = 4 * 1024 * 1024,
     this.timeInterval = const Duration(seconds: 2),
   }) : assert(byteInterval > 0);
 }
 
+/// Injectable monotonic clock for checkpoint scheduling.
 abstract class PackageDownloadCheckpointClock {
+  /// Time elapsed since construction or the last [reset].
   Duration get elapsed;
 
+  /// Restarts elapsed-time measurement.
   void reset();
 }
 
@@ -182,21 +215,44 @@ PackageDownloadCheckpointClock _createCheckpointClock() {
   return _StopwatchCheckpointClock();
 }
 
+/// Resumable, single-writer package downloader with integrity verification.
+///
+/// Checkpoints store a SHA-256 fingerprint of the complete source URL rather
+/// than the URL itself. Both in-process ownership and a persistent OS lock
+/// prevent concurrent writers from corrupting an artifact. A partial transfer
+/// resumes only when server validators and range semantics remain trustworthy.
 class PackageDownloader {
+  /// Default one-gibibyte package limit.
   static const defaultMaxDownloadBytes = 1024 * 1024 * 1024;
   static const _checkpointSchemaVersion = 2;
   static const _maxRedirects = 5;
   static final Set<String> _activeSavePaths = <String>{};
 
+  /// HTTP transport boundary.
   final PackageDownloadClient client;
+
+  /// Hard upper bound for declared and received bytes.
   final int maxDownloadBytes;
+
+  /// Retry policy for transient transfer failures.
   final RetryStrategy retryStrategy;
+
+  /// Maximum duration for a request attempt.
   final Duration requestTimeout;
+
+  /// Maximum period without receiving another response chunk.
   final Duration idleTimeout;
+
+  /// Injectable filesystem boundary.
   final PackageDownloadFileOperations fileOperations;
+
+  /// Frequency of resumable checkpoint persistence.
   final PackageDownloadCheckpointPolicy checkpointPolicy;
+
+  /// Factory for monotonic per-transfer checkpoint clocks.
   final PackageDownloadCheckpointClock Function() checkpointClockFactory;
 
+  /// Creates a downloader with bounded, injectable transport and storage.
   PackageDownloader({
     PackageDownloadClient? client,
     this.maxDownloadBytes = defaultMaxDownloadBytes,
@@ -216,6 +272,11 @@ class PackageDownloader {
         checkpointClockFactory =
             checkpointClockFactory ?? _createCheckpointClock;
 
+  /// Downloads and verifies [action] into [savePath].
+  ///
+  /// [onProgress] receives persisted byte counts. Cancellation, ownership
+  /// conflicts, protocol failures, size mismatches, and SHA-256 mismatches are
+  /// returned as structured [PackageDownloadResult] values.
   Future<PackageDownloadResult> download({
     required DownloadPackageAction action,
     required String savePath,
