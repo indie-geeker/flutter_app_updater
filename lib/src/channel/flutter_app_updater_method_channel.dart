@@ -47,8 +47,16 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   }
 
   @override
-  Future<void> installApp({required String path}) async {
-    return await methodChannel.invokeMethod('installApp', path);
+  Future<void> installApp({
+    required String path,
+    int? packageSizeBytes,
+    String? sha256,
+  }) async {
+    return await methodChannel.invokeMethod('installApp', {
+      'path': path,
+      if (packageSizeBytes != null) 'packageSizeBytes': packageSizeBytes,
+      if (sha256 != null) 'sha256': sha256,
+    });
   }
 
   @override

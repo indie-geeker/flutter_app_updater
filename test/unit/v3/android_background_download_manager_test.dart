@@ -589,7 +589,11 @@ class _FakeBackgroundPlatform extends Fake
   }
 
   @override
-  Future<void> installApp({required String path}) async {
+  Future<void> installApp({
+    required String path,
+    int? packageSizeBytes,
+    String? sha256,
+  }) async {
     installAppPaths.add(path);
   }
 

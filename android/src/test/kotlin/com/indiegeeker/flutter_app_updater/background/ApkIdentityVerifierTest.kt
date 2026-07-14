@@ -49,13 +49,13 @@ internal class ApkIdentityVerifierTest {
     }
 
     val packageFixture = fixture("package mismatch".toByteArray())
-    assertCode("BACKGROUND_DOWNLOAD_INVALID_STATE") {
+    assertCode("PACKAGE_SIGNATURE_INVALID") {
       verifier(packageFixture, packageName = "com.other.app", signer = "host")
         .verifyCompleted(packageFixture.record.id)
     }
 
     val signerFixture = fixture("signer mismatch".toByteArray())
-    assertCode("BACKGROUND_DOWNLOAD_INVALID_STATE") {
+    assertCode("PACKAGE_SIGNATURE_INVALID") {
       verifier(signerFixture, packageName = "com.example.app", signer = "other")
         .verifyCompleted(signerFixture.record.id)
     }
@@ -107,8 +107,42 @@ internal class ApkIdentityVerifierTest {
       fixture.apk.canonicalPath,
       verifierWith(setOf("two", "one")).verifyCompleted(fixture.record.id).canonicalPath,
     )
-    assertCode("BACKGROUND_DOWNLOAD_INVALID_STATE") {
+    assertCode("PACKAGE_SIGNATURE_INVALID") {
       verifierWith(setOf("one", "three")).verifyCompleted(fixture.record.id)
+    }
+  }
+
+  @Test
+  fun unmanagedApkIsIntegrityAndIdentityCheckedBeforeHandoff() {
+    val fixture = fixture("foreground apk".toByteArray())
+    val external = File(fixture.root, "foreground.apk").apply {
+      writeText("foreground apk")
+    }
+    val hash = MessageDigest.getInstance("SHA-256")
+      .digest(external.readBytes())
+      .joinToString("") { "%02x".format(it) }
+    val verifier = verifier(fixture, packageName = "com.example.app", signer = "host")
+
+    assertEquals(
+      external.canonicalPath,
+      verifier.verifyFile(external, external.length(), hash).canonicalPath,
+    )
+    external.writeText("replaced")
+    assertCode("PACKAGE_HASH_MISMATCH") {
+      verifier.verifyFile(external, "foreground apk".length.toLong(), hash)
+    }
+  }
+
+  @Test
+  fun unmanagedApkWithWrongIdentityNeverPassesThrough() {
+    val fixture = fixture("foreground apk".toByteArray())
+    val external = File(fixture.root, "untrusted.apk").apply {
+      writeText("foreground apk")
+    }
+    val verifier = verifier(fixture, packageName = "com.other.app", signer = "host")
+
+    assertCode("PACKAGE_SIGNATURE_INVALID") {
+      verifier.verifyFile(external, null, null)
     }
   }
 
@@ -120,7 +154,7 @@ internal class ApkIdentityVerifierTest {
     fixture.apk.writeText("tamper apk")
 
     assertCode("PACKAGE_HASH_MISMATCH") {
-      verifier.verifyManagedPath(prepared.absolutePath)
+      verifier.verifyManagedPath(prepared.absolutePath, null, null)
     }
   }
 

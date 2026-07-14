@@ -100,6 +100,11 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(platform.installedPaths.single,
           endsWith('${Platform.pathSeparator}app.apk'));
+      expect(platform.installs.single.packageSizeBytes, bytes.length);
+      expect(
+        platform.installs.single.sha256,
+        crypto.sha256.convert(bytes).toString(),
+      );
       expect(await File(platform.installedPaths.single).readAsBytes(), bytes);
     });
 
@@ -200,9 +205,23 @@ class _FakeInstallPlatform extends Fake
     with MockPlatformInterfaceMixin
     implements FlutterAppUpdaterPlatform {
   final installedPaths = <String>[];
+  final installs = <_InstallRequest>[];
 
   @override
-  Future<void> installApp({required String path}) async {
+  Future<void> installApp({
+    required String path,
+    int? packageSizeBytes,
+    String? sha256,
+  }) async {
     installedPaths.add(path);
+    installs.add(_InstallRequest(path, packageSizeBytes, sha256));
   }
+}
+
+class _InstallRequest {
+  final String path;
+  final int? packageSizeBytes;
+  final String? sha256;
+
+  const _InstallRequest(this.path, this.packageSizeBytes, this.sha256);
 }

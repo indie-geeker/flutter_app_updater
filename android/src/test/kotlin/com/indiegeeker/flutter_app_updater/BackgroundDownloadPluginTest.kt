@@ -355,10 +355,22 @@ internal class BackgroundDownloadPluginTest {
     val plugin = FlutterAppUpdaterPlugin(delegate)
     val result = RecordingResult()
 
-    plugin.onMethodCall(MethodCall("installApp", "/internal/artifact.apk"), result)
+    plugin.onMethodCall(MethodCall("installApp", mapOf(
+      "path" to "/internal/artifact.apk",
+      "packageSizeBytes" to 42L,
+      "sha256" to "a".repeat(64),
+    )), result)
 
     assertEquals(listOf("PACKAGE_HASH_MISMATCH"), result.errors)
     assertTrue(result.successes.isEmpty())
+    assertEquals(
+      listOf(Triple<String, Long?, String?>(
+        "/internal/artifact.apk",
+        42L,
+        "a".repeat(64),
+      )),
+      delegate.installVerifications,
+    )
   }
 }
 
@@ -387,6 +399,7 @@ private class FakeDelegate(
   val listeners = mutableListOf<(Map<String, Any?>) -> Unit>()
   var unregisterCount = 0
   var canceled = false
+  val installVerifications = mutableListOf<Triple<String, Long?, String?>>()
   private val pending = ArrayDeque<BackgroundDownloadPluginCompletion>()
 
   override fun execute(
@@ -416,7 +429,13 @@ private class FakeDelegate(
     }
   }
 
-  override fun verifyInstallPath(path: String, completion: BackgroundDownloadPluginCompletion) {
+  override fun verifyInstallPath(
+    path: String,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
+    completion: BackgroundDownloadPluginCompletion,
+  ) {
+    installVerifications += Triple(path, expectedSizeBytes, expectedSha256)
     completion.complete(
       installVerificationFailure?.let { Result.failure(it) } ?: Result.success(path),
     )

@@ -44,9 +44,24 @@ class InstallPackageExecutor implements UpdateActionExecutor {
         message: 'packagePath is required for package installs.',
       );
     }
+    final packageSizeBytes = action.packageSizeBytes;
+    final sha256 = action.sha256;
+    if ((packageSizeBytes == null) != (sha256 == null) ||
+        (packageSizeBytes != null && packageSizeBytes <= 0) ||
+        (sha256 != null && !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(sha256))) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.missingRequiredField,
+        message: 'packageSizeBytes and a 64-character SHA-256 must be '
+            'provided together.',
+      );
+    }
 
     try {
-      await platform.installApp(path: packagePath);
+      await platform.installApp(
+        path: packagePath,
+        packageSizeBytes: packageSizeBytes,
+        sha256: sha256,
+      );
       return const UpdateActionResult.success();
     } on PlatformException catch (error) {
       return UpdateActionResult.failure(
@@ -66,6 +81,9 @@ class InstallPackageExecutor implements UpdateActionExecutor {
       'INSTALL_PERMISSION_REQUIRED' =>
         UpdateErrorCode.packageInstallPermissionRequired,
       'FILE_NOT_FOUND' => UpdateErrorCode.packageFileNotFound,
+      'PACKAGE_FILE_NOT_FOUND' => UpdateErrorCode.packageFileNotFound,
+      'PACKAGE_HASH_MISMATCH' => UpdateErrorCode.packageHashMismatch,
+      'PACKAGE_SIGNATURE_INVALID' => UpdateErrorCode.packageSignatureInvalid,
       'PLATFORM_NOT_SUPPORTED' => UpdateErrorCode.platformNotSupported,
       'INVALID_ARGUMENT' => UpdateErrorCode.manifestInvalid,
       _ => UpdateErrorCode.packageInstallFailed,

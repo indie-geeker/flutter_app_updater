@@ -195,7 +195,11 @@ class _FakeCommercialPlatform extends Fake
   final openedInstallers = <String>[];
 
   @override
-  Future<void> installApp({required String path}) async {
+  Future<void> installApp({
+    required String path,
+    int? packageSizeBytes,
+    String? sha256,
+  }) async {
     installedPaths.add(path);
   }
 

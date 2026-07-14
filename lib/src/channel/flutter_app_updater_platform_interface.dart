@@ -37,7 +37,11 @@ abstract class FlutterAppUpdaterPlatform extends PlatformInterface {
     throw UnimplementedError('appVersion() has not been implemented.');
   }
 
-  Future<void> installApp({required String path}) {
+  Future<void> installApp({
+    required String path,
+    int? packageSizeBytes,
+    String? sha256,
+  }) {
     throw UnimplementedError('installApp() has not been implemented.');
   }
 

@@ -74,11 +74,18 @@ class DownloadPackageAction extends UpdateAction {
 class InstallPackageAction extends UpdateAction {
   final String packagePath;
   final PackageType packageType;
+  final int? packageSizeBytes;
+  final String? sha256;
 
   const InstallPackageAction({
     required this.packagePath,
     this.packageType = PackageType.apk,
-  });
+    this.packageSizeBytes,
+    this.sha256,
+  }) : assert(
+          (packageSizeBytes == null) == (sha256 == null),
+          'packageSizeBytes and sha256 must be provided together.',
+        );
 }
 
 class DownloadAndInstallPackageAction extends UpdateAction {

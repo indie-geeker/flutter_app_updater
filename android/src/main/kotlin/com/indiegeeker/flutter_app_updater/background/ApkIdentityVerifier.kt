@@ -61,33 +61,57 @@ internal class ApkIdentityVerifier(
         error,
       )
     }
+    return verifyFile(apk, record.expectedSizeBytes, record.expectedSha256)
+  }
+
+  /** Verifies integrity and application identity immediately before handoff. */
+  fun verifyFile(
+    file: File,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
+  ): File {
+    val apk = try {
+      file.canonicalFile
+    } catch (error: IOException) {
+      throw ApkIdentityVerificationException(
+        "PACKAGE_FILE_NOT_FOUND",
+        "The APK path cannot be resolved safely.",
+        error,
+      )
+    }
     if (!apk.isFile) {
-      throw ApkIdentityVerificationException("PACKAGE_FILE_NOT_FOUND", "The completed APK is missing.")
+      throw ApkIdentityVerificationException("PACKAGE_FILE_NOT_FOUND", "The APK file is missing.")
     }
-    if (apk.length() != record.expectedSizeBytes) {
-      throw ApkIdentityVerificationException("PACKAGE_HASH_MISMATCH", "The completed APK size changed.")
+    if ((expectedSizeBytes == null) != (expectedSha256 == null)) {
+      throw ApkIdentityVerificationException(
+        "PACKAGE_HASH_MISMATCH",
+        "APK size and SHA-256 must be supplied together.",
+      )
     }
-    if (sha256(apk) != record.expectedSha256) {
-      throw ApkIdentityVerificationException("PACKAGE_HASH_MISMATCH", "The completed APK hash changed.")
+    if (expectedSizeBytes != null && apk.length() != expectedSizeBytes) {
+      throw ApkIdentityVerificationException("PACKAGE_HASH_MISMATCH", "The APK size changed.")
+    }
+    if (expectedSha256 != null && !sha256(apk).equals(expectedSha256, ignoreCase = true)) {
+      throw ApkIdentityVerificationException("PACKAGE_HASH_MISMATCH", "The APK hash changed.")
     }
 
     val installed = hostIdentity ?: throw ApkIdentityVerificationException(
-      "BACKGROUND_DOWNLOAD_INVALID_STATE",
+      "PACKAGE_SIGNATURE_INVALID",
       "The installed application signing identity is unavailable.",
     )
     val archive = archiveIdentityReader(apk) ?: throw ApkIdentityVerificationException(
-      "BACKGROUND_DOWNLOAD_INVALID_STATE",
-      "The completed file is not a readable APK.",
+      "PACKAGE_SIGNATURE_INVALID",
+      "The file is not a readable APK.",
     )
     if (archive.packageName != hostPackageName || installed.packageName != hostPackageName) {
       throw ApkIdentityVerificationException(
-        "BACKGROUND_DOWNLOAD_INVALID_STATE",
+        "PACKAGE_SIGNATURE_INVALID",
         "The APK package ID does not match the host application.",
       )
     }
     if (!hasCompatibleSigningIdentity(installed, archive)) {
       throw ApkIdentityVerificationException(
-        "BACKGROUND_DOWNLOAD_INVALID_STATE",
+        "PACKAGE_SIGNATURE_INVALID",
         "The APK signing identity is not compatible with the installed application.",
       )
     }
@@ -95,7 +119,11 @@ internal class ApkIdentityVerifier(
   }
 
   /** Revalidates managed artifacts immediately before the installer handoff. */
-  fun verifyManagedPath(path: String): File? {
+  fun verifyManagedPath(
+    path: String,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
+  ): File? {
     val id = try {
       store.managedApkTaskId(path)
     } catch (error: Exception) {
@@ -105,7 +133,11 @@ internal class ApkIdentityVerifier(
         error,
       )
     } ?: return null
-    return verifyCompleted(id)
+    val verified = verifyCompleted(id)
+    if (expectedSizeBytes != null || expectedSha256 != null) {
+      return verifyFile(verified, expectedSizeBytes, expectedSha256)
+    }
+    return verified
   }
 
   private fun sha256(file: File): String = try {

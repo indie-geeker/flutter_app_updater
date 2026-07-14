@@ -136,6 +136,8 @@ class DownloadAndInstallPackageExecutor
       InstallPackageAction(
         packagePath: result.file!.path,
         packageType: action.packageType,
+        packageSizeBytes: action.packageSizeBytes,
+        sha256: action.sha256,
       ),
     );
     if (!installResult.isSuccess) {

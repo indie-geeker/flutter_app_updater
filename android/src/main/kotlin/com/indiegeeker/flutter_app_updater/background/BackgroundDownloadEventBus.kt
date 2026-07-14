@@ -2,6 +2,7 @@ package com.indiegeeker.flutter_app_updater.background
 
 import android.content.Context
 import io.flutter.plugin.common.EventChannel
+import java.io.File
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -200,7 +201,12 @@ internal fun interface BackgroundDownloadPluginCompletion {
 
 internal interface BackgroundDownloadPluginDelegate {
   fun execute(method: String, arguments: Any?, completion: BackgroundDownloadPluginCompletion)
-  fun verifyInstallPath(path: String, completion: BackgroundDownloadPluginCompletion)
+  fun verifyInstallPath(
+    path: String,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
+    completion: BackgroundDownloadPluginCompletion,
+  )
   fun observe(listener: (Map<String, Any?>) -> Unit): AutoCloseable
 }
 
@@ -241,12 +247,20 @@ internal class RuntimeBackgroundDownloadPluginDelegate(
 
   override fun verifyInstallPath(
     path: String,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
     completion: BackgroundDownloadPluginCompletion,
   ) {
     try {
       runtime.commandExecutor.execute {
         completion.complete(runCatching {
-          apkVerifier.verifyManagedPath(path)?.absolutePath ?: path
+          val file = File(path)
+          val verified = apkVerifier.verifyManagedPath(
+            path,
+            expectedSizeBytes,
+            expectedSha256,
+          ) ?: apkVerifier.verifyFile(file, expectedSizeBytes, expectedSha256)
+          verified.absolutePath
         })
       }
     } catch (error: Exception) {

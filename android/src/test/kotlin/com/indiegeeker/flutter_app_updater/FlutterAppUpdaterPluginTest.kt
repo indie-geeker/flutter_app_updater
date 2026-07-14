@@ -33,4 +33,19 @@ internal class FlutterAppUpdaterPluginTest {
       FlutterAppUpdaterPlugin.BACKGROUND_DOWNLOAD_EVENT_CHANNEL,
     )
   }
+
+  @Test
+  fun installAppRejectsTheLegacyBarePathContract() {
+    val plugin = FlutterAppUpdaterPlugin()
+    val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+    plugin.onMethodCall(MethodCall("installApp", "/tmp/app.apk"), result)
+
+    Mockito.verify(result).error(
+      Mockito.eq("INVALID_ARGUMENT"),
+      Mockito.anyString(),
+      Mockito.isNull(),
+    )
+    Mockito.verify(result, Mockito.never()).success(Mockito.any())
+  }
 }

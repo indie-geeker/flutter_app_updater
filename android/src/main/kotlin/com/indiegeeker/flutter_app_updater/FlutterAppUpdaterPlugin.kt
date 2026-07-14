@@ -83,12 +83,30 @@ class FlutterAppUpdaterPlugin private constructor(
       "getAppVersionCode" -> getAppVersionCode(result)
       "getAppVersionName" -> getAppVersionName(result)
       "installApp" -> {
-        val filePath = call.arguments as? String
+        val arguments = call.arguments as? Map<*, *>
+        val filePath = arguments?.get("path") as? String
         if (filePath.isNullOrBlank()) {
           result.error("INVALID_ARGUMENT", "安装路径不能为空", null)
           return
         }
-        installApp(filePath, result)
+        val sizeValue = arguments["packageSizeBytes"]
+        val expectedSizeBytes = when (sizeValue) {
+          null -> null
+          is Byte, is Short, is Int, is Long -> (sizeValue as Number).toLong()
+          else -> {
+            result.error("INVALID_ARGUMENT", "packageSizeBytes必须是整数", null)
+            return
+          }
+        }
+        val expectedSha256 = arguments["sha256"] as? String
+        if ((expectedSizeBytes == null) != (expectedSha256 == null) ||
+          (expectedSizeBytes != null && expectedSizeBytes <= 0) ||
+          (expectedSha256 != null && !expectedSha256.matches(Regex("^[0-9a-fA-F]{64}$")))
+        ) {
+          result.error("INVALID_ARGUMENT", "packageSizeBytes和sha256必须成对提供", null)
+          return
+        }
+        installApp(filePath, expectedSizeBytes, expectedSha256, result)
       }
       "getDownloadPath" -> getDownloadPath(result)
       "openStore" -> openStore(call, result)
@@ -151,7 +169,12 @@ class FlutterAppUpdaterPlugin private constructor(
     }
   }
 
-  private fun installApp(filePath: String, result: Result) {
+  private fun installApp(
+    filePath: String,
+    expectedSizeBytes: Long?,
+    expectedSha256: String?,
+    result: Result,
+  ) {
     val delegate = backgroundDelegate
     if (delegate == null) {
       result.error(
@@ -161,7 +184,11 @@ class FlutterAppUpdaterPlugin private constructor(
       )
       return
     }
-    delegate.verifyInstallPath(filePath) { outcome ->
+    delegate.verifyInstallPath(
+      filePath,
+      expectedSizeBytes,
+      expectedSha256,
+    ) { outcome ->
       dispatchToMain {
         outcome.fold(
           onSuccess = { verifiedPath ->
