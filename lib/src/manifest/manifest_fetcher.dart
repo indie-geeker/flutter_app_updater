@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import '../core/update_source.dart';
 import '../utils/retry_strategy.dart';
+import '../utils/trusted_update_uri.dart';
 
 abstract interface class ManifestFetcher {
   Future<Map<String, Object?>> fetch(ManifestUpdateSource source);
@@ -27,6 +28,8 @@ class ManifestFetchException implements Exception {
 }
 
 class IoManifestFetcher implements ManifestFetcher {
+  static const maxRedirects = 5;
+
   final Duration connectionTimeout;
   final Duration requestTimeout;
   final int maxResponseBytes;
@@ -45,7 +48,7 @@ class IoManifestFetcher implements ManifestFetcher {
         requestTimeout.inMicroseconds <= 0) {
       throw ArgumentError('Manifest timeouts must be greater than zero.');
     }
-    _validateScheme(source.manifestUrl);
+    _requireTrustedUri(source.manifestUrl, source);
 
     var retryNumber = 0;
     while (true) {
@@ -88,48 +91,104 @@ class IoManifestFetcher implements ManifestFetcher {
     HttpClient client,
     ManifestUpdateSource source,
   ) async {
-    final request = await client.getUrl(source.manifestUrl);
-    final headers = source.headers;
-    if (headers != null) {
-      for (final entry in headers.entries) {
-        request.headers.set(entry.key, entry.value);
+    var currentUri = source.manifestUrl;
+    var redirectCount = 0;
+    while (true) {
+      _requireTrustedUri(currentUri, source);
+      final request = await client.getUrl(currentUri);
+      request.followRedirects = false;
+      final headers = source.headers;
+      if (headers != null && isSameOrigin(source.manifestUrl, currentUri)) {
+        for (final entry in headers.entries) {
+          request.headers.set(entry.key, entry.value);
+        }
       }
-    }
 
-    final response = await request.close();
-    if (response.statusCode != HttpStatus.ok) {
-      throw ManifestFetchException(
-        message: 'Manifest request failed with HTTP ${response.statusCode}.',
-        statusCode: response.statusCode,
-      );
+      final response = await request.close();
+      if (_isRedirect(response.statusCode)) {
+        if (redirectCount >= maxRedirects) {
+          throw const ManifestFetchException(
+            message: 'Manifest request exceeded the redirect limit of 5.',
+          );
+        }
+        final location = response.headers.value(HttpHeaders.locationHeader);
+        if (location == null || location.trim().isEmpty) {
+          throw const ManifestFetchException(
+            message: 'Manifest redirect is missing a Location header.',
+          );
+        }
+        await _drain(response);
+        final nextUri = currentUri.resolve(location);
+        _requireTrustedUri(nextUri, source);
+        currentUri = nextUri;
+        redirectCount++;
+        continue;
+      }
+
+      if (response.statusCode != HttpStatus.ok) {
+        throw ManifestFetchException(
+          message: 'Manifest request failed with HTTP ${response.statusCode}.',
+          statusCode: response.statusCode,
+        );
+      }
+      if (response.contentLength > maxResponseBytes) {
+        throw ManifestFetchException(
+          message: 'Manifest response exceeds $maxResponseBytes bytes.',
+        );
+      }
+
+      final bodyBytes = BytesBuilder(copy: false);
+      var receivedBytes = 0;
+      await for (final chunk in response) {
+        receivedBytes += chunk.length;
+        if (receivedBytes > maxResponseBytes) {
+          throw ManifestFetchException(
+            message: 'Manifest response exceeds $maxResponseBytes bytes.',
+          );
+        }
+        bodyBytes.add(chunk);
+      }
+
+      final body = utf8.decode(bodyBytes.takeBytes());
+      return _rootObject(jsonDecode(body));
     }
+  }
+
+  void _requireTrustedUri(Uri uri, ManifestUpdateSource source) {
+    try {
+      requireTrustedHttpsUri(
+        uri,
+        allowInsecureLoopback: source.allowInsecureLoopback,
+        field: 'manifestUrl',
+      );
+    } on ArgumentError catch (error) {
+      throw ManifestFetchException(message: error.message.toString());
+    }
+  }
+
+  bool _isRedirect(int statusCode) {
+    return statusCode == HttpStatus.movedPermanently ||
+        statusCode == HttpStatus.found ||
+        statusCode == HttpStatus.seeOther ||
+        statusCode == HttpStatus.temporaryRedirect ||
+        statusCode == HttpStatus.permanentRedirect;
+  }
+
+  Future<void> _drain(HttpClientResponse response) async {
     if (response.contentLength > maxResponseBytes) {
       throw ManifestFetchException(
-        message: 'Manifest response exceeds $maxResponseBytes bytes.',
+        message: 'Manifest redirect response exceeds $maxResponseBytes bytes.',
       );
     }
-
-    final bodyBytes = BytesBuilder(copy: false);
     var receivedBytes = 0;
     await for (final chunk in response) {
       receivedBytes += chunk.length;
       if (receivedBytes > maxResponseBytes) {
         throw ManifestFetchException(
-          message: 'Manifest response exceeds $maxResponseBytes bytes.',
+          message:
+              'Manifest redirect response exceeds $maxResponseBytes bytes.',
         );
       }
-      bodyBytes.add(chunk);
-    }
-
-    final body = utf8.decode(bodyBytes.takeBytes());
-    return _rootObject(jsonDecode(body));
-  }
-
-  void _validateScheme(Uri url) {
-    if ((url.scheme != 'http' && url.scheme != 'https') || !url.hasAuthority) {
-      throw const ManifestFetchException(
-        message: 'Manifest URL must be an absolute HTTP or HTTPS URL.',
-      );
     }
   }
 

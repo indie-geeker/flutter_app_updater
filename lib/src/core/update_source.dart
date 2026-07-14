@@ -7,6 +7,7 @@ sealed class UpdateSource {
     required Uri manifestUrl,
     required String expectedAppId,
     Map<String, String>? headers,
+    bool allowInsecureLoopback,
   }) = ManifestUpdateSource;
 
   const factory UpdateSource.staticManifest({
@@ -18,11 +19,13 @@ class ManifestUpdateSource extends UpdateSource {
   final Uri manifestUrl;
   final String expectedAppId;
   final Map<String, String>? headers;
+  final bool allowInsecureLoopback;
 
   factory ManifestUpdateSource({
     required Uri manifestUrl,
     required String expectedAppId,
     Map<String, String>? headers,
+    bool allowInsecureLoopback = false,
   }) {
     final normalizedAppId = expectedAppId.trim();
     if (normalizedAppId.isEmpty) {
@@ -36,6 +39,7 @@ class ManifestUpdateSource extends UpdateSource {
       manifestUrl: manifestUrl,
       expectedAppId: normalizedAppId,
       headers: headers,
+      allowInsecureLoopback: allowInsecureLoopback,
     );
   }
 
@@ -43,6 +47,7 @@ class ManifestUpdateSource extends UpdateSource {
     required this.manifestUrl,
     required this.expectedAppId,
     this.headers,
+    required this.allowInsecureLoopback,
   });
 }
 
