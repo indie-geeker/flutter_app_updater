@@ -22,11 +22,20 @@ class UpdateSelector {
   });
 
   UpdateCheckResult select(List<UpdateCandidate> releases) {
-    final candidates = releases.where(_matchesTarget).where((release) {
-      return _isNewer(release);
-    }).toList();
+    final newerTargetReleases = releases
+        .where(_matchesPlatformAndChannel)
+        .where(_isNewer)
+        .toList(growable: false);
+    final candidates =
+        newerTargetReleases.where(_matchesArchitecture).toList(growable: false);
 
     if (candidates.isEmpty) {
+      if (newerTargetReleases.isNotEmpty) {
+        return const UpdateCheckFailed(
+          code: UpdateErrorCode.noMatchingRelease,
+          message: 'No release matches the runtime architecture.',
+        );
+      }
       return const UpdateNotAvailable();
     }
 
@@ -36,7 +45,13 @@ class UpdateSelector {
       if (versionCompare != 0) {
         return versionCompare;
       }
-      return _buildNumberForSort(right).compareTo(_buildNumberForSort(left));
+      final buildCompare =
+          _buildNumberForSort(right).compareTo(_buildNumberForSort(left));
+      if (buildCompare != 0) {
+        return buildCompare;
+      }
+      return _architectureSpecificity(right)
+          .compareTo(_architectureSpecificity(left));
     });
 
     final candidate = candidates.first;
@@ -56,18 +71,18 @@ class UpdateSelector {
     );
   }
 
-  bool _matchesTarget(UpdateCandidate release) {
-    return release.platform == platform &&
-        release.channel == channel &&
-        _matchesArchitecture(release);
+  bool _matchesPlatformAndChannel(UpdateCandidate release) {
+    return release.platform == platform && release.channel == channel;
   }
 
   bool _matchesArchitecture(UpdateCandidate release) {
     final releaseArchitecture = release.architecture;
-    if (releaseArchitecture == null || architecture == null) {
-      return true;
-    }
-    return releaseArchitecture == architecture;
+    return releaseArchitecture == null ||
+        (architecture != null && releaseArchitecture == architecture);
+  }
+
+  int _architectureSpecificity(UpdateCandidate release) {
+    return release.architecture == architecture ? 1 : 0;
   }
 
   bool _isNewer(UpdateCandidate release) {

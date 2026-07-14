@@ -5,6 +5,7 @@ import 'package:flutter_app_updater/src/core/update_selector.dart';
 import 'package:flutter_app_updater/src/core/update_source.dart';
 import 'package:flutter_app_updater/src/manifest/update_manifest.dart';
 import 'package:flutter_app_updater/src/models/update_candidate.dart';
+import 'package:flutter_app_updater/src/models/update_error_code.dart';
 import 'package:flutter_app_updater/src/models/update_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,6 +25,57 @@ void main() {
       final result = _selector(architecture: 'arm64').select([
         _candidate(version: '3.0.0', architecture: 'x64'),
         _candidate(version: '2.0.0', architecture: 'arm64'),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).candidate.architecture, 'arm64');
+    });
+
+    test('unknown runtime architecture rejects a specific release', () {
+      final result = _selector(architecture: null).select([
+        _candidate(version: '2.0.0', architecture: 'arm64'),
+      ]);
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.noMatchingRelease,
+      );
+    });
+
+    test('mismatched architecture returns no matching release', () {
+      final result = _selector(architecture: 'x64').select([
+        _candidate(version: '2.0.0', architecture: 'arm64'),
+      ]);
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.noMatchingRelease,
+      );
+    });
+
+    test('universal release is a fallback for a known architecture', () {
+      final result = _selector(architecture: 'arm64').select([
+        _candidate(version: '2.0.0', architecture: null),
+      ]);
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).candidate.architecture, isNull);
+    });
+
+    test('exact architecture wins over universal for equal release', () {
+      final result = _selector(architecture: 'arm64').select([
+        _candidate(
+          version: '2.0.0',
+          buildNumber: '42',
+          architecture: null,
+        ),
+        _candidate(
+          version: '2.0.0',
+          buildNumber: '42',
+          architecture: 'arm64',
+        ),
       ]);
 
       expect(result, isA<UpdateAvailable>());
