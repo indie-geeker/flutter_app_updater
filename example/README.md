@@ -4,9 +4,10 @@ The example is a configurable **Update Simulator**. It models how an
 application checks, presents, downloads, cancels, retries, and completes an
 update without tying the package to a specific product UI.
 
-Version selection, build-number comparison, minimum-supported-version policy,
-recommended action selection, structured results, progress, and cancellation
-use the real `flutter_app_updater` public contracts.
+Version selection, build-number comparison, target matching,
+minimum-supported-version policy, ordered action recommendation, structured
+results, progress, cancellation, and retry reuse the real
+`flutter_app_updater` public contracts.
 
 ## No external side effects
 
@@ -28,28 +29,40 @@ device integration suite below for the real native background path.
 
 The page is divided into three sections:
 
-1. **Installed application** — version, build number, platform, architecture,
-   and channel.
-2. **Available release** — whether an update exists, release metadata,
-   required-update policy, minimum supported version, and delivery method.
-3. **Simulation behavior** — transfer size, duration, and terminal outcome.
+1. **Installed application** — version, build number, platform, runtime
+   architecture, and runtime channel.
+2. **Available release** — whether an update exists, independent release
+   architecture/channel, required-update policy, minimum supported version,
+   primary delivery, and optional fallback delivery.
+3. **Simulation behavior** — transfer size, duration, action-specific terminal
+   outcome, and whether retry succeeds.
 
-Delivery choices follow the selected platform. Android can simulate an
-official store, a Chinese Android market, or APK download and installation.
-iOS uses the App Store. macOS supports the Mac App Store or a desktop
-installer, while Windows uses a desktop installer.
+Delivery choices follow the selected platform. Android exposes independent
+download-only, trusted-local-install-only, and download-then-install actions in
+addition to official stores and Chinese Android markets. iOS uses the App
+Store. macOS supports the Mac App Store or a desktop installer, while Windows
+uses a desktop installer.
+
+The generated manifest preserves primary-then-fallback order. The update
+decision displays that order and marks the first supported action as the
+recommendation. Runtime and release channel/architecture fields are separate so
+the real selector's fail-closed mismatch behavior is visible.
 
 ## Observe the flow
 
 Select **Check for update** to run the scenario:
 
 - an equal version/build produces an up-to-date result;
+- channel and architecture mismatches explain why no release was selected;
 - a recommended update can be deferred;
 - a required update blocks barrier and back-button dismissal;
 - transfer events update progress and byte counts;
 - cancellation returns `ACTION_CANCELED`;
 - configured failures display their public `UpdateErrorCode` and recovery
-  action;
+  action; hash mismatch is offered only for download-related actions, and
+  install permission only for installation actions;
+- **Retry succeeds** deliberately fails the first attempt and proves that the
+  same executor instance recovers on the second attempt;
 - installation permission recovery is visibly simulated and changes no system
   setting.
 

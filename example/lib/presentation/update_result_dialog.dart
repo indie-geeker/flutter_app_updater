@@ -131,9 +131,18 @@ class _UpdateDecision extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Recommended action · ${_actionLabel(update.recommendedAction)}',
+          'Manifest action order',
           style: Theme.of(context).textTheme.labelLarge,
         ),
+        const SizedBox(height: 6),
+        for (final (index, action) in update.actions.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '${index + 1}. ${_actionLabel(action)}'
+              '${identical(action, update.recommendedAction) ? ' · Recommended' : ''}',
+            ),
+          ),
         const SizedBox(height: 24),
         Wrap(
           alignment: WrapAlignment.end,
@@ -247,11 +256,11 @@ class _TerminalResult extends StatelessWidget {
 
 String _actionLabel(UpdateAction action) {
   return switch (action) {
-    OpenStoreAction() => 'open official store',
-    OpenAndroidMarketAction() => 'open Android market',
-    DownloadPackageAction() => 'download package',
-    InstallPackageAction() => 'install package',
-    DownloadAndInstallPackageAction() => 'download and install package',
-    OpenInstallerAction() => 'download desktop installer',
+    OpenStoreAction() => 'Open official store',
+    OpenAndroidMarketAction() => 'Open Android market',
+    DownloadPackageAction() => 'Download package',
+    InstallPackageAction() => 'Install package',
+    DownloadAndInstallPackageAction() => 'Download and install package',
+    OpenInstallerAction() => 'Download desktop installer',
   };
 }

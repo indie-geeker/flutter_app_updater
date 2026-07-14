@@ -4,55 +4,145 @@ import 'package:flutter_app_updater_example/demo/simulated_update_executor.dart'
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  late DownloadAndInstallPackageAction action;
+  final download = DownloadPackageAction(
+    packageUrl: Uri.parse('https://download.example.invalid/app.apk'),
+    packageType: PackageType.apk,
+    packageSizeBytes: 100,
+    sha256: 'a' * 64,
+  );
+  const install = InstallPackageAction(
+    packagePath: '/simulated/app.apk',
+    packageType: PackageType.apk,
+  );
+  final combined = DownloadAndInstallPackageAction(
+    packageUrl: Uri.parse('https://download.example.invalid/app.apk'),
+    packageType: PackageType.apk,
+    packageSizeBytes: 100,
+    sha256: 'a' * 64,
+  );
+  final installer = OpenInstallerAction(
+    installerUrl: Uri.parse('https://download.example.invalid/app.msix'),
+    installerType: InstallerType.msix,
+    installerSizeBytes: 100,
+    sha256: 'a' * 64,
+  );
+  final store = OpenStoreAction(
+    store: StoreKind.googlePlay,
+    storeUrl: Uri.parse('https://play.google.com/store/apps/details?id=app'),
+  );
+  const market = OpenAndroidMarketAction(
+    market: AndroidMarketKind.xiaomi,
+    targetPackageName: 'com.example.app',
+  );
 
-  setUp(() {
-    action = DownloadAndInstallPackageAction(
-      packageUrl: Uri.parse('https://download.example.invalid/app.apk'),
-      packageType: PackageType.apk,
-      packageSizeBytes: 100,
-      sha256: 'a' * 64,
-    );
+  test('store and market actions emit only started and completed', () async {
+    for (final action in [store, market]) {
+      final executor = SimulatedUpdateExecutor(
+        outcome: DemoOutcome.success,
+        duration: Duration.zero,
+        totalBytes: 100,
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(
+          events, [isA<UpdateActionStarted>(), isA<UpdateActionCompleted>()]);
+      expect(events.whereType<UpdateActionProgress>(), isEmpty);
+    }
   });
 
-  test('emits start, four progress events, and one successful completion',
-      () async {
-    const executor = SimulatedUpdateExecutor(
+  test('only download-related actions emit transfer progress', () async {
+    for (final action in [download, combined, installer]) {
+      final executor = SimulatedUpdateExecutor(
+        outcome: DemoOutcome.success,
+        duration: Duration.zero,
+        totalBytes: 100,
+      );
+
+      final events = await executor.performStream(action).toList();
+
+      expect(
+        events
+            .whereType<UpdateActionProgress>()
+            .map((event) => event.downloadedBytes),
+        [25, 50, 75, 100],
+        reason: action.runtimeType.toString(),
+      );
+      expect(events.whereType<UpdateActionCompleted>(), hasLength(1));
+    }
+
+    final installEvents = await SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
-    );
-
-    final events = await executor.performStream(action).toList();
-
-    expect(events.first, isA<UpdateActionStarted>());
-    expect(
-      events
-          .whereType<UpdateActionProgress>()
-          .map((event) => event.downloadedBytes),
-      [25, 50, 75, 100],
-    );
-    expect(events.whereType<UpdateActionCompleted>(), hasLength(1));
-    expect(events.last, isA<UpdateActionCompleted>());
-    expect((events.last as UpdateActionCompleted).result.isSuccess, isTrue);
+    ).performStream(install).toList();
+    expect(installEvents.whereType<UpdateActionProgress>(), isEmpty);
   });
 
-  test('perform returns the terminal stream result', () async {
-    const executor = SimulatedUpdateExecutor(
-      outcome: DemoOutcome.hashMismatch,
+  test('hash mismatch is available only for download-related actions',
+      () async {
+    for (final action in [download, combined, installer]) {
+      expect(
+        SimulatedUpdateExecutor.supportsOutcome(
+          action,
+          DemoOutcome.hashMismatch,
+        ),
+        isTrue,
+      );
+    }
+    for (final action in [store, market, install]) {
+      expect(
+        SimulatedUpdateExecutor.supportsOutcome(
+          action,
+          DemoOutcome.hashMismatch,
+        ),
+        isFalse,
+      );
+    }
+  });
+
+  test('install permission is available only for installation actions',
+      () async {
+    for (final action in [install, combined]) {
+      expect(
+        SimulatedUpdateExecutor.supportsOutcome(
+          action,
+          DemoOutcome.installPermissionRequired,
+        ),
+        isTrue,
+      );
+    }
+    for (final action in [store, market, download, installer]) {
+      expect(
+        SimulatedUpdateExecutor.supportsOutcome(
+          action,
+          DemoOutcome.installPermissionRequired,
+        ),
+        isFalse,
+      );
+    }
+  });
+
+  test('configured first attempt fails and second succeeds on same executor',
+      () async {
+    final executor = SimulatedUpdateExecutor(
+      outcome: DemoOutcome.downloadFailed,
       duration: Duration.zero,
       totalBytes: 100,
+      succeedOnRetry: true,
     );
 
-    final result = await executor.perform(action);
+    final first = await executor.perform(download);
+    final second = await executor.perform(download);
 
-    expect(result.isSuccess, isFalse);
-    expect(result.code, UpdateErrorCode.packageHashMismatch);
+    expect(first.code, UpdateErrorCode.packageDownloadFailed);
+    expect(second.isSuccess, isTrue);
+    expect(executor.attemptCount, 2);
   });
 
   test('cancellation emits one structured terminal result', () async {
     final token = UpdateActionCancelToken();
-    const executor = SimulatedUpdateExecutor(
+    final executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
@@ -60,7 +150,7 @@ void main() {
     final events = <UpdateActionEvent>[];
 
     await for (final event in executor.performStream(
-      action,
+      combined,
       cancelToken: token,
     )) {
       events.add(event);
@@ -75,54 +165,17 @@ void main() {
     expect(events.whereType<UpdateActionProgress>(), hasLength(1));
   });
 
-  test('maps configured failures to existing public error codes', () async {
-    final cases = <DemoOutcome, UpdateErrorCode>{
-      DemoOutcome.downloadFailed: UpdateErrorCode.packageDownloadFailed,
-      DemoOutcome.hashMismatch: UpdateErrorCode.packageHashMismatch,
-      DemoOutcome.installPermissionRequired:
-          UpdateErrorCode.packageInstallPermissionRequired,
-      DemoOutcome.platformNotSupported: UpdateErrorCode.platformNotSupported,
-      DemoOutcome.actionFailed: UpdateErrorCode.actionFailed,
-    };
-
-    for (final MapEntry(key: outcome, value: code) in cases.entries) {
-      final executor = SimulatedUpdateExecutor(
-        outcome: outcome,
-        duration: Duration.zero,
-        totalBytes: 100,
-      );
-
-      final events = await executor.performStream(action).toList();
-      final completion = events.whereType<UpdateActionCompleted>().single;
-
-      expect(completion.result.code, code, reason: outcome.name);
-    }
-  });
-
   test('supports every action produced by the demo', () {
-    const executor = SimulatedUpdateExecutor(
+    final executor = SimulatedUpdateExecutor(
       outcome: DemoOutcome.success,
       duration: Duration.zero,
       totalBytes: 100,
     );
-    final actions = <UpdateAction>[
-      OpenStoreAction(
-        store: StoreKind.googlePlay,
-        storeUrl: Uri.parse('https://store.example.invalid/app'),
-      ),
-      const OpenAndroidMarketAction(
-        market: AndroidMarketKind.xiaomi,
-        targetPackageName: 'com.example.app',
-      ),
-      action,
-      OpenInstallerAction(
-        installerUrl: Uri.parse('https://download.example.invalid/app.msix'),
-        installerType: InstallerType.msix,
-        installerSizeBytes: 100,
-        sha256: 'a' * 64,
-      ),
-    ];
 
-    expect(actions.every(executor.supports), isTrue);
+    expect(
+      [store, market, download, install, combined, installer]
+          .every(executor.supports),
+      isTrue,
+    );
   });
 }

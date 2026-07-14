@@ -187,9 +187,9 @@ class _StatusContent {
 
 _StatusContent? _statusFor(UpdateDemoController controller) {
   return switch (controller.phase) {
-    DemoPhase.upToDate => const _StatusContent(
+    DemoPhase.upToDate => _StatusContent(
         'No update available',
-        'The installed version is up to date.',
+        controller.message ?? 'The installed version is up to date.',
       ),
     DemoPhase.checkFailed => _StatusContent(
         controller.errorCode?.value ?? 'Check failed',

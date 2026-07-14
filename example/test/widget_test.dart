@@ -19,9 +19,21 @@ void main() {
     expect(find.byKey(const Key('release-version-field')), findsOneWidget);
     expect(find.byKey(const Key('force-update-switch')), findsOneWidget);
     expect(find.byKey(const Key('platform-field')), findsOneWidget);
+    expect(
+      find.byKey(const Key('runtime-architecture-field')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('runtime-channel-field')), findsOneWidget);
+    expect(
+      find.byKey(const Key('release-architecture-field')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('release-channel-field')), findsOneWidget);
     expect(find.byKey(const Key('delivery-field')), findsOneWidget);
+    expect(find.byKey(const Key('fallback-delivery-field')), findsOneWidget);
     expect(find.byKey(const Key('duration-field')), findsOneWidget);
     expect(find.byKey(const Key('outcome-field')), findsOneWidget);
+    expect(find.byKey(const Key('retry-succeeds-switch')), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Reset'), findsOneWidget);
     expect(
         find.widgetWithText(FilledButton, 'Check for update'), findsOneWidget);
@@ -43,6 +55,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Official store'), findsWidgets);
     expect(find.text('Chinese Android market'), findsNothing);
+    expect(find.text('Download APK only'), findsNothing);
+    expect(find.text('Install local APK only'), findsNothing);
     expect(find.text('Download and install APK'), findsNothing);
     await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
@@ -60,6 +74,21 @@ void main() {
     await tester.tap(deliveryField);
     await tester.pumpAndSettle();
     expect(find.text('Desktop installer'), findsWidgets);
+  });
+
+  testWidgets('Android exposes separate download and install flows',
+      (tester) async {
+    await tester.pumpWidget(const MyApp());
+
+    final deliveryField = find.byKey(const Key('delivery-field'));
+    await tester.ensureVisible(deliveryField);
+    await tester.pumpAndSettle();
+    await tester.tap(deliveryField);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Download APK only'), findsOneWidget);
+    expect(find.text('Install local APK only'), findsOneWidget);
+    expect(find.text('Download and install APK'), findsWidgets);
   });
 
   testWidgets('shows an in-page result when no update is available',
@@ -84,6 +113,12 @@ void main() {
     await _checkForUpdate(tester);
 
     expect(find.text('Update 2.0.0 available'), findsOneWidget);
+    expect(find.text('Manifest action order'), findsOneWidget);
+    expect(
+      find.text('1. Download and install package · Recommended'),
+      findsOneWidget,
+    );
+    expect(find.text('2. Open official store'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Later'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Update now'), findsOneWidget);
 
@@ -147,12 +182,13 @@ void main() {
     expect(find.text('ACTION_CANCELED'), findsOneWidget);
   });
 
-  testWidgets('download failure exposes its code and retry action',
+  testWidgets('retry reuses the simulator executor and reaches success',
       (tester) async {
     await _pumpScenario(
       tester,
       DemoScenario.defaults().copyWith(
         outcome: DemoOutcome.downloadFailed,
+        succeedOnRetry: true,
         executionDuration: Duration.zero,
       ),
     );
@@ -163,6 +199,38 @@ void main() {
 
     expect(find.text('PACKAGE_DOWNLOAD_FAILED'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Simulation complete'), findsOneWidget);
+  });
+
+  testWidgets('channel and architecture mismatches are visible',
+      (tester) async {
+    final controller = await _pumpScenario(
+      tester,
+      DemoScenario.defaults().copyWith(
+        runtimeChannel: 'stable',
+        releaseChannel: 'beta',
+      ),
+    );
+
+    await _checkForUpdate(tester);
+    expect(find.textContaining('runtime channel stable'), findsOneWidget);
+
+    controller.updateScenario(
+      controller.scenario.copyWith(
+        releaseChannel: 'stable',
+        runtimeArchitecture: 'arm64',
+        releaseArchitecture: 'x64',
+      ),
+    );
+    await tester.pump();
+    await _checkForUpdate(tester);
+
+    expect(find.text('NO_MATCHING_RELEASE'), findsOneWidget);
+    expect(find.textContaining('runtime architecture arm64'), findsOneWidget);
   });
 
   testWidgets('install permission failure offers simulated recovery',

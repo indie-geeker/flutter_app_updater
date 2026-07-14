@@ -22,9 +22,10 @@ class ScenarioForm extends StatefulWidget {
 class _ScenarioFormState extends State<ScenarioForm> {
   late final TextEditingController _installedVersion;
   late final TextEditingController _installedBuild;
-  late final TextEditingController _architecture;
+  late final TextEditingController _runtimeArchitecture;
   late final TextEditingController _releaseVersion;
   late final TextEditingController _releaseBuild;
+  late final TextEditingController _releaseArchitecture;
   late final TextEditingController _releaseNotes;
   late final TextEditingController _minimumVersion;
   late final TextEditingController _packageSizeMb;
@@ -34,9 +35,10 @@ class _ScenarioFormState extends State<ScenarioForm> {
     super.initState();
     _installedVersion = TextEditingController();
     _installedBuild = TextEditingController();
-    _architecture = TextEditingController();
+    _runtimeArchitecture = TextEditingController();
     _releaseVersion = TextEditingController();
     _releaseBuild = TextEditingController();
+    _releaseArchitecture = TextEditingController();
     _releaseNotes = TextEditingController();
     _minimumVersion = TextEditingController();
     _packageSizeMb = TextEditingController();
@@ -53,9 +55,10 @@ class _ScenarioFormState extends State<ScenarioForm> {
   void dispose() {
     _installedVersion.dispose();
     _installedBuild.dispose();
-    _architecture.dispose();
+    _runtimeArchitecture.dispose();
     _releaseVersion.dispose();
     _releaseBuild.dispose();
+    _releaseArchitecture.dispose();
     _releaseNotes.dispose();
     _minimumVersion.dispose();
     _packageSizeMb.dispose();
@@ -65,9 +68,16 @@ class _ScenarioFormState extends State<ScenarioForm> {
   void _syncControllers() {
     _sync(_installedVersion, widget.scenario.installedVersion);
     _sync(_installedBuild, widget.scenario.installedBuildNumber);
-    _sync(_architecture, widget.scenario.architecture);
+    _sync(
+      _runtimeArchitecture,
+      widget.scenario.runtimeArchitecture,
+    );
     _sync(_releaseVersion, widget.scenario.releaseVersion);
     _sync(_releaseBuild, widget.scenario.releaseBuildNumber);
+    _sync(
+      _releaseArchitecture,
+      widget.scenario.releaseArchitecture,
+    );
     _sync(_releaseNotes, widget.scenario.releaseNotes);
     _sync(_minimumVersion, widget.scenario.minSupportedVersion ?? '');
     _sync(
@@ -132,20 +142,22 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 ),
               ),
               TextField(
-                key: const Key('architecture-field'),
-                controller: _architecture,
+                key: const Key('runtime-architecture-field'),
+                controller: _runtimeArchitecture,
                 enabled: widget.enabled,
-                decoration: const InputDecoration(labelText: 'Architecture'),
+                decoration:
+                    const InputDecoration(labelText: 'Runtime architecture'),
                 onChanged: (value) => _emit(
-                  widget.scenario.copyWith(architecture: value),
+                  widget.scenario.copyWith(runtimeArchitecture: value),
                 ),
               ),
               _RebuiltDropdown<String>(
-                rebuildValue: widget.scenario.channel,
+                rebuildValue: widget.scenario.runtimeChannel,
                 child: DropdownButtonFormField<String>(
-                  key: const Key('channel-field'),
-                  initialValue: widget.scenario.channel,
-                  decoration: const InputDecoration(labelText: 'Channel'),
+                  key: const Key('runtime-channel-field'),
+                  initialValue: widget.scenario.runtimeChannel,
+                  decoration:
+                      const InputDecoration(labelText: 'Runtime channel'),
                   items: const [
                     DropdownMenuItem(value: 'stable', child: Text('Stable')),
                     DropdownMenuItem(value: 'beta', child: Text('Beta')),
@@ -153,7 +165,9 @@ class _ScenarioFormState extends State<ScenarioForm> {
                   onChanged: widget.enabled
                       ? (value) {
                           if (value != null) {
-                            _emit(widget.scenario.copyWith(channel: value));
+                            _emit(
+                              widget.scenario.copyWith(runtimeChannel: value),
+                            );
                           }
                         }
                       : null,
@@ -205,6 +219,44 @@ class _ScenarioFormState extends State<ScenarioForm> {
                         const InputDecoration(labelText: 'Release build'),
                     onChanged: (value) => _emit(
                       widget.scenario.copyWith(releaseBuildNumber: value),
+                    ),
+                  ),
+                  TextField(
+                    key: const Key('release-architecture-field'),
+                    controller: _releaseArchitecture,
+                    enabled: widget.enabled,
+                    decoration: const InputDecoration(
+                      labelText: 'Release architecture',
+                    ),
+                    onChanged: (value) => _emit(
+                      widget.scenario.copyWith(releaseArchitecture: value),
+                    ),
+                  ),
+                  _RebuiltDropdown<String>(
+                    rebuildValue: widget.scenario.releaseChannel,
+                    child: DropdownButtonFormField<String>(
+                      key: const Key('release-channel-field'),
+                      initialValue: widget.scenario.releaseChannel,
+                      decoration:
+                          const InputDecoration(labelText: 'Release channel'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'stable',
+                          child: Text('Stable'),
+                        ),
+                        DropdownMenuItem(value: 'beta', child: Text('Beta')),
+                      ],
+                      onChanged: widget.enabled
+                          ? (value) {
+                              if (value != null) {
+                                _emit(
+                                  widget.scenario.copyWith(
+                                    releaseChannel: value,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                   ),
                 ],
@@ -265,7 +317,7 @@ class _ScenarioFormState extends State<ScenarioForm> {
                       initialValue: widget.scenario.delivery,
                       isExpanded: true,
                       decoration:
-                          const InputDecoration(labelText: 'Delivery method'),
+                          const InputDecoration(labelText: 'Primary delivery'),
                       items: DemoScenario.allowedDeliveries(
                         widget.scenario.platform,
                       )
@@ -276,13 +328,37 @@ class _ScenarioFormState extends State<ScenarioForm> {
                             ),
                           )
                           .toList(),
+                      onChanged: widget.enabled ? _changeDelivery : null,
+                    ),
+                  ),
+                  _RebuiltDropdown<DemoDelivery?>(
+                    rebuildValue: widget.scenario.fallbackDelivery,
+                    child: DropdownButtonFormField<DemoDelivery?>(
+                      key: const Key('fallback-delivery-field'),
+                      initialValue: widget.scenario.fallbackDelivery,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Fallback delivery'),
+                      items: [
+                        const DropdownMenuItem<DemoDelivery?>(
+                          value: null,
+                          child: Text('None'),
+                        ),
+                        ...DemoScenario.allowedDeliveries(
+                          widget.scenario.platform,
+                        ).map(
+                          (delivery) => DropdownMenuItem<DemoDelivery?>(
+                            value: delivery,
+                            child: Text(_deliveryLabel(delivery)),
+                          ),
+                        ),
+                      ],
                       onChanged: widget.enabled
-                          ? (value) {
-                              if (value != null) {
-                                _emit(
-                                    widget.scenario.copyWith(delivery: value));
-                              }
-                            }
+                          ? (value) => _emit(
+                                widget.scenario.copyWith(
+                                  fallbackDelivery: value,
+                                ),
+                              )
                           : null,
                     ),
                   ),
@@ -368,7 +444,9 @@ class _ScenarioFormState extends State<ScenarioForm> {
                   isExpanded: true,
                   decoration:
                       const InputDecoration(labelText: 'Terminal outcome'),
-                  items: DemoOutcome.values
+                  items: DemoScenario.allowedOutcomes(
+                    widget.scenario.delivery,
+                  )
                       .map(
                         (outcome) => DropdownMenuItem(
                           value: outcome,
@@ -385,6 +463,21 @@ class _ScenarioFormState extends State<ScenarioForm> {
                       : null,
                 ),
               ),
+              SwitchListTile.adaptive(
+                key: const Key('retry-succeeds-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Retry succeeds'),
+                subtitle: const Text(
+                  'Fail the first attempt, then recover with the same executor.',
+                ),
+                value: widget.scenario.succeedOnRetry,
+                onChanged: widget.enabled &&
+                        widget.scenario.outcome != DemoOutcome.success
+                    ? (value) => _emit(
+                          widget.scenario.copyWith(succeedOnRetry: value),
+                        )
+                    : null,
+              ),
             ],
           ),
         ),
@@ -400,12 +493,44 @@ class _ScenarioFormState extends State<ScenarioForm> {
     final delivery = allowed.contains(widget.scenario.delivery)
         ? widget.scenario.delivery
         : allowed.first;
+    final fallback = allowed.contains(widget.scenario.fallbackDelivery)
+        ? widget.scenario.fallbackDelivery
+        : null;
     final architecture = platform == TargetPlatform.android ? 'arm64' : 'x64';
+    final allowedOutcomes = DemoScenario.allowedOutcomes(delivery);
+    final outcome = allowedOutcomes.contains(widget.scenario.outcome)
+        ? widget.scenario.outcome
+        : DemoOutcome.success;
     _emit(
       widget.scenario.copyWith(
         platform: platform,
         delivery: delivery,
-        architecture: architecture,
+        fallbackDelivery: fallback,
+        runtimeArchitecture: architecture,
+        releaseArchitecture: architecture,
+        outcome: outcome,
+        succeedOnRetry: outcome == DemoOutcome.success
+            ? false
+            : widget.scenario.succeedOnRetry,
+      ),
+    );
+  }
+
+  void _changeDelivery(DemoDelivery? delivery) {
+    if (delivery == null) {
+      return;
+    }
+    final allowedOutcomes = DemoScenario.allowedOutcomes(delivery);
+    final outcome = allowedOutcomes.contains(widget.scenario.outcome)
+        ? widget.scenario.outcome
+        : DemoOutcome.success;
+    _emit(
+      widget.scenario.copyWith(
+        delivery: delivery,
+        outcome: outcome,
+        succeedOnRetry: outcome == DemoOutcome.success
+            ? false
+            : widget.scenario.succeedOnRetry,
       ),
     );
   }
@@ -531,7 +656,9 @@ String _deliveryLabel(DemoDelivery delivery) {
   return switch (delivery) {
     DemoDelivery.officialStore => 'Official store',
     DemoDelivery.androidMarket => 'Chinese Android market',
-    DemoDelivery.androidPackage => 'Download and install APK',
+    DemoDelivery.androidDownload => 'Download APK only',
+    DemoDelivery.androidInstall => 'Install local APK only',
+    DemoDelivery.androidDownloadAndInstall => 'Download and install APK',
     DemoDelivery.desktopInstaller => 'Desktop installer',
   };
 }

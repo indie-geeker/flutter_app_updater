@@ -9,19 +9,24 @@ class DemoManifestFactory {
   const DemoManifestFactory();
 
   UpdateManifest build(DemoScenario scenario) {
-    if (!DemoScenario.allowedDeliveries(scenario.platform)
-        .contains(scenario.delivery)) {
-      throw ArgumentError.value(
-        scenario.delivery,
-        'delivery',
-        'Delivery is not available for ${scenario.platform.name}.',
-      );
+    final allowed = DemoScenario.allowedDeliveries(scenario.platform);
+    for (final delivery in [
+      scenario.delivery,
+      if (scenario.fallbackDelivery case final fallback?) fallback,
+    ]) {
+      if (!allowed.contains(delivery)) {
+        throw ArgumentError.value(
+          delivery,
+          'delivery',
+          'Delivery is not available for ${scenario.platform.name}.',
+        );
+      }
     }
 
     return UpdateManifest(
       schemaVersion: 3,
       appId: appId,
-      channel: scenario.channel,
+      channel: scenario.releaseChannel,
       releases: [
         UpdateCandidate(
           version: scenario.updateAvailable
@@ -30,23 +35,32 @@ class DemoManifestFactory {
           buildNumber: scenario.updateAvailable
               ? scenario.releaseBuildNumber
               : scenario.installedBuildNumber,
-          channel: scenario.channel,
+          channel: scenario.releaseChannel,
           platform: scenario.platform,
-          architecture: scenario.architecture,
+          architecture: scenario.releaseArchitecture.trim().isEmpty
+              ? null
+              : scenario.releaseArchitecture.trim(),
           releaseNotes: scenario.releaseNotes,
           releasedAt: DateTime.utc(2026, 7, 10, 12),
           policy: UpdatePolicy(
             level: scenario.policyLevel,
             minSupportedVersion: scenario.minSupportedVersion,
           ),
-          actions: [_buildAction(scenario)],
+          actions: [
+            _buildAction(scenario.delivery, scenario),
+            if (scenario.fallbackDelivery case final fallback?)
+              _buildAction(fallback, scenario),
+          ],
         ),
       ],
     );
   }
 
-  UpdateAction _buildAction(DemoScenario scenario) {
-    return switch (scenario.delivery) {
+  UpdateAction _buildAction(
+    DemoDelivery delivery,
+    DemoScenario scenario,
+  ) {
+    return switch (delivery) {
       DemoDelivery.officialStore => _buildStoreAction(scenario.platform),
       DemoDelivery.androidMarket => OpenAndroidMarketAction(
           market: AndroidMarketKind.xiaomi,
@@ -55,7 +69,19 @@ class DemoManifestFactory {
             'https://market.example.invalid/apps/$appId',
           ),
         ),
-      DemoDelivery.androidPackage => DownloadAndInstallPackageAction(
+      DemoDelivery.androidDownload => DownloadPackageAction(
+          packageUrl: Uri.parse(
+            'https://downloads.example.invalid/update-simulator.apk',
+          ),
+          packageType: PackageType.apk,
+          packageSizeBytes: scenario.packageSizeBytes,
+          sha256: '0' * 64,
+        ),
+      DemoDelivery.androidInstall => const InstallPackageAction(
+          packagePath: '/simulated/update-simulator.apk',
+          packageType: PackageType.apk,
+        ),
+      DemoDelivery.androidDownloadAndInstall => DownloadAndInstallPackageAction(
           packageUrl: Uri.parse(
             'https://downloads.example.invalid/update-simulator.apk',
           ),

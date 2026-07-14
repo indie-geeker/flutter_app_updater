@@ -74,6 +74,7 @@ class UpdateDemoController extends ChangeNotifier {
             outcome: _scenario.outcome,
             duration: _scenario.executionDuration,
             totalBytes: _scenario.packageSizeBytes,
+            succeedOnRetry: _scenario.succeedOnRetry,
           ),
         ],
       );
@@ -90,11 +91,20 @@ class UpdateDemoController extends ChangeNotifier {
           _message = 'Update ${result.candidate.version} is available.';
         case PreparedUpdateNotAvailable():
           _phase = DemoPhase.upToDate;
-          _message = 'The installed version is up to date.';
+          _message = _scenario.runtimeChannel != _scenario.releaseChannel
+              ? 'No release selected: runtime channel '
+                  '${_scenario.runtimeChannel} does not match release channel '
+                  '${_scenario.releaseChannel}.'
+              : 'The installed version is up to date.';
         case PreparedUpdateCheckFailed(:final code, :final message):
           _phase = DemoPhase.checkFailed;
           _errorCode = code;
-          _message = message;
+          _message = code == UpdateErrorCode.noMatchingRelease &&
+                  _scenario.runtimeArchitecture != _scenario.releaseArchitecture
+              ? 'No release selected: runtime architecture '
+                  '${_scenario.runtimeArchitecture} does not match release '
+                  'architecture ${_scenario.releaseArchitecture}.'
+              : message;
       }
     } on ArgumentError catch (error) {
       if (!_isCurrent(generation)) {
@@ -128,8 +138,13 @@ class UpdateDemoController extends ChangeNotifier {
     _errorCode = null;
     _message = 'Running the simulated update.';
     _progress = null;
-    _downloadedBytes = 0;
-    _totalBytes = _scenario.packageSizeBytes;
+    if (_isDownloadRelated(update.recommendedAction)) {
+      _downloadedBytes = 0;
+      _totalBytes = _scenario.packageSizeBytes;
+    } else {
+      _downloadedBytes = null;
+      _totalBytes = null;
+    }
     _notify();
 
     await for (final event in updater.performRecommendedStream(
@@ -202,6 +217,12 @@ class UpdateDemoController extends ChangeNotifier {
   void simulateOpenSettings() {
     _message = 'Settings recovery was simulated; no system setting changed.';
     _notify();
+  }
+
+  bool _isDownloadRelated(UpdateAction action) {
+    return action is DownloadPackageAction ||
+        action is DownloadAndInstallPackageAction ||
+        action is OpenInstallerAction;
   }
 
   void _clearFlow() {

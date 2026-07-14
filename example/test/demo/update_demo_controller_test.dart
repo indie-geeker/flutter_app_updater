@@ -18,6 +18,14 @@ void main() {
     expect(controller.phase, DemoPhase.updateAvailable);
     expect(controller.preparedUpdate?.candidate.version, '2.0.0');
     expect(controller.preparedUpdate?.isRequired, isFalse);
+    expect(
+      controller.preparedUpdate?.actions.map((action) => action.runtimeType),
+      [DownloadAndInstallPackageAction, OpenStoreAction],
+    );
+    expect(
+      controller.preparedUpdate?.recommendedAction,
+      isA<DownloadAndInstallPackageAction>(),
+    );
   });
 
   test('reports up to date through the real selector path', () async {
@@ -76,6 +84,85 @@ void main() {
 
     expect(controller.phase, DemoPhase.failed);
     expect(controller.errorCode, UpdateErrorCode.packageHashMismatch);
+  });
+
+  test('retry reuses the executor and succeeds after configured first failure',
+      () async {
+    final controller = UpdateDemoController(
+      scenario: DemoScenario.defaults().copyWith(
+        outcome: DemoOutcome.downloadFailed,
+        succeedOnRetry: true,
+        executionDuration: Duration.zero,
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.checkForUpdate();
+
+    await controller.performRecommended();
+    expect(controller.phase, DemoPhase.failed);
+    expect(controller.errorCode, UpdateErrorCode.packageDownloadFailed);
+
+    await controller.performRecommended();
+    expect(controller.phase, DemoPhase.succeeded);
+    expect(controller.errorCode, isNull);
+  });
+
+  test('makes runtime channel mismatch visible', () async {
+    final controller = UpdateDemoController(
+      scenario: DemoScenario.defaults().copyWith(
+        runtimeChannel: 'stable',
+        releaseChannel: 'beta',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.checkForUpdate();
+
+    expect(controller.phase, DemoPhase.upToDate);
+    expect(controller.message, contains('runtime channel stable'));
+    expect(controller.message, contains('release channel beta'));
+  });
+
+  test('makes runtime architecture mismatch visible', () async {
+    final controller = UpdateDemoController(
+      scenario: DemoScenario.defaults().copyWith(
+        runtimeArchitecture: 'arm64',
+        releaseArchitecture: 'x64',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.checkForUpdate();
+
+    expect(controller.phase, DemoPhase.checkFailed);
+    expect(controller.errorCode, UpdateErrorCode.noMatchingRelease);
+    expect(controller.message, contains('runtime architecture arm64'));
+    expect(controller.message, contains('release architecture x64'));
+  });
+
+  test('selects separate Android download and install flows', () async {
+    for (final MapEntry(key: delivery, value: type) in {
+      DemoDelivery.androidDownload: DownloadPackageAction,
+      DemoDelivery.androidInstall: InstallPackageAction,
+      DemoDelivery.androidDownloadAndInstall: DownloadAndInstallPackageAction,
+    }.entries) {
+      final controller = UpdateDemoController(
+        scenario: DemoScenario.defaults().copyWith(
+          delivery: delivery,
+          fallbackDelivery: null,
+          executionDuration: Duration.zero,
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.checkForUpdate();
+
+      expect(
+        controller.preparedUpdate?.recommendedAction.runtimeType,
+        type,
+        reason: delivery.name,
+      );
+    }
   });
 
   test('cancels an active simulated update', () async {
