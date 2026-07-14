@@ -13,12 +13,6 @@ void main() {
       expect(action.storeUrl.host, 'apps.apple.com');
     });
 
-    test('models Google Play in-app updates', () {
-      const action = PlayInAppUpdateAction(mode: PlayUpdateMode.immediate);
-
-      expect(action.mode, PlayUpdateMode.immediate);
-    });
-
     test('models Chinese Android market jumps', () {
       final action = OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,

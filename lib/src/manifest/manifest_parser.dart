@@ -70,9 +70,6 @@ class ManifestParser {
           store: _parseStoreKind(_requiredString(action, 'store')),
           storeUrl: _requiredAbsoluteUri(action, 'storeUrl'),
         ),
-      'playInAppUpdate' => PlayInAppUpdateAction(
-          mode: _parsePlayUpdateMode(_requiredString(action, 'mode')),
-        ),
       'openAndroidMarket' => OpenAndroidMarketAction(
           market: _parseAndroidMarketKind(_requiredString(action, 'market')),
           targetPackageName: _requiredString(action, 'targetPackageName'),
@@ -165,17 +162,6 @@ class ManifestParser {
       _ => throw ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
           message: 'Unsupported Android market: $value.',
-        ),
-    };
-  }
-
-  PlayUpdateMode _parsePlayUpdateMode(String value) {
-    return switch (value) {
-      'immediate' => PlayUpdateMode.immediate,
-      'flexible' => PlayUpdateMode.flexible,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported Play update mode: $value.',
         ),
     };
   }

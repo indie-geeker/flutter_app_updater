@@ -184,7 +184,6 @@ class RetryStrategy {
       UpdateErrorCode.noSupportedAction ||
       UpdateErrorCode.storeNotAvailable ||
       UpdateErrorCode.marketNotAvailable ||
-      UpdateErrorCode.playInAppUpdateUnavailable ||
       UpdateErrorCode.packageTooLarge ||
       UpdateErrorCode.packageHashMismatch ||
       UpdateErrorCode.packageSignatureInvalid ||

@@ -97,8 +97,6 @@ class ManifestSchema {
         _requiredString(action, 'market');
         _requiredString(action, 'targetPackageName');
         _optionalAbsoluteUrl(action, 'fallbackUrl');
-      case 'playInAppUpdate':
-        _requiredString(action, 'mode');
       case 'downloadPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');

@@ -253,6 +253,5 @@ String _actionLabel(UpdateAction action) {
     InstallPackageAction() => 'install package',
     DownloadAndInstallPackageAction() => 'download and install package',
     OpenInstallerAction() => 'download desktop installer',
-    PlayInAppUpdateAction() => 'start Play in-app update',
   };
 }

@@ -48,9 +48,6 @@ flutter:
       android:
         package: com.indiegeeker.flutter_app_updater
         pluginClass: FlutterAppUpdaterPlugin
-      ohos:
-        package: com.indiegeeker.flutter_app_updater
-        pluginClass: FlutterAppUpdaterPlugin
       ios:
         pluginClass: FlutterAppUpdaterPlugin
       macos:

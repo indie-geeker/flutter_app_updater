@@ -262,6 +262,17 @@ void main() {
     expect(pubignore, contains('**/local.properties'));
   });
 
+  test('pubspec and repository do not register unfinished OHOS support', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final issueTemplate =
+        File('.github/ISSUE_TEMPLATE/bug_report.yml').readAsStringSync();
+
+    expect(pubspec, isNot(contains('      ohos:')));
+    expect(issueTemplate, isNot(contains('        - OHOS')));
+    expect(Directory('ohos').existsSync(), isFalse);
+    expect(Directory('example/ohos').existsSync(), isFalse);
+  });
+
   test('pubspec advertises a coherent Flutter SDK floor', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
@@ -275,12 +286,11 @@ void main() {
         File('ios/flutter_app_updater.podspec').readAsStringSync();
     final macosPodspec =
         File('macos/flutter_app_updater.podspec').readAsStringSync();
-    final ohosPackage = File('ohos/oh-package.json5').readAsStringSync();
 
     expect(pubspec, contains('repository:'));
     expect(pubspec, contains('issue_tracker:'));
     expect(pubspec, contains('topics:'));
-    for (final metadata in [iosPodspec, macosPodspec, ohosPackage]) {
+    for (final metadata in [iosPodspec, macosPodspec]) {
       expect(metadata, contains('3.0.0'));
       expect(metadata, isNot(contains('example.com')));
       expect(metadata, isNot(contains('Your Company')));

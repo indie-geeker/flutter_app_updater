@@ -27,5 +27,31 @@ void main() {
 
       expect(existingLegacySources, isEmpty);
     });
+
+    test('does not ship unfinished Play in-app update symbols', () {
+      const forbiddenNames = [
+        'PlayUpdateMode',
+        'PlayInAppUpdateAction',
+        'startPlayInAppUpdate',
+        'playInAppUpdateUnavailable',
+      ];
+      const runtimeRoots = ['lib', 'android', 'ios', 'macos', 'example/lib'];
+
+      final matches = <String>[];
+      for (final root in runtimeRoots) {
+        for (final entity in Directory(root).listSync(recursive: true)) {
+          if (entity is! File) continue;
+          if (!const ['.dart', '.kt', '.swift'].any(entity.path.endsWith)) {
+            continue;
+          }
+          final source = entity.readAsStringSync();
+          for (final name in forbiddenNames) {
+            if (source.contains(name)) matches.add('${entity.path}: $name');
+          }
+        }
+      }
+
+      expect(matches, isEmpty);
+    });
   });
 }

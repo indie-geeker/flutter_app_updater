@@ -22,7 +22,6 @@ body:
         - iOS
         - macOS
         - Windows
-        - OHOS
         - Other
     validations:
       required: true

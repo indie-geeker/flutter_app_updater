@@ -1,5 +1,6 @@
 ## Unreleased
 
+* **Breaking**: Remove the unfinished Play In-App Updates action/channel surface and OHOS plugin registration from the unpublished v3 API.
 * **Feature**: Add an advanced Android-only API for one persistent, user-visible APK download with durable status, progress observation, explicit resume, cancel, and removal.
 * **Reliability**: Add native checkpoint recovery, strict HTTP Range and strong-validator handling, byte/disk limits, SHA-256 verification, and process-start reconciliation.
 * **Android**: Use a host-opted-in visible foreground service started through the API-appropriate service entry point on API 21-33, and user-initiated data transfer jobs on API 34+, with visible retry and cancel actions.
@@ -14,7 +15,7 @@
 * **Feature**: Add package install and download-then-install actions for Android self-hosted APK flows.
 * **Feature**: Add `AppUpdater.manifest`, `checkAndPrepare`, and `performRecommended` as the default UI-free integration flow.
 * **Feature**: Add manifest v3 parsing, validation, and release selection.
-* **Feature**: Add official store actions for App Store, Mac App Store, Google Play fallback URLs, and a Play in-app update entry point.
+* **Feature**: Add official store actions for App Store, Mac App Store, and Google Play URLs.
 * **Feature**: Add Chinese Android market descriptors and Android market opening support.
 * **Feature**: Add SHA-256 verified package downloads with resume safety metadata.
 * **Feature**: Add desktop installer actions for verified Windows and macOS installers.

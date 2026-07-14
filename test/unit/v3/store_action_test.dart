@@ -41,15 +41,6 @@ void main() {
       ]);
     });
 
-    test('PlayInAppUpdateAction delegates to the platform executor', () async {
-      const action = PlayInAppUpdateAction(mode: PlayUpdateMode.immediate);
-
-      final result = await StoreUpdateExecutor().perform(action);
-
-      expect(result.isSuccess, isTrue);
-      expect(fakePlatform.startedPlayModes, [PlayUpdateMode.immediate.name]);
-    });
-
     test('invalid store URL returns structured failure', () async {
       final action = OpenStoreAction(
         store: StoreKind.appStore,
@@ -98,7 +89,6 @@ class _FakeStorePlatform extends Fake
     with MockPlatformInterfaceMixin
     implements FlutterAppUpdaterPlatform {
   final openedStores = <({String store, String storeUrl})>[];
-  final startedPlayModes = <String>[];
   bool throwMissingPluginOnOpenStore = false;
 
   @override
@@ -110,12 +100,5 @@ class _FakeStorePlatform extends Fake
       throw MissingPluginException('openStore is not implemented.');
     }
     openedStores.add((store: store, storeUrl: storeUrl));
-  }
-
-  @override
-  Future<void> startPlayInAppUpdate({
-    required String mode,
-  }) async {
-    startedPlayModes.add(mode);
   }
 }

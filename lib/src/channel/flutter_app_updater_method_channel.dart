@@ -78,15 +78,6 @@ class MethodChannelFlutterAppUpdater extends FlutterAppUpdaterPlatform {
   }
 
   @override
-  Future<void> startPlayInAppUpdate({
-    required String mode,
-  }) async {
-    await methodChannel.invokeMethod<void>('startPlayInAppUpdate', {
-      'mode': mode,
-    });
-  }
-
-  @override
   Future<void> openAndroidMarket({
     required String marketPackageName,
     required String marketUri,

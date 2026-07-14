@@ -13,7 +13,8 @@ Stable v3 scope:
 - macOS: Mac App Store URL, DMG and ZIP installer download then open.
 - Windows: MSIX, MSI, and EXE installer download then open.
 
-Planned scope: Play In-App Updates, OHOS, and Linux installer flows.
+Future work, not registered or exposed by the stable runtime: Play In-App
+Updates, OHOS, and Linux installer flows.
 
 ## Install
 

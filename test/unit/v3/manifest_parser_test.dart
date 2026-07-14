@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/src/actions/update_action.dart';
 import 'package:flutter_app_updater/src/manifest/manifest_parser.dart';
+import 'package:flutter_app_updater/src/models/update_error_code.dart';
 import 'package:flutter_app_updater/src/models/update_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,7 +103,7 @@ void main() {
       expect(downloadAndInstallAction.sha256, isNull);
     });
 
-    test('parses Android market and Play in-app update actions', () {
+    test('parses Android market actions', () {
       final release = const ManifestParser()
           .parse({
             'schemaVersion': 3,
@@ -121,10 +122,6 @@ void main() {
                     'fallbackUrl':
                         'https://app.mi.com/details?id=com.example.app',
                   },
-                  {
-                    'type': 'playInAppUpdate',
-                    'mode': 'immediate',
-                  },
                 ],
               },
             ],
@@ -136,9 +133,33 @@ void main() {
       expect(marketAction.market, AndroidMarketKind.xiaomi);
       expect(marketAction.targetPackageName, 'com.example.app');
       expect(marketAction.fallbackUrl?.host, 'app.mi.com');
+    });
 
-      final playAction = release.actions[1] as PlayInAppUpdateAction;
-      expect(playAction.mode, PlayUpdateMode.immediate);
+    test('rejects unfinished Play in-app update actions', () {
+      expect(
+        () => const ManifestParser().parse({
+          'schemaVersion': 3,
+          'appId': 'com.example.app',
+          'channel': 'stable',
+          'releases': [
+            {
+              'version': '2.0.0',
+              'platform': 'android',
+              'releaseNotes': 'Bug fixes',
+              'actions': [
+                {'type': 'playInAppUpdate', 'mode': 'immediate'},
+              ],
+            },
+          ],
+        }),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.unsupportedActionType,
+          ),
+        ),
+      );
     });
   });
 }
