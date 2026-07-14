@@ -1181,7 +1181,8 @@ void main() {
         packageSizeBytes: 11,
         sha256: _sha256(utf8.encode('hello world')),
         overrides: const {
-          'packageUrl': 'https://stale.example.com/app.apk',
+          'packageUrlSha256':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         },
       );
       client.enqueue(
@@ -1273,10 +1274,13 @@ void main() {
         () async {
       final validHash = _sha256(utf8.encode('hello world'));
       final cases = <String, Map<String, Object?>>{
-        'url': {'packageUrl': 'https://other.example.com/app.apk'},
+        'url': {
+          'packageUrlSha256':
+              _sha256(utf8.encode('https://other.example.com/app.apk')),
+        },
         'size': {'packageSizeBytes': 12},
         'hash': {'sha256': 'a' * 64},
-        'schema': {'schemaVersion': 2},
+        'schema': {'schemaVersion': 1},
         'etag': {'etag': 'W/"v1"'},
       };
 
@@ -1334,6 +1338,56 @@ void main() {
       expect(client.requests.single.headers['range'], 'bytes=5-');
       expect(await partialFile.readAsString(), 'hello');
       expect(await _checkpointSlot(partialFile, 0).exists(), isTrue);
+    });
+
+    test('checkpoint v2 fingerprints signed URLs without persisting tokens',
+        () async {
+      final savePath = _path('private-checkpoint.apk');
+      final url = Uri.parse(
+        'https://example.com/app.apk?token=super-secret&expires=123',
+      );
+      client.enqueue(
+        PackageDownloadResponse(
+          statusCode: 200,
+          headers: const {
+            'etag': '"v1"',
+            'content-length': '11',
+          },
+          bytes: Stream<List<int>>.multi((controller) {
+            controller.add(utf8.encode('hello'));
+            controller.addError(const SocketException('offline'));
+            controller.close();
+          }),
+        ),
+      );
+
+      final result = await PackageDownloader(
+        client: client,
+        retryStrategy: RetryStrategy.disabled,
+        checkpointPolicy: const PackageDownloadCheckpointPolicy(
+          byteInterval: 1,
+        ),
+      ).download(
+        action: _action(
+          packageUrl: url,
+          packageSizeBytes: 11,
+          sha256: _sha256(utf8.encode('hello world')),
+        ),
+        savePath: savePath,
+      );
+
+      expect(result.code, UpdateErrorCode.packageDownloadFailed);
+      final slot = _checkpointSlot(File('$savePath.download'), 1);
+      final raw = await slot.readAsString();
+      final metadata = jsonDecode(raw) as Map<String, Object?>;
+      expect(metadata['schemaVersion'], 2);
+      expect(
+        metadata['packageUrlSha256'],
+        _sha256(utf8.encode(url.toString())),
+      );
+      expect(metadata.containsKey('packageUrl'), isFalse);
+      expect(raw, isNot(contains('super-secret')));
+      expect(raw, isNot(contains(url.toString())));
     });
 
     test('exhausted transient HTTP retries preserve a durable checkpoint',
@@ -1788,7 +1842,9 @@ void main() {
         totalBytes: 11,
         etag: '"v1"',
         sha256: _sha256(utf8.encode('hello world')),
-        overrides: {'packageUrl': url.toString()},
+        overrides: {
+          'packageUrlSha256': _sha256(utf8.encode(url.toString())),
+        },
       );
 
       try {
@@ -1906,9 +1962,9 @@ Future<void> _writeCheckpointSlot({
   Map<String, Object?> overrides = const {},
 }) async {
   final metadata = <String, Object?>{
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'revision': revision,
-    'packageUrl': 'https://example.com/app.apk',
+    'packageUrlSha256': _sha256(utf8.encode('https://example.com/app.apk')),
     'downloadedBytes': downloadedBytes,
     'packageSizeBytes': packageSizeBytes,
     'sha256': sha256.toLowerCase(),

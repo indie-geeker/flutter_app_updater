@@ -8,6 +8,7 @@ import '../actions/update_action.dart';
 import '../models/update_error_code.dart';
 import '../platform/update_action_cancel_token.dart';
 import '../utils/retry_strategy.dart';
+import 'package_download_lock.dart';
 import 'package_download_result.dart';
 
 export 'package_download_result.dart';
@@ -183,7 +184,7 @@ PackageDownloadCheckpointClock _createCheckpointClock() {
 
 class PackageDownloader {
   static const defaultMaxDownloadBytes = 1024 * 1024 * 1024;
-  static const _checkpointSchemaVersion = 1;
+  static const _checkpointSchemaVersion = 2;
   static const _maxRedirects = 5;
   static final Set<String> _activeSavePaths = <String>{};
 
@@ -281,83 +282,108 @@ class PackageDownloader {
       );
     }
 
-    var retryNumber = 0;
-    var cleanRetryUsed = false;
-    var forceClean = false;
-    while (true) {
-      try {
-        return await _downloadOnce(
-          action: action,
-          targetFile: targetFile,
-          partialFile: partialFile,
-          metadataFile: metadataFile,
-          onProgress: onProgress,
-          cancelToken: cancelToken,
-          forceClean: forceClean,
-        );
-      } on _CleanRetryRequired {
-        if (cleanRetryUsed) {
-          await _cleanupPartialState(partialFile, metadataFile);
-          return const PackageDownloadResult.failure(
-            code: UpdateErrorCode.packageDownloadFailed,
-            message: 'The server rejected both resumed and clean requests.',
+    final PackageDownloadLock? writerLock;
+    try {
+      writerLock = await PackageDownloadLock.tryAcquire(savePath);
+    } on FileSystemException catch (error) {
+      return PackageDownloadResult.failure(
+        code: UpdateErrorCode.packageDownloadFailed,
+        message: error.message,
+      );
+    }
+    if (writerLock == null) {
+      return const PackageDownloadResult.failure(
+        code: UpdateErrorCode.downloadInProgress,
+        message: 'Another process is already writing to this download path.',
+      );
+    }
+
+    try {
+      var retryNumber = 0;
+      var cleanRetryUsed = false;
+      var forceClean = false;
+      while (true) {
+        try {
+          return await _downloadOnce(
+            action: action,
+            targetFile: targetFile,
+            partialFile: partialFile,
+            metadataFile: metadataFile,
+            onProgress: onProgress,
+            cancelToken: cancelToken,
+            forceClean: forceClean,
           );
-        }
-        cleanRetryUsed = true;
-        forceClean = true;
-        await _cleanupPartialState(partialFile, metadataFile);
-        continue;
-      } on _PackageDownloadCanceled {
-        await _cleanupPartialState(partialFile, metadataFile);
-        return const PackageDownloadResult.failure(
-          code: UpdateErrorCode.actionCanceled,
-          message: 'Package download canceled.',
-        );
-      } on _PackageSizeExceeded catch (error) {
-        await _cleanupPartialState(partialFile, metadataFile);
-        return PackageDownloadResult.failure(
-          code: UpdateErrorCode.packageTooLarge,
-          message: error.message,
-        );
-      } on _InvalidResumeResponse catch (error) {
-        await _cleanupPartialState(partialFile, metadataFile);
-        return PackageDownloadResult.failure(
-          code: UpdateErrorCode.packageDownloadFailed,
-          message: error.message,
-        );
-      } catch (error) {
-        if (cancelToken?.isCanceled ?? false) {
+        } on _CleanRetryRequired {
+          if (cleanRetryUsed) {
+            await _cleanupPartialState(partialFile, metadataFile);
+            return const PackageDownloadResult.failure(
+              code: UpdateErrorCode.packageDownloadFailed,
+              message: 'The server rejected both resumed and clean requests.',
+            );
+          }
+          cleanRetryUsed = true;
+          forceClean = true;
+          await _cleanupPartialState(partialFile, metadataFile);
+          continue;
+        } on _PackageDownloadCanceled {
           await _cleanupPartialState(partialFile, metadataFile);
           return const PackageDownloadResult.failure(
             code: UpdateErrorCode.actionCanceled,
             message: 'Package download canceled.',
           );
-        }
-        if (_shouldRetry(error, retryNumber)) {
-          final delay = retryStrategy.getDelay(retryNumber);
-          retryNumber++;
-          forceClean = false;
-          if (delay > Duration.zero) {
-            try {
-              await _waitForRetry(delay, cancelToken);
-            } on _PackageDownloadCanceled {
-              await _cleanupPartialState(partialFile, metadataFile);
-              return const PackageDownloadResult.failure(
-                code: UpdateErrorCode.actionCanceled,
-                message: 'Package download canceled.',
-              );
-            }
-          }
-          continue;
-        }
-        if (!_shouldPreserveCheckpoint(error)) {
+        } on _PackageSizeExceeded catch (error) {
           await _cleanupPartialState(partialFile, metadataFile);
+          return PackageDownloadResult.failure(
+            code: UpdateErrorCode.packageTooLarge,
+            message: error.message,
+          );
+        } on _InvalidResumeResponse catch (error) {
+          await _cleanupPartialState(partialFile, metadataFile);
+          return PackageDownloadResult.failure(
+            code: UpdateErrorCode.packageDownloadFailed,
+            message: error.message,
+          );
+        } catch (error) {
+          if (cancelToken?.isCanceled ?? false) {
+            await _cleanupPartialState(partialFile, metadataFile);
+            return const PackageDownloadResult.failure(
+              code: UpdateErrorCode.actionCanceled,
+              message: 'Package download canceled.',
+            );
+          }
+          if (_shouldRetry(error, retryNumber)) {
+            final delay = retryStrategy.getDelay(retryNumber);
+            retryNumber++;
+            forceClean = false;
+            if (delay > Duration.zero) {
+              try {
+                await _waitForRetry(delay, cancelToken);
+              } on _PackageDownloadCanceled {
+                await _cleanupPartialState(partialFile, metadataFile);
+                return const PackageDownloadResult.failure(
+                  code: UpdateErrorCode.actionCanceled,
+                  message: 'Package download canceled.',
+                );
+              }
+            }
+            continue;
+          }
+          if (!_shouldPreserveCheckpoint(error)) {
+            await _cleanupPartialState(partialFile, metadataFile);
+          }
+          return PackageDownloadResult.failure(
+            code: UpdateErrorCode.packageDownloadFailed,
+            message:
+                error is FileSystemException ? error.message : error.toString(),
+          );
         }
-        return PackageDownloadResult.failure(
-          code: UpdateErrorCode.packageDownloadFailed,
-          message:
-              error is FileSystemException ? error.message : error.toString(),
-        );
+      }
+    } finally {
+      try {
+        await writerLock.release();
+      } on FileSystemException {
+        // Closing the descriptor still releases the OS lock. Preserve the
+        // already determined download result.
       }
     }
   }
@@ -849,7 +875,7 @@ class PackageDownloader {
         slot,
       );
       if (metadata != null &&
-          metadata.packageUrl == action.packageUrl.toString() &&
+          metadata.packageUrlSha256 == _packageUrlSha256(action.packageUrl) &&
           metadata.packageSizeBytes == expectedSize &&
           metadata.sha256 == expectedSha256 &&
           metadata.totalBytes == expectedSize &&
@@ -900,7 +926,7 @@ class PackageDownloader {
       if (data is! Map<String, Object?> ||
           data['schemaVersion'] != _checkpointSchemaVersion ||
           data['revision'] is! int ||
-          data['packageUrl'] is! String ||
+          data['packageUrlSha256'] is! String ||
           data['downloadedBytes'] is! int ||
           data['packageSizeBytes'] is! int ||
           data['sha256'] is! String ||
@@ -915,7 +941,8 @@ class PackageDownloader {
       return _ResumeMetadata(
         slot: slot,
         revision: revision,
-        packageUrl: data['packageUrl']! as String,
+        packageUrlSha256:
+            (data['packageUrlSha256']! as String).trim().toLowerCase(),
         downloadedBytes: data['downloadedBytes']! as int,
         packageSizeBytes: data['packageSizeBytes']! as int,
         sha256: (data['sha256']! as String).trim().toLowerCase(),
@@ -963,7 +990,7 @@ class PackageDownloader {
     final metadata = <String, Object?>{
       'schemaVersion': _checkpointSchemaVersion,
       'revision': nextRevision,
-      'packageUrl': action.packageUrl.toString(),
+      'packageUrlSha256': _packageUrlSha256(action.packageUrl),
       'downloadedBytes': downloadedBytes,
       'packageSizeBytes': action.packageSizeBytes,
       'sha256': _normalizedSha256(action.sha256),
@@ -1164,12 +1191,16 @@ class PackageDownloader {
     }
     return normalized;
   }
+
+  String _packageUrlSha256(Uri url) {
+    return crypto.sha256.convert(utf8.encode(url.toString())).toString();
+  }
 }
 
 class _ResumeMetadata {
   final int slot;
   final int revision;
-  final String packageUrl;
+  final String packageUrlSha256;
   final int downloadedBytes;
   final int packageSizeBytes;
   final String sha256;
@@ -1179,7 +1210,7 @@ class _ResumeMetadata {
   const _ResumeMetadata({
     required this.slot,
     required this.revision,
-    required this.packageUrl,
+    required this.packageUrlSha256,
     required this.downloadedBytes,
     required this.packageSizeBytes,
     required this.sha256,
