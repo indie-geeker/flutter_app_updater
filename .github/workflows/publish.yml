@@ -3,47 +3,42 @@ name: Publish to pub.dev
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*.*.*'
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  full-gate:
+    uses: ./.github/workflows/full-gate.yml
+
+  release-metadata:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@0ca7a949e71ae44c8e688a51c5e7e93b2c87e295 # v2
         with:
           channel: stable
           cache: true
-      - name: Verify tag matches pubspec version
-        shell: bash
-        run: |
-          package_version="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
-          if [[ "v${package_version}" != "${GITHUB_REF_NAME}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match pubspec ${package_version}."
-            exit 1
-          fi
       - name: Install dependencies
         run: flutter pub get
-      - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed .
-      - name: Analyze
-        run: flutter analyze --no-pub
-      - name: Test
-        run: flutter test --no-pub
-      - name: Generate API docs dry-run
-        run: dart doc --dry-run
-      - name: Validate package archive
-        run: flutter pub publish --dry-run
+      - name: Verify tag package and changelog metadata
+        run: dart run tool/ci/verify_release_metadata.dart --tag "$GITHUB_REF_NAME"
+      - name: Require the tagged commit to belong to main
+        shell: bash
+        run: |
+          tag_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          git fetch origin main
+          git merge-base --is-ancestor "$tag_commit" origin/main
 
   publish:
-    needs: validate
+    needs: [full-gate, release-metadata]
     permissions:
       contents: read
       id-token: write
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
     with:
       environment: pub.dev

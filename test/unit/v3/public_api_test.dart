@@ -339,7 +339,10 @@ void main() {
     expect(workflow, contains('GITHUB_REF_NAME'));
     expect(
       workflow,
-      contains('dart-lang/setup-dart/.github/workflows/publish.yml@v1'),
+      contains(
+        'dart-lang/setup-dart/.github/workflows/publish.yml@'
+        '65eb853c7ba17dde3be364c3d2858773e7144260',
+      ),
     );
     expect(workflow, isNot(contains('CREDENTIALS_JSON')));
     expect(workflow, isNot(contains('credentials.json')));

@@ -55,6 +55,9 @@ On the pub.dev package Admin page, automated publishing must be bound to
 GitHub environment `pub.dev`. Protect that environment with a required reviewer.
 
 After CI passes, update `version` and `CHANGELOG.md`, merge the release change,
-then push the matching tag (for example, `v3.0.0`). The publish workflow checks
-the tag against `pubspec.yaml` before calling the official Dart OIDC workflow.
+then push the matching tag (for example, `v3.0.0`). Stable and prerelease tags
+must exactly match a SemVer `pubspec.yaml` version without build metadata and a
+same-version `CHANGELOG.md` heading. The publish workflow fetches full history,
+requires the tagged commit to be an ancestor of `origin/main`, reruns the full
+gate, and verifies metadata before calling the official Dart OIDC workflow.
 No long-lived pub.dev credential belongs in GitHub secrets or repository files.
