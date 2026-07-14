@@ -310,7 +310,7 @@ void main() {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
     expect(pubspec, contains("sdk: '>=3.4.0 <4.0.0'"));
-    expect(pubspec, contains("flutter: '>=3.4.0'"));
+    expect(pubspec, contains("flutter: '>=3.22.0'"));
   });
 
   test('pubspec and native packages contain release metadata', () {
@@ -346,19 +346,25 @@ void main() {
   });
 
   test('CI covers quality gates and native example builds', () {
-    final workflow = File('.github/workflows/ci.yml').readAsStringSync();
+    final ci = File('.github/workflows/ci.yml').readAsStringSync();
+    final workflow = File('.github/workflows/full-gate.yml').readAsStringSync();
 
+    expect(ci, contains('uses: ./.github/workflows/full-gate.yml'));
+    expect(workflow, contains('workflow_call'));
+    expect(workflow, contains('quality-minimum'));
+    expect(workflow, contains('quality-stable'));
     expect(workflow, contains('flutter test --coverage'));
-    expect(workflow, contains('Enforce 80% coverage floor'));
+    expect(workflow, contains('Enforce total and critical 80% coverage'));
     expect(workflow, contains('manifest_fetcher'));
     expect(workflow, contains('package_downloader'));
-    expect(workflow, contains('flutter pub publish --dry-run'));
+    expect(workflow, contains('bash tool/ci/publish_dry_run.sh'));
     expect(workflow, contains('flutter build apk --debug'));
     expect(workflow, contains('macos-latest'));
     expect(workflow, contains('flutter build ios --simulator --debug'));
     expect(workflow, contains('flutter build macos --debug'));
     expect(workflow, contains('windows-latest'));
     expect(workflow, contains('flutter build windows --debug'));
+    expect(workflow, contains('ctest --test-dir'));
     expect(workflow, contains('working-directory: example/android'));
     expect(
       workflow,

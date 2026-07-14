@@ -1,0 +1,203 @@
+name: Full gate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-minimum:
+    name: Quality (minimum Flutter)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read minimum Flutter version
+        id: minimum-flutter
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < tool/ci/flutter_min_version.txt)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.minimum-flutter.outputs.version }}
+          cache: true
+      - name: Install package dependencies
+        run: flutter pub get
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyze package
+        run: flutter analyze --no-pub
+      - name: Test package
+        run: flutter test --no-pub
+      - name: Analyze example
+        working-directory: example
+        run: flutter analyze --no-pub
+      - name: Test example
+        working-directory: example
+        run: flutter test --no-pub
+
+  quality-stable:
+    name: Quality (stable Flutter)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install package dependencies
+        run: flutter pub get
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyze package
+        run: flutter analyze --no-pub
+      - name: Test package with coverage
+        run: flutter test --coverage --no-pub
+      - name: Enforce total and critical 80% coverage
+        shell: bash
+        run: |
+          awk '
+            BEGIN {
+              critical = "(manifest_fetcher|manifest_schema|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
+              expected_critical = 9
+            }
+            /^SF:/ { file = substr($0, 4); lf = 0; lh = 0 }
+            /^LF:/ { lf = substr($0, 4) + 0; total_lf += lf }
+            /^LH:/ { lh = substr($0, 4) + 0; total_lh += lh }
+            /^end_of_record/ {
+              if (file ~ critical) {
+                critical_seen++
+                coverage = lf == 0 ? 0 : 100 * lh / lf
+                printf "%s coverage %.2f%%\n", file, coverage
+                if (coverage < 80) failed = 1
+              }
+            }
+            END {
+              total = total_lf == 0 ? 0 : 100 * total_lh / total_lf
+              printf "Total line coverage: %.2f%%\n", total
+              if (critical_seen != expected_critical) {
+                printf "Expected %d critical files, found %d.\n", expected_critical, critical_seen
+                failed = 1
+              }
+              if (total < 80 || failed) exit 1
+            }
+          ' coverage/lcov.info
+      - name: Generate API docs dry-run
+        run: dart doc --dry-run
+      - name: Analyze example
+        working-directory: example
+        run: flutter analyze --no-pub
+      - name: Test example
+        working-directory: example
+        run: flutter test --no-pub
+      - name: Validate clean committed pub archive
+        run: bash tool/ci/publish_dry_run.sh
+
+  android-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Test lint and merge Android plugin manifest
+        working-directory: example/android
+        run: ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest --console=plain
+      - name: Build Android example
+        working-directory: example
+        run: flutter build apk --debug --no-pub
+
+  ios-example:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Build iOS example for simulator
+        working-directory: example
+        run: flutter build ios --simulator --debug --no-codesign --no-pub
+
+  macos-example:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Build macOS example
+        working-directory: example
+        run: flutter build macos --debug --no-pub
+
+  windows-example:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Build Windows example and native tests
+        working-directory: example
+        run: flutter build windows --debug --no-pub
+      - name: Run Windows native tests
+        working-directory: example
+        run: ctest --test-dir build/windows/x64 -C Debug --output-on-failure
+
+  gate:
+    name: Required full gate
+    if: always()
+    needs:
+      - quality-minimum
+      - quality-stable
+      - android-example
+      - ios-example
+      - macos-example
+      - windows-example
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every gate job to pass
+        shell: bash
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in ${RESULTS}; do
+            if [[ "${result}" != "success" ]]; then
+              echo "A required full-gate job finished with ${result}." >&2
+              exit 1
+            fi
+          done

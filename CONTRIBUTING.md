@@ -13,14 +13,17 @@ compatibility improvements, tests, and documentation corrections are welcome.
 
 ## Local checks
 
-Install the current stable Flutter SDK, then run:
+The supported floor is the exact version in
+`tool/ci/flutter_min_version.txt` (currently Flutter 3.22.0). Changes must pass
+both that version and the current stable Flutter SDK. The canonical automation
+is `.github/workflows/full-gate.yml`; run the stable local subset with:
 
 ```bash
 flutter pub get
 (cd example && flutter pub get)
 dart format --output=none --set-exit-if-changed .
 flutter analyze --no-pub
-flutter test --no-pub
+flutter test --coverage --no-pub
 dart doc --dry-run
 (cd example && flutter analyze --no-pub && flutter test --no-pub)
 (cd example/android && ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest)
@@ -30,8 +33,9 @@ dart doc --dry-run
 Add a failing test before changing behavior. Native changes should also include
 the relevant Android, iOS, macOS, or Windows build/device verification.
 
-Run `flutter pub publish --dry-run` from a temporary package copy that does not
-contain `.git`; the release gate expects zero warnings. For Android background
+Run `bash tool/ci/publish_dry_run.sh` after committing the intended changes. It
+creates a temporary package from `git archive HEAD`, resolves dependencies, and
+requires `flutter pub publish --dry-run` to report zero warnings. For Android background
 download changes, also run the controllable server tests and the full device
 suite documented in
 `tool/verification/android_background_download.md`. The device suite requires
