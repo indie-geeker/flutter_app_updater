@@ -233,6 +233,11 @@ void main() {
 
   test('example demonstrates the convenience flow through the public API', () {
     final example = File('example/lib/main.dart').readAsStringSync();
+    final home = File('example/lib/presentation/example_home_page.dart')
+        .readAsStringSync();
+    final productionController = File(
+      'example/lib/production/production_update_controller.dart',
+    ).readAsStringSync();
     final controller =
         File('example/lib/demo/update_demo_controller.dart').readAsStringSync();
     final manifestFactory =
@@ -241,14 +246,25 @@ void main() {
         .readAsStringSync();
     final examplePubspec = File('example/pubspec.yaml').readAsStringSync();
 
-    expect(example, contains('UpdateSimulatorPage'));
+    expect(example, contains('ExampleHomePage'));
+    expect(home, contains('UpdateSimulatorPage'));
+    expect(home, contains('ProductionIntegrationPage'));
+    expect(productionController, contains('AppUpdater.manifest'));
+    expect(productionController, contains('ManifestSignaturePolicy.required'));
     expect(controller, contains('UpdateSource.staticManifest'));
     expect(controller, contains('await updater.checkAndPrepare()'));
     expect(controller, contains('performRecommendedStream'));
     expect(controller, contains('UpdateActionCancelToken'));
     expect(manifestFactory, contains('DownloadAndInstallPackageAction'));
     expect(simulator, contains('SimulatedUpdateExecutor'));
-    for (final source in [example, controller, manifestFactory, simulator]) {
+    for (final source in [
+      example,
+      home,
+      productionController,
+      controller,
+      manifestFactory,
+      simulator,
+    ]) {
       expect(source, isNot(contains('flutter_app_updater/src/')));
     }
     expect(examplePubspec, contains('version: 1.0.0+1'));

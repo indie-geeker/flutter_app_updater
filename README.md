@@ -415,12 +415,14 @@ Useful error codes include:
 
 ## Example
 
-The bundled example is a configurable update simulator. It lets you vary the
-installed version, available release, required-update policy, platform,
-delivery method, execution duration, and terminal outcome. Version selection
-and policy decisions use the real package flow; network, store, download,
-permission, and installer effects remain deterministic simulations. See
-[`example/README.md`](example/README.md) for scenarios and runnable commands.
+The bundled example opens on a configurable update simulator with no external
+side effects.
+It also includes a separately labeled production integration tab that is
+disabled by default. When explicitly configured, that tab exercises the real
+signed-manifest fetch, verification, identity binding, selection, preparation,
+and user-confirmed action path. See
+[`example/README.md`](example/README.md) for the safety boundary, configuration,
+and runnable commands.
 
 ## Maintainer Verification
 

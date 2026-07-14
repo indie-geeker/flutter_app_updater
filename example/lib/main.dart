@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
-import 'presentation/update_simulator_page.dart';
+import 'presentation/example_home_page.dart';
+import 'production/production_update_configuration.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final ProductionUpdateConfiguration? productionConfiguration;
+
+  const MyApp({super.key, this.productionConfiguration});
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +52,10 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const UpdateSimulatorPage(),
+      home: ExampleHomePage(
+        productionConfiguration: productionConfiguration ??
+            ProductionUpdateConfiguration.fromEnvironment(),
+      ),
     );
   }
 }

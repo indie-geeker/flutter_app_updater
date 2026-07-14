@@ -39,6 +39,21 @@ void main() {
         find.widgetWithText(FilledButton, 'Check for update'), findsOneWidget);
   });
 
+  testWidgets('keeps the simulator default and production flow opt-in',
+      (tester) async {
+    await tester.pumpWidget(const MyApp());
+
+    expect(find.text('Installed application'), findsOneWidget);
+    expect(find.text('Production integration disabled'), findsNothing);
+
+    await tester.tap(find.text('Production'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Production integration disabled'), findsOneWidget);
+    expect(find.text('ENABLE_PRODUCTION_UPDATE_EXAMPLE'), findsOneWidget);
+    expect(find.text('Check production update'), findsNothing);
+  });
+
   testWidgets('platform selection constrains available delivery methods',
       (tester) async {
     await tester.pumpWidget(const MyApp());

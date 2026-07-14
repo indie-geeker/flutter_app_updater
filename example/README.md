@@ -70,11 +70,41 @@ The required-update dialog includes a clearly labeled **Reset simulation**
 escape. That control exists only so the example cannot trap the person testing
 it; a real host application decides its own required-update escape policy.
 
+## Opt-in production integration
+
+The **Production** tab is disabled by default. When explicitly enabled, it uses
+runtime package metadata and the package's real signed-manifest path: fetch,
+Ed25519 verification, parse, application-identity binding, release selection,
+and preparation. A check never executes an action. The page shows a separate
+confirmation containing the action type, destination host, package or installer
+type, exact size, SHA-256 digest, and distribution policy before it can call the
+recommended executor.
+
+Supply configuration at build time. Public verification keys are safe to embed;
+never put a signing seed or private key in `--dart-define`, source control, or the
+application binary.
+
+```bash
+cd example
+flutter run \
+  --dart-define=ENABLE_PRODUCTION_UPDATE_EXAMPLE=true \
+  --dart-define=UPDATE_MANIFEST_URL=https://updates.example.com/manifest.json \
+  --dart-define=UPDATE_EXPECTED_APP_ID=com.example.app \
+  --dart-define=UPDATE_CHANNEL=stable \
+  --dart-define=UPDATE_ARCHITECTURE=arm64 \
+  --dart-define='UPDATE_MANIFEST_PUBLIC_KEYS={"release-2026-01":"<base64-public-key>"}'
+```
+
+All enabled configurations require an absolute HTTPS manifest URL, an exact
+runtime application ID, and at least one raw 32-byte Ed25519 public key encoded
+as Base64. Invalid configuration is rendered as a structured
+`CONFIGURATION_INVALID` result instead of escaping the widget tree.
+
 ## Package and example boundary
 
-The package remains UI-free. The form, dialogs, controller, generated data, and
-simulated executor live entirely under `example/lib/`. Production applications
-should provide their own presentation and use real manifest and platform
+The package remains UI-free. Both example presentations, their controllers,
+generated data, and the simulated executor live entirely under `example/lib/`.
+Production applications should provide their own presentation and choose
 executors appropriate to their distribution channel.
 
 ## Run and verify
