@@ -208,27 +208,27 @@ void main() {
     expect(readme, contains('checkAndPrepare'));
     expect(readme, contains('performRecommended'));
     expect(readme, contains('downloadAndInstallPackage'));
-    expect(readme, contains('Play In-App Updates'));
-    expect(readme, contains('Planned'));
+    expect(readme, isNot(contains('Play In-App Updates')));
+    expect(readme, isNot(contains('| OHOS |')));
     expect(
         readme, isNot(contains('Remote manifest fetching is not implemented')));
     expect(readme, contains('storeUrl'));
     expect(readme, contains('packageUrl'));
     expect(readme, contains('installerUrl'));
-    expect(readme, isNot(contains('required SHA-256')));
+    expect(readme, contains('required SHA-256'));
     expect(readme, contains('signature'));
     expect(readme, isNot(contains('downloadUrl')));
     expect(readme, isNot(contains('artifactUri')));
     expect(readme.toLowerCase(), isNot(contains('md5')));
     expect(readme, isNot(contains('Windows | URL handler support')));
-    expect(readme, contains('Windows | Unsupported'));
+    expect(readme, contains('| Windows | Unsupported'));
     expect(readme, contains('configurable update simulator'));
     expect(readme, contains('doc/migration-v2-to-v3.md'));
     expect(readme, contains('doc/security-model.md'));
     expect(exampleReadme, contains('Update Simulator'));
     expect(exampleReadme, contains('No external side effects'));
     expect(exampleReadme, isNot(contains('Safe preview')));
-    expect(exampleReadme, isNot(contains('Remote manifest')));
+    expect(exampleReadme, contains('real signed-manifest path'));
   });
 
   test('example demonstrates the convenience flow through the public API', () {

@@ -22,8 +22,7 @@ streaming executor. Running it does not:
 
 Reserved `.invalid` URLs make accidental external execution fail closed.
 The simulator does not imitate process death, JobScheduler, foreground-service
-lifecycle, force-stop, reboot, or OEM background restrictions. Use the Android
-device integration suite below for the real native background path.
+lifecycle, force-stop, reboot, or OEM background restrictions.
 
 ## Configure a scenario
 
@@ -75,10 +74,10 @@ it; a real host application decides its own required-update escape policy.
 The **Production** tab is disabled by default. When explicitly enabled, it uses
 runtime package metadata and the package's real signed-manifest path: fetch,
 Ed25519 verification, parse, application-identity binding, release selection,
-and preparation. A check never executes an action. The page shows a separate
-confirmation containing the action type, destination host, package or installer
-type, exact size, SHA-256 digest, and distribution policy before it can call the
-recommended executor.
+and preparation. A check never executes an action. A separate confirmation
+shows the action type, destination host, package or installer type, exact size,
+SHA-256 digest, and distribution policy before it can call the recommended
+executor.
 
 Supply configuration at build time. Public verification keys are safe to embed;
 never put a signing seed or private key in `--dart-define`, source control, or the
@@ -119,48 +118,12 @@ flutter analyze --no-pub
 flutter test --no-pub
 ```
 
-The integration test keeps a native method-channel smoke check and verifies
-that the simulator launches. Run it on a configured device or simulator:
-
-```bash
-flutter test integration_test/plugin_integration_test.dart
-```
-
-## Android background download device suite
-
 The example Android manifest opts into the permissions, services, and receiver
 required by the advanced Android-only background API. This is test-host setup,
 not a permission or component automatically added by the plugin.
 
-First run the native plugin gate from `example/android`:
+Run the native plugin automation from `example/android`:
 
 ```bash
 ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
 ```
-
-The full device suite, including install preparation, must use a real APK with
-the same package name and signing identity as the app installed by the test.
-From the package root:
-
-```bash
-cd example
-flutter build apk --debug
-cd ..
-dart run tool/verification/android_background_download_server.dart \
-  --port 18080 \
-  --artifact example/build/app/outputs/flutter-apk/app-debug.apk
-```
-
-In another terminal, forward the loopback server and run the integration test:
-
-```bash
-adb reverse tcp:18080 tcp:18080
-cd example
-flutter test integration_test/android_background_download_test.dart -d <device-id>
-```
-
-The server's built-in deterministic payload is only for host-side protocol
-tests; it is not a valid artifact for the device integration suite. Record the
-device model, API level, ROM/build, battery mode, and notification state as
-described in
-[`tool/verification/android_background_download.md`](../tool/verification/android_background_download.md).

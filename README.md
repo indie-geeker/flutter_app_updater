@@ -13,9 +13,6 @@ Stable v3 scope:
 - macOS: Mac App Store URL, DMG and ZIP installer download then open.
 - Windows: MSIX, MSI, and EXE installer download then open.
 
-Future work, not registered or exposed by the stable runtime: Play In-App
-Updates, OHOS, and Linux installer flows.
-
 ## Install
 
 ```yaml
@@ -36,6 +33,10 @@ final updater = AppUpdater.manifest(
   architecture: 'arm64',
   channel: 'stable',
   downloadDirectory: downloadDirectory,
+  distributionPolicy: UpdateDistributionPolicy.any,
+  signaturePolicy: ManifestSignaturePolicy.required(
+    trustedPublicKeys: trustedManifestPublicKeys,
+  ),
 );
 
 final result = await updater.checkAndPrepare();
@@ -94,18 +95,28 @@ result is sufficient.
 
 ## Network and artifact safety
 
-- Manifest requests accept only absolute HTTP(S) URLs, default to 10-second
-  connection and 20-second request timeouts, retry transient failures, and cap
-  responses at 1 MiB.
-- Self-hosted artifact executors require HTTPS outside localhost.
+- Remote manifests and artifacts require absolute HTTPS URLs. Plain HTTP is an
+  opt-in loopback-only development exception. Redirects are limited to five,
+  every target is revalidated, HTTPS cannot downgrade to HTTP, and sensitive
+  request headers cross only a same-origin redirect.
+- Remote self-hosted actions require exact byte size and a required SHA-256
+  digest, plus an authenticated Ed25519 envelope before payload parsing. The
+  declared size must be positive.
 - Downloads use 30-second request and idle timeouts, retry transient failures,
   preserve validated ETag/Last-Modified resume state, and default to a 1 GiB
-  maximum. Concurrent writes to the same target path are rejected.
+  maximum. A URL fingerprint protects checkpoint privacy, and a process guard
+  plus persistent operating-system lock reject competing writers.
 - Declared artifact sizes must be positive and are enforced before and during
   streaming. Cancellation, size violations, and hash mismatches remove partial
   files.
-- `sha256` remains optional for general compatibility. Commercial direct
-  downloads should publish both the exact size and SHA-256 value.
+- The manifest `appId`, platform, channel, and architecture are checked before
+  action selection. Unknown runtime architecture fails closed for an
+  architecture-specific release; only a genuinely universal release matches.
+- Actions remain in publisher order. Host `UpdateDistributionPolicy` and
+  executor capability filtering remove disallowed actions without reordering;
+  the first remaining action is recommended. Use
+  `UpdateDistributionPolicy.storeOnly` or
+  `UpdateDistributionPolicy.selfHostedOnly` to make the host boundary explicit.
 
 ## Manifest v3
 
@@ -131,7 +142,8 @@ result is sufficient.
           "type": "downloadAndInstallPackage",
           "packageUrl": "https://example.com/app.apk",
           "packageType": "apk",
-          "packageSizeBytes": 25600000
+          "packageSizeBytes": 25600000,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ]
     }
@@ -150,7 +162,12 @@ Direct field names:
 - `releasedAt`
 - `sha256`
 
-`sha256` is optional. When it is present, the downloaded file is checked before the action continues. When it is absent, the package still downloads and installs.
+This JSON is the signed payload, not the network response. For self-hosted
+actions, encode the exact payload bytes in a versioned Ed25519 envelope with
+`keyId`, `issuedAt`, `expiresAt`, `payload`, and `signature`. Rotate keys by
+shipping an overlap period in which the host trusts both key IDs. Bare remote
+manifests are accepted only for official-store-only actions when the host uses
+the optional signature policy.
 
 ## Recipes
 
@@ -199,7 +216,7 @@ Use one action when you want the package to download and then start Android inst
   "packageUrl": "https://example.com/app.apk",
   "packageType": "apk",
   "packageSizeBytes": 25600000,
-  "sha256": "optional-file-hash"
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 ```
 
@@ -209,17 +226,17 @@ Use separate actions when your app wants to download now and install later:
 {
   "type": "downloadPackage",
   "packageUrl": "https://example.com/app.apk",
-  "packageType": "apk"
+  "packageType": "apk",
+  "packageSizeBytes": 25600000,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 ```
 
-```json
-{
-  "type": "installPackage",
-  "packagePath": "/local/path/app.apk",
-  "packageType": "apk"
-}
-```
+Remote manifests cannot request installation of an arbitrary local path. A
+host may construct an `InstallPackageAction` only at a trusted typed boundary,
+for example after its own verified download. Android revalidates expected size,
+SHA-256, package identity, and signing lineage immediately before installer
+handoff.
 
 ## Advanced Android-only background downloads
 
@@ -339,10 +356,7 @@ pressure, and OEM process management can stop or reject execution.
 
 The implementation does not use or promise WorkManager or DownloadManager,
 does not request battery exemptions, and does not promise uninterrupted
-background execution on any OEM family. Record exact model, API level,
-ROM/build, battery mode, and notification state during device qualification.
-See [the verification matrix](tool/verification/android_background_download.md)
-for reproducible protocol and device checks.
+background execution on any OEM family.
 
 ### iOS App Store
 
@@ -372,14 +386,12 @@ Supported stable installer types:
 
 ## Platform Matrix
 
-| Platform | Official store | Chinese markets | Package download | Package install | Desktop installer | Play In-App Updates |
-| --- | --- | --- | --- | --- | --- | --- |
-| Android | Stable | Stable | Stable | Stable | Not applicable | Planned |
-| iOS | Stable | Not applicable | Unsupported | Unsupported | Not applicable | Not applicable |
-| macOS | Stable | Not applicable | Stable | Unsupported | Stable | Not applicable |
-| Windows | Unsupported | Not applicable | Stable | Unsupported | Stable | Not applicable |
-| OHOS | Planned | Planned | Planned | Planned | Not applicable | Not applicable |
-| Linux | Planned | Not applicable | Planned | Planned | Planned | Not applicable |
+| Platform | Official store | Chinese markets | Package download | Package install | Desktop installer |
+| --- | --- | --- | --- | --- | --- |
+| Android | Stable | Stable | Stable | Stable | Not applicable |
+| iOS | Stable | Not applicable | Unsupported | Unsupported | Not applicable |
+| macOS | Stable | Not applicable | Stable | Unsupported | Stable |
+| Windows | Unsupported | Not applicable | Stable | Unsupported | Stable |
 
 Unsupported actions return structured failures instead of throwing platform exceptions through the public API.
 
@@ -426,16 +438,22 @@ and runnable commands.
 
 ## Maintainer Verification
 
+The supported floor is Flutter 3.22.0. The reusable full gate tests that exact
+version and current stable Flutter, validates root/example analysis and tests,
+enforces total and critical coverage at 80%, generates API docs, builds every
+registered platform example, runs Android and Windows native tests, and checks a
+clean publish archive.
+
 ```bash
-dart format --output=none --set-exit-if-changed .
-flutter analyze
-flutter test --coverage
+flutter pub get
+(cd example && flutter pub get)
+dart format --output=none --set-exit-if-changed lib test example/lib example/test example/integration_test tool
+flutter analyze --no-pub
+flutter test --coverage --no-pub
 dart doc --dry-run
-flutter pub publish --dry-run
-flutter analyze example
-(cd example && flutter test)
-(cd example && flutter build apk --debug)
-(cd example && flutter build macos --debug)
+(cd example && flutter analyze --no-pub && flutter test --no-pub)
+(cd example && flutter build apk --debug --no-pub)
+bash tool/ci/publish_dry_run.sh
 ```
 
 The Android-native reliability gate runs from `example/android`:
@@ -444,9 +462,15 @@ The Android-native reliability gate runs from `example/android`:
 ../../android/gradlew :flutter_app_updater:testDebugUnitTest :flutter_app_updater:lintDebug :app:processDebugMainManifest
 ```
 
-CI also builds the Windows example. Store opening, Android package permission,
-APK installation, and desktop installer launch still require targeted device or
-host smoke tests before a production release.
+For a release, update `pubspec.yaml` and `CHANGELOG.md`, merge the release commit
+to `main`, and tag that exact commit as `v<version>`. The publish workflow runs
+the same full gate and requires tag, version, CHANGELOG, and `origin/main`
+ancestry to agree. Validate locally with:
+
+```bash
+version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+dart run tool/ci/verify_release_metadata.dart --tag "v$version"
+```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and
 [SECURITY.md](SECURITY.md) for private vulnerability reporting.

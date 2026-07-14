@@ -1,31 +1,29 @@
 ## Unreleased
 
-* **Breaking**: Remove the unfinished Play In-App Updates action/channel surface and OHOS plugin registration from the unpublished v3 API.
-* **Feature**: Add an advanced Android-only API for one persistent, user-visible APK download with durable status, progress observation, explicit resume, cancel, and removal.
-* **Reliability**: Add native checkpoint recovery, strict HTTP Range and strong-validator handling, byte/disk limits, SHA-256 verification, and process-start reconciliation.
-* **Android**: Use a host-opted-in visible foreground service started through the API-appropriate service entry point on API 21-33, and user-initiated data transfer jobs on API 34+, with visible retry and cancel actions.
-* **Safety**: Keep installation separate from download completion and revalidate file size, hash, package identity, and signing lineage before returning an install action.
-* **Testing**: Add Android unit/lint/merged-manifest CI gates plus a controllable protocol harness and an evidence template for future real-device qualification.
-* **Documentation**: Document host-owned manifest and notification setup, server requirements, Play policy implications, and force-stop, reboot, and OEM execution limits.
-* **Documentation**: Add a v2-to-v3 migration guide and a complete remote update security model.
+No changes yet.
 
-## 3.0.0 - 2026-07-10
+## 3.0.0 - 2026-07-13
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
-* **Breaking**: Make package and installer hashes optional; hashes are verified only when supplied.
+* **Breaking**: Remove unfinished platform surfaces and require strict architecture matching for architecture-specific releases.
+* **Breaking**: Require positive exact sizes and SHA-256 digests for remote packages and installers; forbid remote local-path installation actions.
 * **Feature**: Add package install and download-then-install actions for Android self-hosted APK flows.
 * **Feature**: Add `AppUpdater.manifest`, `checkAndPrepare`, and `performRecommended` as the default UI-free integration flow.
-* **Feature**: Add manifest v3 parsing, validation, and release selection.
+* **Feature**: Add manifest v3 parsing, application identity binding, validation, ordered release selection, host distribution policy, and executor capability filtering.
 * **Feature**: Add official store actions for App Store, Mac App Store, and Google Play URLs.
 * **Feature**: Add Chinese Android market descriptors and Android market opening support.
-* **Feature**: Add SHA-256 verified package downloads with resume safety metadata.
+* **Security**: Require trusted HTTPS transport and bounded redirects, authenticate self-hosted manifests with versioned Ed25519 envelopes, and support two-key rotation through `keyId`.
+* **Security**: Add native APK identity and signing-lineage verification before every Android installer handoff.
+* **Feature**: Add SHA-256 verified downloads with private URL-fingerprint checkpoint metadata and cross-process writer ownership.
 * **Feature**: Add desktop installer actions for verified Windows and macOS installers.
-* **Documentation**: Rewrite README and example around the v3 action model.
+* **Feature**: Add an advanced Android-only API for one persistent, user-visible APK download with durable status, progress observation, explicit resume, cancel, and removal.
+* **Reliability**: Add native checkpoint recovery, strict HTTP Range and strong-validator handling, byte/disk limits, bounded retries, and process-start reconciliation.
+* **Android**: Use a host-opted-in visible foreground service on API 21-33 and user-initiated data transfer jobs on API 34+, with visible retry and cancel actions.
+* **Example**: Add a network-free simulator with ordered actions, cancellation, failure recovery, and a separately enabled production integration using the signed-manifest path.
+* **Documentation**: Add complete public Dartdoc, a v2-to-v3 migration guide, and a remote update security model.
 * **Safety**: Make Android package-install permission opt-in and exclude machine-local platform configuration from published archives.
-* **Safety**: Bind manifests to an expected application ID and validate release versions, artifact sizes, URL schemes, response limits, and download limits.
-* **Reliability**: Add bounded manifest retries/timeouts plus resumable download retries, request/idle timeouts, active cancellation, concurrent-target protection, progress events, and partial-file cleanup.
-* **Example**: Add a network-free preview executor and an explicit remote mode covering policy, progress, cancellation, and structured failures.
-* **Release**: Add pub.dev OIDC publishing, Android/iOS/macOS/Windows CI builds, enforced coverage floors, dependency updates, and open-source governance files.
+* **Release**: Unify CI and publishing behind one full quality gate covering minimum/stable Flutter, root/example checks, coverage, docs, clean archive validation, native tests, and platform builds.
+* **Release**: Add tag/version/CHANGELOG/main-ancestry release provenance checks, immutable workflow action pins, download checksums, Dependabot coverage, and pub.dev OIDC publishing.
 
 ## 2.1.0
 

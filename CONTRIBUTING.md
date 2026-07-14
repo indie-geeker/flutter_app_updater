@@ -31,16 +31,11 @@ dart doc --dry-run
 ```
 
 Add a failing test before changing behavior. Native changes should also include
-the relevant Android, iOS, macOS, or Windows build/device verification.
+the relevant Android, iOS, macOS, or Windows automated build and test gate.
 
 Run `bash tool/ci/publish_dry_run.sh` after committing the intended changes. It
 creates a temporary package from `git archive HEAD`, resolves dependencies, and
-requires `flutter pub publish --dry-run` to report zero warnings. For Android background
-download changes, also run the controllable server tests and the full device
-suite documented in
-`tool/verification/android_background_download.md`. The device suite requires
-a real APK matching the installed test app's package and signing identity; the
-server's built-in payload is only for host-side protocol tests.
+requires `flutter pub publish --dry-run` to report zero warnings.
 
 ## Pull requests
 
@@ -61,3 +56,10 @@ same-version `CHANGELOG.md` heading. The publish workflow fetches full history,
 requires the tagged commit to be an ancestor of `origin/main`, reruns the full
 gate, and verifies metadata before calling the official Dart OIDC workflow.
 No long-lived pub.dev credential belongs in GitHub secrets or repository files.
+
+Verify the version and changelog contract locally before tagging:
+
+```bash
+version="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+dart run tool/ci/verify_release_metadata.dart --tag "v$version"
+```
