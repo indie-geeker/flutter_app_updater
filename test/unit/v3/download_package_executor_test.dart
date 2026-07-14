@@ -28,6 +28,7 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
         sha256: crypto.sha256.convert(bytes).toString(),
       );
       final executor = DownloadPackageExecutor(
@@ -57,6 +58,7 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
         sha256: 'a' * 64,
       );
       final executor = DownloadPackageExecutor(
@@ -79,11 +81,14 @@ void main() {
       expect(result.code, UpdateErrorCode.packageDownloadFailed);
     });
 
-    test('downloads package actions without SHA-256', () async {
+    test('downloads package actions with required integrity metadata',
+        () async {
       final bytes = utf8.encode('package bytes');
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
+        sha256: crypto.sha256.convert(bytes).toString(),
       );
       final executor = DownloadPackageExecutor(
         downloadDirectory: tempDir.path,
@@ -105,7 +110,7 @@ void main() {
       expect(result.file!.path, endsWith('${Platform.pathSeparator}app.apk'));
       expect(await result.file!.readAsBytes(), bytes);
       expect(result.downloadedBytes, bytes.length);
-      expect(result.sha256, isNull);
+      expect(result.sha256, action.sha256);
     });
 
     test('replaces reserved or mismatched artifact file names', () async {
@@ -120,6 +125,8 @@ void main() {
         final action = DownloadPackageAction(
           packageUrl: url,
           packageType: PackageType.apk,
+          packageSizeBytes: bytes.length,
+          sha256: crypto.sha256.convert(bytes).toString(),
         );
         final executor = DownloadPackageExecutor(
           downloadDirectory: tempDir.path,
@@ -139,7 +146,10 @@ void main() {
         expect(result.isSuccess, isTrue);
         expect(
           result.file!.path,
-          endsWith('${Platform.pathSeparator}package-download.apk'),
+          endsWith(
+            '${Platform.pathSeparator}package-'
+            '${crypto.sha256.convert(bytes).toString().substring(0, 12)}.apk',
+          ),
         );
       }
     });
@@ -149,6 +159,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
+        sha256: crypto.sha256.convert(bytes).toString(),
       );
       final executor = DownloadPackageExecutor(
         downloadDirectory: tempDir.path,
@@ -187,6 +199,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final executor = DownloadPackageExecutor(
         downloadDirectory: tempDir.path,

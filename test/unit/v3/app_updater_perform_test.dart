@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_interface.dart';
@@ -57,6 +58,7 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
         sha256: 'a' * 64,
       );
       final updater = _updater(executors: [executor]);
@@ -121,6 +123,8 @@ void main() {
         DownloadPackageAction(
           packageUrl: _serverUri(server, '/app.apk'),
           packageType: PackageType.apk,
+          packageSizeBytes: _packageBytes('/app.apk').length,
+          sha256: sha256.convert(_packageBytes('/app.apk')).toString(),
         ),
       );
       final installResult = await androidUpdater.perform(
@@ -130,12 +134,16 @@ void main() {
         DownloadAndInstallPackageAction(
           packageUrl: _serverUri(server, '/combined.apk'),
           packageType: PackageType.apk,
+          packageSizeBytes: _packageBytes('/combined.apk').length,
+          sha256: sha256.convert(_packageBytes('/combined.apk')).toString(),
         ),
       );
       final installerResult = await windowsUpdater.perform(
         OpenInstallerAction(
           installerUrl: _serverUri(server, '/app.msi'),
           installerType: InstallerType.msi,
+          installerSizeBytes: _packageBytes('/app.msi').length,
+          sha256: sha256.convert(_packageBytes('/app.msi')).toString(),
         ),
       );
 
@@ -202,12 +210,14 @@ class _PackageServer {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) {
       request.response.statusCode = HttpStatus.ok;
-      request.response.add(utf8.encode('package:${request.uri.path}'));
+      request.response.add(_packageBytes(request.uri.path));
       request.response.close();
     });
     return server;
   }
 }
+
+List<int> _packageBytes(String path) => utf8.encode('package:$path');
 
 Uri _serverUri(HttpServer server, String path) {
   return Uri.parse('http://127.0.0.1:${server.port}$path');

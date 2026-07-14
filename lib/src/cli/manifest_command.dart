@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../manifest/manifest_schema.dart';
+import '../manifest/manifest_parser.dart';
+import '../manifest/remote_manifest_policy.dart';
 
 class CliCommandResult {
   final int exitCode;
@@ -42,6 +43,8 @@ class ManifestCommand {
               'packageUrl': 'https://example.com/app.apk',
               'packageType': 'apk',
               'packageSizeBytes': 25600000,
+              'sha256': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+                  'aaaaaaaaaaaaaaaa',
             },
           ],
         },
@@ -60,13 +63,19 @@ class ManifestCommand {
       }
 
       final decoded = jsonDecode(await file.readAsString());
-      const ManifestSchema().validate(_asStringMap(decoded));
+      final manifest = const ManifestParser().parse(_asStringMap(decoded));
+      const RemoteManifestPolicy().validate(manifest);
 
       return const CliCommandResult(
         exitCode: 0,
         stdout: 'Manifest valid\n',
       );
     } on ManifestParseException catch (error) {
+      return CliCommandResult(
+        exitCode: 1,
+        stderr: '${error.code.value}: ${error.message}\n',
+      );
+    } on RemoteManifestPolicyException catch (error) {
       return CliCommandResult(
         exitCode: 1,
         stderr: '${error.code.value}: ${error.message}\n',

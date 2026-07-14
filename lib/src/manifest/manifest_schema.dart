@@ -108,18 +108,21 @@ class ManifestSchema {
       case 'downloadPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
-        _optionalPositiveInt(action, 'packageSizeBytes');
+        _requiredPositiveInt(action, 'packageSizeBytes');
+        _requiredSha256(action);
       case 'installPackage':
         _requiredString(action, 'packagePath');
         _optionalString(action, 'packageType');
       case 'downloadAndInstallPackage':
         _requiredAbsoluteUrl(action, 'packageUrl');
         _requiredString(action, 'packageType');
-        _optionalPositiveInt(action, 'packageSizeBytes');
+        _requiredPositiveInt(action, 'packageSizeBytes');
+        _requiredSha256(action);
       case 'openInstaller':
         _requiredAbsoluteUrl(action, 'installerUrl');
         _requiredString(action, 'installerType');
-        _optionalPositiveInt(action, 'installerSizeBytes');
+        _requiredPositiveInt(action, 'installerSizeBytes');
+        _requiredSha256(action);
       default:
         throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,
@@ -229,17 +232,26 @@ class ManifestSchema {
     );
   }
 
-  int? _optionalPositiveInt(Map<String, Object?> map, String field) {
+  int _requiredPositiveInt(Map<String, Object?> map, String field) {
     final value = map[field];
-    if (value == null) {
-      return null;
-    }
     if (value is int && value > 0) {
       return value;
     }
     throw ManifestParseException(
-      code: UpdateErrorCode.manifestInvalid,
-      message: '$field must be a positive integer.',
+      code: value == null
+          ? UpdateErrorCode.missingRequiredField
+          : UpdateErrorCode.manifestInvalid,
+      message: '$field is required and must be a positive integer.',
     );
+  }
+
+  void _requiredSha256(Map<String, Object?> map) {
+    final value = _requiredString(map, 'sha256');
+    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value)) {
+      throw const ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'sha256 must contain exactly 64 hexadecimal characters.',
+      );
+    }
   }
 }

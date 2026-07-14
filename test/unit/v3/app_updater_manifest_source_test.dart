@@ -141,6 +141,32 @@ void main() {
       );
     });
 
+    test('rejects remote actions that violate the remote policy', () async {
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+        ),
+        manifestFetcher: _FakeManifestFetcher(
+          _manifestJson(
+            version: '2.0.0',
+            action: {
+              'type': 'installPackage',
+              'packagePath': '/tmp/untrusted.apk',
+            },
+          ),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.unsupportedActionType,
+      );
+    });
+
     test('invalid installed version is configurationInvalid for both sources',
         () async {
       for (final updater in _updatersForManifest(
@@ -303,6 +329,7 @@ Map<String, Object?> _manifestJson({
   required String version,
   String appId = 'com.example.app',
   String? minSupportedVersion,
+  Map<String, Object?>? action,
 }) {
   return {
     'schemaVersion': 3,
@@ -320,12 +347,13 @@ Map<String, Object?> _manifestJson({
         if (minSupportedVersion != null)
           'policy': {'minSupportedVersion': minSupportedVersion},
         'actions': [
-          {
-            'type': 'openStore',
-            'store': 'googlePlay',
-            'storeUrl':
-                'https://play.google.com/store/apps/details?id=com.example.app',
-          },
+          action ??
+              {
+                'type': 'openStore',
+                'store': 'googlePlay',
+                'storeUrl':
+                    'https://play.google.com/store/apps/details?id=com.example.app',
+              },
         ],
       },
     ],

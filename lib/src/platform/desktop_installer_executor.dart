@@ -210,8 +210,8 @@ class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
       return safeFileName;
     }
 
-    final normalizedSha256 = action.sha256?.toLowerCase().trim();
-    final prefix = normalizedSha256 == null || normalizedSha256.isEmpty
+    final normalizedSha256 = action.sha256.toLowerCase().trim();
+    final prefix = normalizedSha256.isEmpty
         ? 'download'
         : normalizedSha256.length >= 12
             ? normalizedSha256.substring(0, 12)

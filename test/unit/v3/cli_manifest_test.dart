@@ -121,7 +121,7 @@ void main() {
       expect(result.stderr, contains('packageType'));
     });
 
-    test('verifies downloadAndInstallPackage actions without sha256', () async {
+    test('rejects downloadAndInstallPackage actions without sha256', () async {
       final manifestFile = await _writeManifest(
         tempDir,
         _manifestWithAction({
@@ -133,8 +133,26 @@ void main() {
 
       final result = await const ManifestCommand().verify(manifestFile.path);
 
-      expect(result.exitCode, 0);
-      expect(result.stdout, contains('Manifest valid'));
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
+    });
+
+    test('applies the same remote store policy as runtime validation',
+        () async {
+      final manifestFile = await _writeManifest(
+        tempDir,
+        _manifestWithAction({
+          'type': 'openStore',
+          'store': 'googlePlay',
+          'storeUrl': 'https://evil.example.com/google-play',
+        }),
+      );
+
+      final result = await const ManifestCommand().verify(manifestFile.path);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('MANIFEST_INVALID'));
+      expect(result.stderr, contains('storeUrl host'));
     });
 
     test('rejects relative action URLs', () async {

@@ -6,6 +6,7 @@ import '../actions/update_action.dart';
 import '../download/package_downloader.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
+import '../manifest/remote_manifest_policy.dart';
 import '../models/update_distribution_policy.dart';
 import '../platform/android_market_executor.dart';
 import '../models/update_candidate.dart';
@@ -152,6 +153,7 @@ class AppUpdater {
               'expected appId ${manifestSource.expectedAppId}.',
         );
       }
+      const RemoteManifestPolicy().validate(manifest);
       return _selectManifest(manifest, effectiveSelector, effectiveExecutors);
     } on FormatException catch (error) {
       return UpdateCheckFailed(
@@ -159,6 +161,11 @@ class AppUpdater {
         message: error.message,
       );
     } on ManifestParseException catch (error) {
+      return UpdateCheckFailed(
+        code: error.code,
+        message: error.message,
+      );
+    } on RemoteManifestPolicyException catch (error) {
       return UpdateCheckFailed(
         code: error.code,
         message: error.message,

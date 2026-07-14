@@ -107,6 +107,7 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
         sha256: 'a' * 64,
       );
 

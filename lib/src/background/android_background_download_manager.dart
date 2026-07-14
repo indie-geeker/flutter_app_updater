@@ -25,8 +25,8 @@ class AndroidBackgroundDownloadManager {
       () => _platform.startBackgroundDownload(
         packageUrl: action.packageUrl,
         packageType: action.packageType,
-        packageSizeBytes: action.packageSizeBytes!,
-        sha256: action.sha256!.trim().toLowerCase(),
+        packageSizeBytes: action.packageSizeBytes,
+        sha256: action.sha256.trim().toLowerCase(),
       ),
       fallbackCode: UpdateErrorCode.backgroundDownloadStartRejected,
     );
@@ -322,17 +322,15 @@ class AndroidBackgroundDownloadManager {
       );
     }
     final size = action.packageSizeBytes;
-    if (size == null ||
-        size <= 0 ||
-        size > PackageDownloader.defaultMaxDownloadBytes) {
+    if (size <= 0 || size > PackageDownloader.defaultMaxDownloadBytes) {
       throw ArgumentError.value(
         size,
         'action.packageSizeBytes',
         'Must be exact, positive, and within the default download limit.',
       );
     }
-    final sha256 = action.sha256?.trim();
-    if (sha256 == null || !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(sha256)) {
+    final sha256 = action.sha256.trim();
+    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(sha256)) {
       throw ArgumentError.value(
         action.sha256,
         'action.sha256',

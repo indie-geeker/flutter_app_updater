@@ -11,6 +11,7 @@ void main() {
       packageUrl: Uri.parse('https://download.example.invalid/app.apk'),
       packageType: PackageType.apk,
       packageSizeBytes: 100,
+      sha256: 'a' * 64,
     );
   });
 
@@ -117,6 +118,8 @@ void main() {
       OpenInstallerAction(
         installerUrl: Uri.parse('https://download.example.invalid/app.msix'),
         installerType: InstallerType.msix,
+        installerSizeBytes: 100,
+        sha256: 'a' * 64,
       ),
     ];
 

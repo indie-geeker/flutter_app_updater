@@ -71,11 +71,6 @@ void main() {
           packageSizeBytes: 1,
           sha256: 'a' * 64,
         ),
-        DownloadPackageAction(
-          packageUrl: Uri.parse('https://example.com/update.apk'),
-          packageType: PackageType.apk,
-          sha256: 'a' * 64,
-        ),
         _action(size: 0),
         _action(size: PackageDownloader.defaultMaxDownloadBytes + 1),
         _action(sha256: 'not-a-sha'),

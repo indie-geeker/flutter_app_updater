@@ -27,11 +27,13 @@ void main() {
     final packageAction = DownloadPackageAction(
       packageUrl: Uri.parse('https://example.com/app.apk'),
       packageType: PackageType.apk,
+      packageSizeBytes: 42,
       sha256: 'a' * 64,
     );
     final installerAction = OpenInstallerAction(
       installerUrl: Uri.parse('https://example.com/app.msi'),
       installerType: InstallerType.msi,
+      installerSizeBytes: 42,
       sha256: 'b' * 64,
     );
     final candidate = UpdateCandidate(

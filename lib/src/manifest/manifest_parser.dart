@@ -79,8 +79,8 @@ class ManifestParser {
           packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
           packageType:
               _parsePackageType(_requiredString(action, 'packageType')),
-          packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
-          sha256: _optionalString(action, 'sha256'),
+          packageSizeBytes: _requiredInt(action, 'packageSizeBytes'),
+          sha256: _requiredString(action, 'sha256').toLowerCase(),
         ),
       'installPackage' => InstallPackageAction(
           packagePath: _requiredString(action, 'packagePath'),
@@ -92,16 +92,16 @@ class ManifestParser {
           packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
           packageType:
               _parsePackageType(_requiredString(action, 'packageType')),
-          packageSizeBytes: _optionalInt(action, 'packageSizeBytes'),
-          sha256: _optionalString(action, 'sha256'),
+          packageSizeBytes: _requiredInt(action, 'packageSizeBytes'),
+          sha256: _requiredString(action, 'sha256').toLowerCase(),
         ),
       'openInstaller' => OpenInstallerAction(
           installerUrl: _requiredAbsoluteUri(action, 'installerUrl'),
           installerType: _parseInstallerType(
             _requiredString(action, 'installerType'),
           ),
-          installerSizeBytes: _optionalInt(action, 'installerSizeBytes'),
-          sha256: _optionalString(action, 'sha256'),
+          installerSizeBytes: _requiredInt(action, 'installerSizeBytes'),
+          sha256: _requiredString(action, 'sha256').toLowerCase(),
         ),
       _ => throw ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,
@@ -303,20 +303,6 @@ class ManifestParser {
     throw ManifestParseException(
       code: UpdateErrorCode.missingRequiredField,
       message: '$field is required.',
-    );
-  }
-
-  int? _optionalInt(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
-      return null;
-    }
-    if (value is int) {
-      return value;
-    }
-    throw ManifestParseException(
-      code: UpdateErrorCode.manifestInvalid,
-      message: '$field must be an integer.',
     );
   }
 }

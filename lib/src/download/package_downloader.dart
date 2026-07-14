@@ -251,13 +251,13 @@ class PackageDownloader {
     final metadataFile = File('${partialFile.path}.meta');
     final declaredSize = action.packageSizeBytes;
 
-    if (declaredSize != null && declaredSize <= 0) {
+    if (declaredSize <= 0) {
       return const PackageDownloadResult.failure(
         code: UpdateErrorCode.manifestInvalid,
         message: 'packageSizeBytes must be a positive integer.',
       );
     }
-    if (declaredSize != null && declaredSize > maxDownloadBytes) {
+    if (declaredSize > maxDownloadBytes) {
       return PackageDownloadResult.failure(
         code: UpdateErrorCode.packageTooLarge,
         message: 'Declared package size exceeds the $maxDownloadBytes byte '
@@ -432,14 +432,11 @@ class PackageDownloader {
               expectedEtag: resume.etag,
             )
           : null;
-      final totalBytes = action.packageSizeBytes ??
-          contentRange?.totalBytes ??
-          _responseTotalBytes(response, initialDownloadedBytes);
+      final totalBytes = action.packageSizeBytes;
       final rangedTotalBytes = contentRange?.totalBytes;
       if (rangedTotalBytes != null &&
           (rangedTotalBytes > maxDownloadBytes ||
-              (action.packageSizeBytes != null &&
-                  rangedTotalBytes != action.packageSizeBytes))) {
+              rangedTotalBytes != action.packageSizeBytes)) {
         throw const _PackageSizeExceeded(
           'Resumed package size exceeds the allowed byte limit.',
         );
@@ -475,9 +472,7 @@ class PackageDownloader {
         partialFile: partialFile,
         metadataFile: metadataFile,
         cancelToken: cancelToken,
-        expectedSize: action.packageSizeBytes ??
-            contentRange?.totalBytes ??
-            response.contentLength,
+        expectedSize: action.packageSizeBytes,
       );
     } finally {
       await response.close();
@@ -526,7 +521,7 @@ class PackageDownloader {
             throw const _PackageDownloadCanceled();
           }
           final nextDownloadedBytes = downloadedBytes + chunk.length;
-          final effectiveLimit = action.packageSizeBytes ?? maxDownloadBytes;
+          final effectiveLimit = action.packageSizeBytes;
           if (nextDownloadedBytes > effectiveLimit ||
               nextDownloadedBytes > maxDownloadBytes) {
             throw const _PackageSizeExceeded(
@@ -786,30 +781,18 @@ class PackageDownloader {
   void _validateResponseSize({
     required PackageDownloadResponse response,
     required int initialDownloadedBytes,
-    required int? declaredSize,
+    required int declaredSize,
   }) {
     final contentLength = response.contentLength;
     if (contentLength == null || contentLength < 0) {
       return;
     }
     final responseTotal = initialDownloadedBytes + contentLength;
-    if (responseTotal > maxDownloadBytes ||
-        (declaredSize != null && responseTotal > declaredSize)) {
+    if (responseTotal > maxDownloadBytes || responseTotal > declaredSize) {
       throw const _PackageSizeExceeded(
         'Package response exceeds the allowed byte limit.',
       );
     }
-  }
-
-  int? _responseTotalBytes(
-    PackageDownloadResponse response,
-    int initialDownloadedBytes,
-  ) {
-    final contentLength = response.contentLength;
-    if (contentLength == null || contentLength < 0) {
-      return null;
-    }
-    return initialDownloadedBytes + contentLength;
   }
 
   _ContentRange _validatedContentRange(
@@ -854,7 +837,7 @@ class PackageDownloader {
   }) async {
     final expectedSize = action.packageSizeBytes;
     final expectedSha256 = _normalizedSha256(action.sha256);
-    if (expectedSize == null || expectedSha256 == null) {
+    if (expectedSha256 == null) {
       await _cleanupPartialState(partialFile, metadataFile);
       return null;
     }
@@ -952,8 +935,7 @@ class PackageDownloader {
     required int? totalBytes,
   }) {
     final expectedSize = action.packageSizeBytes;
-    return expectedSize != null &&
-        _normalizedSha256(action.sha256) != null &&
+    return _normalizedSha256(action.sha256) != null &&
         totalBytes == expectedSize &&
         _isStrongEtag(response.etag);
   }
@@ -1021,7 +1003,7 @@ class PackageDownloader {
     }
     final downloadedBytes = await partialFile.length();
     final requiredSize = expectedSize ?? action.packageSizeBytes;
-    if (requiredSize != null && downloadedBytes != requiredSize) {
+    if (downloadedBytes != requiredSize) {
       await _cleanupPartialState(partialFile, metadataFile);
       return PackageDownloadResult.failure(
         code: UpdateErrorCode.packageDownloadFailed,

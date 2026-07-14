@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_interface.dart';
@@ -32,10 +33,14 @@ void main() {
       final apk = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final aab = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.aab'),
         packageType: PackageType.aab,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
 
       expect(
@@ -87,6 +92,8 @@ void main() {
         DownloadAndInstallPackageAction(
           packageUrl: Uri.parse('https://example.com/app.apk'),
           packageType: PackageType.apk,
+          packageSizeBytes: bytes.length,
+          sha256: crypto.sha256.convert(bytes).toString(),
         ),
       );
 
@@ -121,6 +128,8 @@ void main() {
         DownloadAndInstallPackageAction(
           packageUrl: Uri.parse('https://example.com/app.apk'),
           packageType: PackageType.apk,
+          packageSizeBytes: 42,
+          sha256: 'a' * 64,
         ),
       );
 
@@ -144,6 +153,8 @@ void main() {
       final action = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: bytes.length,
+        sha256: crypto.sha256.convert(bytes).toString(),
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,

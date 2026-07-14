@@ -37,12 +37,14 @@ void main() {
                 'packageUrl': 'https://example.com/app.apk',
                 'packageType': 'apk',
                 'packageSizeBytes': 25600000,
+                'sha256': 'A' * 64,
               },
               {
                 'type': 'openInstaller',
                 'installerUrl': 'https://example.com/app.dmg',
                 'installerType': 'dmg',
                 'installerSizeBytes': 82000000,
+                'sha256': 'B' * 64,
               },
               {
                 'type': 'installPackage',
@@ -54,6 +56,7 @@ void main() {
                 'packageUrl': 'https://example.com/app.apk',
                 'packageType': 'apk',
                 'packageSizeBytes': 25600000,
+                'sha256': 'C' * 64,
               },
             ],
           },
@@ -83,13 +86,13 @@ void main() {
       expect(packageAction.packageUrl.path, '/app.apk');
       expect(packageAction.packageType, PackageType.apk);
       expect(packageAction.packageSizeBytes, 25600000);
-      expect(packageAction.sha256, isNull);
+      expect(packageAction.sha256, 'a' * 64);
 
       final installerAction = release.actions[2] as OpenInstallerAction;
       expect(installerAction.installerUrl.path, '/app.dmg');
       expect(installerAction.installerType, InstallerType.dmg);
       expect(installerAction.installerSizeBytes, 82000000);
-      expect(installerAction.sha256, isNull);
+      expect(installerAction.sha256, 'b' * 64);
 
       final installAction = release.actions[3] as InstallPackageAction;
       expect(installAction.packagePath, '/tmp/app.apk');
@@ -100,7 +103,7 @@ void main() {
       expect(downloadAndInstallAction.packageUrl.path, '/app.apk');
       expect(downloadAndInstallAction.packageType, PackageType.apk);
       expect(downloadAndInstallAction.packageSizeBytes, 25600000);
-      expect(downloadAndInstallAction.sha256, isNull);
+      expect(downloadAndInstallAction.sha256, 'c' * 64);
     });
 
     test('parses Android market actions', () {

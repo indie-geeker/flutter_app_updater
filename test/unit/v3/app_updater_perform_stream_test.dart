@@ -24,6 +24,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final token = UpdateActionCancelToken();
       final executor = _StreamingExecutor();
@@ -42,6 +44,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final updater = _updater([_StreamingExecutor()]);
       final prepared = PreparedUpdateAvailable(
@@ -69,6 +73,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final events = await _updater([_NoTerminalExecutor()])
           .performStream(action)
@@ -86,6 +92,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final events = await _updater([_DuplicateTerminalExecutor()])
           .performStream(action)

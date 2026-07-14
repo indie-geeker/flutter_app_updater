@@ -183,7 +183,7 @@ void main() {
       expect(await File('$savePath.download').exists(), isFalse);
     });
 
-    test('downloads packages without SHA-256', () async {
+    test('downloads packages with complete integrity metadata', () async {
       final bytes = utf8.encode('package-without-hash');
       client.enqueue(
         PackageDownloadResponse(
@@ -197,18 +197,20 @@ void main() {
         action: DownloadPackageAction(
           packageUrl: Uri.parse('https://example.com/app.apk'),
           packageType: PackageType.apk,
+          packageSizeBytes: bytes.length,
+          sha256: _sha256(bytes),
         ),
         savePath: _path('app.apk'),
       );
 
       expect(result.isSuccess, isTrue);
       expect(result.file?.readAsStringSync(), 'package-without-hash');
-      expect(result.sha256, isNull);
+      expect(result.sha256, _sha256(bytes));
       expect(
           client.requests.single.url, Uri.parse('https://example.com/app.apk'));
     });
 
-    test('rejects hash mismatch only when SHA-256 is provided', () async {
+    test('rejects hash mismatch after exact-size verification', () async {
       final vector = _vector('clean_200_hash_mismatch');
       final response = _map(vector['response']);
       client.enqueue(
@@ -219,8 +221,12 @@ void main() {
         ),
       );
 
+      final body = utf8.encode(response['body']! as String);
       final result = await PackageDownloader(client: client).download(
-        action: _action(sha256: 'a' * 64),
+        action: _action(
+          packageSizeBytes: body.length,
+          sha256: 'a' * 64,
+        ),
         savePath: _path('app.apk'),
       );
 
@@ -478,7 +484,10 @@ void main() {
       );
 
       final result = await PackageDownloader(client: client).download(
-        action: _action(sha256: _sha256(bytes)),
+        action: _action(
+          packageSizeBytes: bytes.length,
+          sha256: _sha256(bytes),
+        ),
         savePath: _path('app.apk'),
       );
 
@@ -499,7 +508,10 @@ void main() {
       final progress = <PackageDownloadProgress>[];
 
       final result = await PackageDownloader(client: client).download(
-        action: _action(sha256: _sha256(bytes)),
+        action: _action(
+          packageSizeBytes: bytes.length,
+          sha256: _sha256(bytes),
+        ),
         savePath: _path('app.apk'),
         onProgress: progress.add,
       );
@@ -668,7 +680,7 @@ void main() {
         maxDownloadBytes: 4,
         retryStrategy: RetryStrategy.disabled,
       ).download(
-        action: _action(sha256: ''),
+        action: _action(packageSizeBytes: 4, sha256: ''),
         savePath: _path('app.apk'),
       );
 
@@ -1935,7 +1947,7 @@ DownloadPackageAction _action({
   return DownloadPackageAction(
     packageUrl: packageUrl ?? Uri.parse('https://example.com/app.apk'),
     packageType: PackageType.apk,
-    packageSizeBytes: packageSizeBytes,
+    packageSizeBytes: packageSizeBytes ?? utf8.encode('package-bytes').length,
     sha256: sha256 ?? _sha256(utf8.encode('package-bytes')),
   );
 }

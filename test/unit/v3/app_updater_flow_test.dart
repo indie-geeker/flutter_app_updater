@@ -31,6 +31,8 @@ void main() {
       final action = DownloadPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
+        packageSizeBytes: 42,
+        sha256: 'a' * 64,
       );
       final executor = _RecordingExecutor(
         supportsAction: (candidate) => candidate is DownloadPackageAction,
@@ -199,11 +201,15 @@ OpenAndroidMarketAction _marketAction() => const OpenAndroidMarketAction(
 DownloadPackageAction _downloadAction(String name) => DownloadPackageAction(
       packageUrl: Uri.parse('https://example.com/$name'),
       packageType: PackageType.apk,
+      packageSizeBytes: 42,
+      sha256: 'a' * 64,
     );
 
 OpenInstallerAction _installerAction() => OpenInstallerAction(
       installerUrl: Uri.parse('https://example.com/app.msi'),
       installerType: InstallerType.msi,
+      installerSizeBytes: 42,
+      sha256: 'b' * 64,
     );
 
 class _FakeManifestFetcher implements ManifestFetcher {
@@ -232,6 +238,8 @@ Map<String, Object?> _manifestJson() {
             'type': 'downloadAndInstallPackage',
             'packageUrl': 'https://example.com/app.apk',
             'packageType': 'apk',
+            'packageSizeBytes': 42,
+            'sha256': 'a' * 64,
           },
         ],
       },

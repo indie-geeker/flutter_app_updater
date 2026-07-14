@@ -60,14 +60,14 @@ class OpenAndroidMarketAction extends UpdateAction {
 class DownloadPackageAction extends UpdateAction {
   final Uri packageUrl;
   final PackageType packageType;
-  final int? packageSizeBytes;
-  final String? sha256;
+  final int packageSizeBytes;
+  final String sha256;
 
   const DownloadPackageAction({
     required this.packageUrl,
     required this.packageType,
-    this.packageSizeBytes,
-    this.sha256,
+    required this.packageSizeBytes,
+    required this.sha256,
   });
 }
 
@@ -84,27 +84,27 @@ class InstallPackageAction extends UpdateAction {
 class DownloadAndInstallPackageAction extends UpdateAction {
   final Uri packageUrl;
   final PackageType packageType;
-  final int? packageSizeBytes;
-  final String? sha256;
+  final int packageSizeBytes;
+  final String sha256;
 
   const DownloadAndInstallPackageAction({
     required this.packageUrl,
     required this.packageType,
-    this.packageSizeBytes,
-    this.sha256,
+    required this.packageSizeBytes,
+    required this.sha256,
   });
 }
 
 class OpenInstallerAction extends UpdateAction {
   final Uri installerUrl;
   final InstallerType installerType;
-  final int? installerSizeBytes;
-  final String? sha256;
+  final int installerSizeBytes;
+  final String sha256;
 
   const OpenInstallerAction({
     required this.installerUrl,
     required this.installerType,
-    this.installerSizeBytes,
-    this.sha256,
+    required this.installerSizeBytes,
+    required this.sha256,
   });
 }

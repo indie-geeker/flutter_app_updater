@@ -107,6 +107,7 @@ void main() {
       final action = _installer(
         installerUrl: Uri.parse('https://example.com/app.dmg'),
         installerType: InstallerType.dmg,
+        installerSizeBytes: bytes.length,
         sha256: _sha256(bytes),
       );
 
@@ -255,6 +256,7 @@ void main() {
           _installer(
             installerUrl: installerUrl,
             installerType: InstallerType.dmg,
+            installerSizeBytes: bytes.length,
             sha256: sha256,
           ),
         );
@@ -285,7 +287,8 @@ OpenInstallerAction _installer({
   return OpenInstallerAction(
     installerUrl: installerUrl ?? Uri.parse('https://example.com/app.msi'),
     installerType: installerType,
-    installerSizeBytes: installerSizeBytes,
+    installerSizeBytes:
+        installerSizeBytes ?? utf8.encode('windows-installer').length,
     sha256: sha256 ?? _sha256(utf8.encode('windows-installer')),
   );
 }

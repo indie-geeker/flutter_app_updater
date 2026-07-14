@@ -121,25 +121,25 @@ void main() {
       );
     });
 
-    test('allows package actions without sha256', () {
+    test('requires complete package metadata', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
           'type': 'downloadPackage',
           'packageUrl': 'https://example.com/app.apk',
           'packageType': 'apk',
         })),
-        returnsNormally,
+        throwsA(isA<ManifestParseException>()),
       );
     });
 
-    test('allows installer actions without sha256', () {
+    test('requires complete installer metadata', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
           'type': 'openInstaller',
           'installerUrl': 'https://example.com/app.dmg',
           'installerType': 'dmg',
         })),
-        returnsNormally,
+        throwsA(isA<ManifestParseException>()),
       );
     });
 
@@ -154,7 +154,7 @@ void main() {
       );
     });
 
-    test('allows downloadAndInstallPackage actions without sha256', () {
+    test('requires SHA-256 for downloadAndInstallPackage actions', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
           'type': 'downloadAndInstallPackage',
@@ -162,7 +162,26 @@ void main() {
           'packageType': 'apk',
           'packageSizeBytes': 25600000,
         })),
-        returnsNormally,
+        throwsA(isA<ManifestParseException>()),
+      );
+    });
+
+    test('rejects malformed SHA-256 metadata', () {
+      expect(
+        () => const ManifestParser().parse(_manifestWithAction({
+          'type': 'downloadPackage',
+          'packageUrl': 'https://example.com/app.apk',
+          'packageType': 'apk',
+          'packageSizeBytes': 42,
+          'sha256': 'not-a-sha256',
+        })),
+        throwsA(
+          isA<ManifestParseException>().having(
+            (error) => error.code,
+            'code',
+            UpdateErrorCode.manifestInvalid,
+          ),
+        ),
       );
     });
 
@@ -173,18 +192,21 @@ void main() {
           'packageUrl': 'https://example.com/app.apk',
           'packageType': 'apk',
           'packageSizeBytes': 0,
+          'sha256': 'a' * 64,
         },
         {
           'type': 'downloadAndInstallPackage',
           'packageUrl': 'https://example.com/app.apk',
           'packageType': 'apk',
           'packageSizeBytes': -1,
+          'sha256': 'a' * 64,
         },
         {
           'type': 'openInstaller',
           'installerUrl': 'https://example.com/app.dmg',
           'installerType': 'dmg',
           'installerSizeBytes': 0,
+          'sha256': 'a' * 64,
         },
       ]) {
         expect(
