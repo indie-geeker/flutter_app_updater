@@ -35,6 +35,38 @@ void main() {
   });
 
   group('DesktopInstallerExecutor', () {
+    test('reports support only for platform installer types', () {
+      final windows = DesktopInstallerExecutor(
+        platform: TargetPlatform.windows,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      );
+      final macOS = DesktopInstallerExecutor(
+        platform: TargetPlatform.macOS,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      );
+      final android = DesktopInstallerExecutor(
+        platform: TargetPlatform.android,
+        platformChannel: platform,
+        client: client,
+        downloadDirectory: tempDir,
+      );
+
+      expect(windows.supports(_installer(installerType: InstallerType.msi)),
+          isTrue);
+      expect(windows.supports(_installer(installerType: InstallerType.dmg)),
+          isFalse);
+      expect(
+          macOS.supports(_installer(installerType: InstallerType.dmg)), isTrue);
+      expect(macOS.supports(_installer(installerType: InstallerType.exe)),
+          isFalse);
+      expect(android.supports(_installer(installerType: InstallerType.exe)),
+          isFalse);
+    });
+
     test('accepts Windows installer types and opens verified installer',
         () async {
       final bytes = utf8.encode('windows-installer');

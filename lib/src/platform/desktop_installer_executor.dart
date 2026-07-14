@@ -30,7 +30,10 @@ class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
         downloadDirectory = downloadDirectory ?? Directory.systemTemp;
 
   @override
-  bool supports(UpdateAction action) => action is OpenInstallerAction;
+  bool supports(UpdateAction action) =>
+      action is OpenInstallerAction &&
+      _supportsPlatform(platform) &&
+      _supportsInstallerType(platform, action.installerType);
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {

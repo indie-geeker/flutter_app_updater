@@ -56,7 +56,7 @@ class UpdateSelector {
 
     final candidate = candidates.first;
     final isRequired = _isRequired(candidate);
-    final recommendedAction = _recommendedAction(candidate, isRequired);
+    final recommendedAction = _recommendedAction(candidate);
     if (recommendedAction == null) {
       return UpdateCheckFailed(
         code: UpdateErrorCode.noSupportedAction,
@@ -67,6 +67,7 @@ class UpdateSelector {
     return UpdateAvailable(
       candidate: candidate,
       recommendedAction: recommendedAction,
+      actions: candidate.actions,
       isRequired: isRequired,
     );
   }
@@ -120,24 +121,10 @@ class UpdateSelector {
     return VersionComparator.compare(installedVersion, minSupportedVersion) < 0;
   }
 
-  UpdateAction? _recommendedAction(
-    UpdateCandidate candidate,
-    bool isRequired,
-  ) {
+  UpdateAction? _recommendedAction(UpdateCandidate candidate) {
     if (candidate.actions.isEmpty) {
       return null;
     }
-
-    if (isRequired) {
-      for (final action in candidate.actions) {
-        if (action is DownloadAndInstallPackageAction ||
-            action is DownloadPackageAction ||
-            action is OpenInstallerAction) {
-          return action;
-        }
-      }
-    }
-
     return candidate.actions.first;
   }
 }
@@ -149,11 +136,13 @@ sealed class UpdateCheckResult {
 class UpdateAvailable extends UpdateCheckResult {
   final UpdateCandidate candidate;
   final UpdateAction recommendedAction;
+  final List<UpdateAction> actions;
   final bool isRequired;
 
   const UpdateAvailable({
     required this.candidate,
     required this.recommendedAction,
+    required this.actions,
     this.isRequired = false,
   });
 }

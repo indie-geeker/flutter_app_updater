@@ -70,8 +70,141 @@ void main() {
       expect(actionResult.isSuccess, isTrue);
       expect(executor.performedActions, [same(action)]);
     });
+
+    test('storeOnly keeps executable store actions in manifest order',
+        () async {
+      final download = _downloadAction('first.apk');
+      final store = _storeAction();
+      final installer = _installerAction();
+      final updater = _updaterForActions(
+        [download, store, installer],
+        distributionPolicy: UpdateDistributionPolicy.storeOnly,
+        executors: [_RecordingExecutor(supportsAction: (_) => true)],
+      );
+
+      final result = await updater.checkAndPrepare();
+
+      expect(result, isA<PreparedUpdateAvailable>());
+      final available = result as PreparedUpdateAvailable;
+      expect(available.actions, [same(store)]);
+      expect(available.recommendedAction, same(store));
+    });
+
+    test('selfHostedOnly removes official store and market actions', () async {
+      final download = _downloadAction('app.apk');
+      final installer = _installerAction();
+      final updater = _updaterForActions(
+        [_storeAction(), _marketAction(), download, installer],
+        distributionPolicy: UpdateDistributionPolicy.selfHostedOnly,
+        executors: [_RecordingExecutor(supportsAction: (_) => true)],
+      );
+
+      final result = await updater.checkAndPrepare();
+
+      expect(result, isA<PreparedUpdateAvailable>());
+      final available = result as PreparedUpdateAvailable;
+      expect(available.actions, [same(download), same(installer)]);
+      expect(available.recommendedAction, same(download));
+    });
+
+    test('unsupported actions are removed without reordering', () async {
+      final store = _storeAction();
+      final download = _downloadAction('unsupported.apk');
+      final installer = _installerAction();
+      final updater = _updaterForActions(
+        [store, download, installer],
+        executors: [
+          _RecordingExecutor(
+            supportsAction: (action) =>
+                action is OpenStoreAction || action is OpenInstallerAction,
+          ),
+        ],
+      );
+
+      final result = await updater.checkAndPrepare();
+
+      expect(result, isA<PreparedUpdateAvailable>());
+      final available = result as PreparedUpdateAvailable;
+      expect(available.actions, [same(store), same(installer)]);
+      expect(available.recommendedAction, same(store));
+    });
+
+    test('empty policy and capability intersection is structured failure',
+        () async {
+      final updater = _updaterForActions(
+        [_downloadAction('app.apk')],
+        distributionPolicy: UpdateDistributionPolicy.storeOnly,
+        executors: [_RecordingExecutor(supportsAction: (_) => true)],
+      );
+
+      final result = await updater.checkAndPrepare();
+
+      expect(result, isA<PreparedUpdateCheckFailed>());
+      expect(
+        (result as PreparedUpdateCheckFailed).code,
+        UpdateErrorCode.noSupportedAction,
+      );
+    });
   });
 }
+
+AppUpdater _updaterForActions(
+  List<UpdateAction> actions, {
+  UpdateDistributionPolicy distributionPolicy = UpdateDistributionPolicy.any,
+  required List<UpdateActionExecutor> executors,
+}) {
+  return AppUpdater(
+    source: UpdateSource.staticManifest(
+      manifest: UpdateManifest(
+        schemaVersion: 3,
+        appId: 'com.example.app',
+        channel: 'stable',
+        releases: [
+          UpdateCandidate(
+            version: '2.0.0',
+            channel: 'stable',
+            platform: TargetPlatform.android,
+            architecture: 'arm64',
+            releaseNotes: 'Bug fixes',
+            policy: const UpdatePolicy(),
+            actions: actions,
+          ),
+        ],
+      ),
+    ),
+    selector: const UpdateSelector(
+      installedVersion: '1.0.0',
+      platform: TargetPlatform.android,
+      architecture: 'arm64',
+      channel: 'stable',
+    ),
+    platform: TargetPlatform.android,
+    distributionPolicy: distributionPolicy,
+    executors: executors,
+  );
+}
+
+OpenStoreAction _storeAction() => OpenStoreAction(
+      store: StoreKind.googlePlay,
+      storeUrl: Uri.parse(
+        'https://play.google.com/store/apps/details?id=com.example.app',
+      ),
+    );
+
+OpenAndroidMarketAction _marketAction() => const OpenAndroidMarketAction(
+      market: AndroidMarketKind.xiaomi,
+      targetPackageName: 'com.example.app',
+    );
+
+DownloadPackageAction _downloadAction(String name) => DownloadPackageAction(
+      packageUrl: Uri.parse('https://example.com/$name'),
+      packageType: PackageType.apk,
+    );
+
+OpenInstallerAction _installerAction() => OpenInstallerAction(
+      installerUrl: Uri.parse('https://example.com/app.msi'),
+      installerType: InstallerType.msi,
+    );
 
 class _FakeManifestFetcher implements ManifestFetcher {
   final Map<String, Object?> json;

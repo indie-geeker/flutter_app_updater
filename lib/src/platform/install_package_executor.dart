@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../actions/update_action.dart';
@@ -7,13 +8,19 @@ import 'update_action_executor.dart';
 
 class InstallPackageExecutor implements UpdateActionExecutor {
   final FlutterAppUpdaterPlatform platform;
+  final TargetPlatform targetPlatform;
 
   InstallPackageExecutor({
     FlutterAppUpdaterPlatform? platform,
-  }) : platform = platform ?? FlutterAppUpdaterPlatform.instance;
+    TargetPlatform? targetPlatform,
+  })  : platform = platform ?? FlutterAppUpdaterPlatform.instance,
+        targetPlatform = targetPlatform ?? defaultTargetPlatform;
 
   @override
-  bool supports(UpdateAction action) => action is InstallPackageAction;
+  bool supports(UpdateAction action) =>
+      targetPlatform == TargetPlatform.android &&
+      action is InstallPackageAction &&
+      action.packageType == PackageType.apk;
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
@@ -21,6 +28,12 @@ class InstallPackageExecutor implements UpdateActionExecutor {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
         message: 'InstallPackageExecutor only supports package installs.',
+      );
+    }
+    if (!supports(action)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: 'Only Android APK packages can be installed locally.',
       );
     }
 

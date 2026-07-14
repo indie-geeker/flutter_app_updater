@@ -6,8 +6,35 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 void main() {
   group('InstallPackageExecutor', () {
+    test('supports only Android APK installation', () {
+      const apk = InstallPackageAction(packagePath: '/tmp/app.apk');
+      const aab = InstallPackageAction(
+        packagePath: '/tmp/app.aab',
+        packageType: PackageType.aab,
+      );
+
+      expect(
+        InstallPackageExecutor(targetPlatform: TargetPlatform.android)
+            .supports(apk),
+        isTrue,
+      );
+      expect(
+        InstallPackageExecutor(targetPlatform: TargetPlatform.iOS)
+            .supports(apk),
+        isFalse,
+      );
+      expect(
+        InstallPackageExecutor(targetPlatform: TargetPlatform.android)
+            .supports(aab),
+        isFalse,
+      );
+    });
+
     test('supports only package install actions', () {
-      final executor = InstallPackageExecutor(platform: _FakeInstallPlatform());
+      final executor = InstallPackageExecutor(
+        platform: _FakeInstallPlatform(),
+        targetPlatform: TargetPlatform.android,
+      );
 
       expect(
         executor.supports(
@@ -28,7 +55,10 @@ void main() {
 
     test('installs an existing package through the platform channel', () async {
       final platform = _FakeInstallPlatform();
-      final executor = InstallPackageExecutor(platform: platform);
+      final executor = InstallPackageExecutor(
+        platform: platform,
+        targetPlatform: TargetPlatform.android,
+      );
 
       final result = await executor.perform(
         const InstallPackageAction(packagePath: '/tmp/app.apk'),
@@ -40,7 +70,10 @@ void main() {
 
     test('rejects blank package paths before calling platform', () async {
       final platform = _FakeInstallPlatform();
-      final executor = InstallPackageExecutor(platform: platform);
+      final executor = InstallPackageExecutor(
+        platform: platform,
+        targetPlatform: TargetPlatform.android,
+      );
 
       final result = await executor.perform(
         const InstallPackageAction(packagePath: ' '),
@@ -59,6 +92,7 @@ void main() {
             message: 'Permission required.',
           ),
         ),
+        targetPlatform: TargetPlatform.android,
       );
 
       final result = await executor.perform(
@@ -77,6 +111,7 @@ void main() {
             message: 'Missing file.',
           ),
         ),
+        targetPlatform: TargetPlatform.android,
       );
 
       final result = await executor.perform(

@@ -9,8 +9,29 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('AndroidMarketExecutor', () {
+    test('reports support only on Android', () {
+      const action = OpenAndroidMarketAction(
+        market: AndroidMarketKind.xiaomi,
+        targetPackageName: 'com.example.app',
+      );
+
+      expect(
+        AndroidMarketExecutor(targetPlatform: TargetPlatform.android)
+            .supports(action),
+        isTrue,
+      );
+      expect(
+        AndroidMarketExecutor(targetPlatform: TargetPlatform.iOS)
+            .supports(action),
+        isFalse,
+      );
+    });
+
     test('supports only OpenAndroidMarketAction', () {
-      final executor = AndroidMarketExecutor(platform: _FakeMarketPlatform());
+      final executor = AndroidMarketExecutor(
+        platform: _FakeMarketPlatform(),
+        targetPlatform: TargetPlatform.android,
+      );
 
       expect(
         executor.supports(
@@ -36,7 +57,10 @@ void main() {
 
     test('builds market descriptor URI and fallback URL', () async {
       final platform = _FakeMarketPlatform();
-      final executor = AndroidMarketExecutor(platform: platform);
+      final executor = AndroidMarketExecutor(
+        platform: platform,
+        targetPlatform: TargetPlatform.android,
+      );
       const action = OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
         targetPackageName: 'com.example.app',
@@ -57,7 +81,10 @@ void main() {
 
     test('uses action fallback URL before registry fallback URL', () async {
       final platform = _FakeMarketPlatform();
-      final executor = AndroidMarketExecutor(platform: platform);
+      final executor = AndroidMarketExecutor(
+        platform: platform,
+        targetPlatform: TargetPlatform.android,
+      );
       final action = OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
         targetPackageName: 'com.example.app',
@@ -77,6 +104,7 @@ void main() {
             message: 'No market app.',
           ),
         ),
+        targetPlatform: TargetPlatform.android,
       );
       const action = OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
@@ -91,7 +119,10 @@ void main() {
 
     test('rejects blank target package names', () async {
       final platform = _FakeMarketPlatform();
-      final executor = AndroidMarketExecutor(platform: platform);
+      final executor = AndroidMarketExecutor(
+        platform: platform,
+        targetPlatform: TargetPlatform.android,
+      );
       const action = OpenAndroidMarketAction(
         market: AndroidMarketKind.xiaomi,
         targetPackageName: ' ',

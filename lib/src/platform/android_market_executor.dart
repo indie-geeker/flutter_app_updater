@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../actions/update_action.dart';
@@ -8,13 +9,18 @@ import 'update_action_executor.dart';
 
 class AndroidMarketExecutor implements UpdateActionExecutor {
   final FlutterAppUpdaterPlatform platform;
+  final TargetPlatform targetPlatform;
 
   AndroidMarketExecutor({
     FlutterAppUpdaterPlatform? platform,
-  }) : platform = platform ?? FlutterAppUpdaterPlatform.instance;
+    TargetPlatform? targetPlatform,
+  })  : platform = platform ?? FlutterAppUpdaterPlatform.instance,
+        targetPlatform = targetPlatform ?? defaultTargetPlatform;
 
   @override
-  bool supports(UpdateAction action) => action is OpenAndroidMarketAction;
+  bool supports(UpdateAction action) =>
+      targetPlatform == TargetPlatform.android &&
+      action is OpenAndroidMarketAction;
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
@@ -22,6 +28,12 @@ class AndroidMarketExecutor implements UpdateActionExecutor {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
         message: 'AndroidMarketExecutor only supports Android market actions.',
+      );
+    }
+    if (!supports(action)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: 'Android market actions require Android.',
       );
     }
 

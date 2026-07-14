@@ -90,7 +90,7 @@ void main() {
     });
 
     test('default executors perform stable commercial actions', () async {
-      final updater = AppUpdater(
+      final androidUpdater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
         ),
@@ -100,25 +100,37 @@ void main() {
           channel: 'stable',
         ),
         downloadDirectory: tempDir.path,
+        platform: TargetPlatform.android,
+      );
+      final windowsUpdater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+        ),
+        selector: const UpdateSelector(
+          installedVersion: '1.0.0',
+          platform: TargetPlatform.windows,
+          channel: 'stable',
+        ),
+        downloadDirectory: tempDir.path,
         platform: TargetPlatform.windows,
       );
 
-      final downloadResult = await updater.perform(
+      final downloadResult = await androidUpdater.perform(
         DownloadPackageAction(
           packageUrl: _serverUri(server, '/app.apk'),
           packageType: PackageType.apk,
         ),
       );
-      final installResult = await updater.perform(
+      final installResult = await androidUpdater.perform(
         const InstallPackageAction(packagePath: '/tmp/app.apk'),
       );
-      final downloadAndInstallResult = await updater.perform(
+      final downloadAndInstallResult = await androidUpdater.perform(
         DownloadAndInstallPackageAction(
           packageUrl: _serverUri(server, '/combined.apk'),
           packageType: PackageType.apk,
         ),
       );
-      final installerResult = await updater.perform(
+      final installerResult = await windowsUpdater.perform(
         OpenInstallerAction(
           installerUrl: _serverUri(server, '/app.msi'),
           installerType: InstallerType.msi,

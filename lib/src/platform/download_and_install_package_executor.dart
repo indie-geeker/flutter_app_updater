@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../actions/update_action.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
@@ -12,20 +14,28 @@ class DownloadAndInstallPackageExecutor
     implements StreamingUpdateActionExecutor {
   final DownloadPackageExecutor downloadExecutor;
   final InstallPackageExecutor installExecutor;
+  final TargetPlatform targetPlatform;
 
   DownloadAndInstallPackageExecutor({
     required String downloadDirectory,
     PackageDownloader? downloader,
     InstallPackageExecutor? installExecutor,
+    TargetPlatform? targetPlatform,
   })  : downloadExecutor = DownloadPackageExecutor(
           downloadDirectory: downloadDirectory,
           downloader: downloader,
         ),
-        installExecutor = installExecutor ?? InstallPackageExecutor();
+        targetPlatform = targetPlatform ?? defaultTargetPlatform,
+        installExecutor = installExecutor ??
+            InstallPackageExecutor(
+              targetPlatform: targetPlatform ?? defaultTargetPlatform,
+            );
 
   @override
   bool supports(UpdateAction action) =>
-      action is DownloadAndInstallPackageAction;
+      targetPlatform == TargetPlatform.android &&
+      action is DownloadAndInstallPackageAction &&
+      action.packageType == PackageType.apk;
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
@@ -52,6 +62,15 @@ class DownloadAndInstallPackageExecutor
           code: UpdateErrorCode.noSupportedAction,
           message: 'DownloadAndInstallPackageExecutor only supports '
               'download-and-install package actions.',
+        ),
+      );
+      return;
+    }
+    if (targetPlatform != TargetPlatform.android) {
+      yield const UpdateActionCompleted(
+        UpdateActionResult.failure(
+          code: UpdateErrorCode.platformNotSupported,
+          message: 'Package installation requires Android.',
         ),
       );
       return;

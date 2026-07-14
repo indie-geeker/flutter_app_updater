@@ -21,6 +21,33 @@ void main() {
   });
 
   group('StoreUpdateExecutor', () {
+    test('reports support only for the current platform store', () {
+      final googlePlay = OpenStoreAction(
+        store: StoreKind.googlePlay,
+        storeUrl: Uri.parse('https://play.google.com/store/apps/details?id=x'),
+      );
+      final appStore = OpenStoreAction(
+        store: StoreKind.appStore,
+        storeUrl: Uri.parse('https://apps.apple.com/app/id1'),
+      );
+
+      expect(
+        StoreUpdateExecutor(targetPlatform: TargetPlatform.android)
+            .supports(googlePlay),
+        isTrue,
+      );
+      expect(
+        StoreUpdateExecutor(targetPlatform: TargetPlatform.windows)
+            .supports(googlePlay),
+        isFalse,
+      );
+      expect(
+        StoreUpdateExecutor(targetPlatform: TargetPlatform.iOS)
+            .supports(appStore),
+        isTrue,
+      );
+    });
+
     test('OpenStoreAction delegates to the platform executor', () async {
       final action = OpenStoreAction(
         store: StoreKind.googlePlay,
@@ -29,7 +56,9 @@ void main() {
         ),
       );
 
-      final result = await StoreUpdateExecutor().perform(action);
+      final result = await StoreUpdateExecutor(
+        targetPlatform: TargetPlatform.android,
+      ).perform(action);
 
       expect(result.isSuccess, isTrue);
       expect(fakePlatform.openedStores, [
@@ -47,7 +76,9 @@ void main() {
         storeUrl: Uri(),
       );
 
-      final result = await StoreUpdateExecutor().perform(action);
+      final result = await StoreUpdateExecutor(
+        targetPlatform: TargetPlatform.iOS,
+      ).perform(action);
 
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.manifestInvalid);
@@ -64,7 +95,9 @@ void main() {
         ),
       );
 
-      final result = await StoreUpdateExecutor().perform(action);
+      final result = await StoreUpdateExecutor(
+        targetPlatform: TargetPlatform.android,
+      ).perform(action);
 
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.platformNotSupported);
@@ -77,7 +110,9 @@ void main() {
         sha256: 'a' * 64,
       );
 
-      final result = await StoreUpdateExecutor().perform(action);
+      final result = await StoreUpdateExecutor(
+        targetPlatform: TargetPlatform.android,
+      ).perform(action);
 
       expect(result.isSuccess, isFalse);
       expect(result.code, UpdateErrorCode.noSupportedAction);

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_app_updater/src/channel/flutter_app_updater_platform_interface.dart';
 import 'package:flutter_app_updater/src/download/package_downloader.dart';
@@ -27,6 +28,39 @@ void main() {
       }
     });
 
+    test('supports only Android APK download and installation', () {
+      final apk = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.apk'),
+        packageType: PackageType.apk,
+      );
+      final aab = DownloadAndInstallPackageAction(
+        packageUrl: Uri.parse('https://example.com/app.aab'),
+        packageType: PackageType.aab,
+      );
+
+      expect(
+        DownloadAndInstallPackageExecutor(
+          downloadDirectory: tempDir.path,
+          targetPlatform: TargetPlatform.android,
+        ).supports(apk),
+        isTrue,
+      );
+      expect(
+        DownloadAndInstallPackageExecutor(
+          downloadDirectory: tempDir.path,
+          targetPlatform: TargetPlatform.iOS,
+        ).supports(apk),
+        isFalse,
+      );
+      expect(
+        DownloadAndInstallPackageExecutor(
+          downloadDirectory: tempDir.path,
+          targetPlatform: TargetPlatform.android,
+        ).supports(aab),
+        isFalse,
+      );
+    });
+
     test('downloads and installs package actions', () async {
       final bytes = utf8.encode('package bytes');
       client.enqueue(
@@ -38,11 +72,15 @@ void main() {
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,
+        targetPlatform: TargetPlatform.android,
         downloader: PackageDownloader(
           client: client,
           retryStrategy: RetryStrategy.disabled,
         ),
-        installExecutor: InstallPackageExecutor(platform: platform),
+        installExecutor: InstallPackageExecutor(
+          platform: platform,
+          targetPlatform: TargetPlatform.android,
+        ),
       );
 
       final result = await executor.perform(
@@ -68,11 +106,15 @@ void main() {
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,
+        targetPlatform: TargetPlatform.android,
         downloader: PackageDownloader(
           client: client,
           retryStrategy: RetryStrategy.disabled,
         ),
-        installExecutor: InstallPackageExecutor(platform: platform),
+        installExecutor: InstallPackageExecutor(
+          platform: platform,
+          targetPlatform: TargetPlatform.android,
+        ),
       );
 
       final result = await executor.perform(
@@ -105,8 +147,12 @@ void main() {
       );
       final executor = DownloadAndInstallPackageExecutor(
         downloadDirectory: tempDir.path,
+        targetPlatform: TargetPlatform.android,
         downloader: PackageDownloader(client: client),
-        installExecutor: InstallPackageExecutor(platform: platform),
+        installExecutor: InstallPackageExecutor(
+          platform: platform,
+          targetPlatform: TargetPlatform.android,
+        ),
       );
 
       final events = await executor.performStream(action).toList();

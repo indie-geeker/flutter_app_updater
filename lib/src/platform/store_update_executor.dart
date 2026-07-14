@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../actions/update_action.dart';
@@ -7,33 +8,44 @@ import 'update_action_executor.dart';
 
 class StoreUpdateExecutor implements UpdateActionExecutor {
   final FlutterAppUpdaterPlatform platform;
+  final TargetPlatform targetPlatform;
 
   StoreUpdateExecutor({
     FlutterAppUpdaterPlatform? platform,
-  }) : platform = platform ?? FlutterAppUpdaterPlatform.instance;
+    TargetPlatform? targetPlatform,
+  })  : platform = platform ?? FlutterAppUpdaterPlatform.instance,
+        targetPlatform = targetPlatform ?? defaultTargetPlatform;
 
   @override
   bool supports(UpdateAction action) {
-    return action is OpenStoreAction;
+    if (action is! OpenStoreAction) {
+      return false;
+    }
+    return switch (targetPlatform) {
+      TargetPlatform.android => action.store == StoreKind.googlePlay,
+      TargetPlatform.iOS => action.store == StoreKind.appStore,
+      TargetPlatform.macOS => action.store == StoreKind.macAppStore,
+      _ => false,
+    };
   }
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
-    if (!supports(action)) {
+    if (action is! OpenStoreAction) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
         message: 'StoreUpdateExecutor only supports store update actions.',
       );
     }
+    if (!supports(action)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: 'This store is not supported on the current platform.',
+      );
+    }
 
     try {
-      if (action is OpenStoreAction) {
-        return await _openStore(action);
-      }
-      return const UpdateActionResult.failure(
-        code: UpdateErrorCode.noSupportedAction,
-        message: 'Unsupported store action.',
-      );
+      return await _openStore(action);
     } on PlatformException catch (error) {
       return UpdateActionResult.failure(
         code: _mapPlatformCode(error.code),

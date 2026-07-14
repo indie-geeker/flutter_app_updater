@@ -149,7 +149,7 @@ void main() {
       expect(result, isA<UpdateNotAvailable>());
     });
 
-    test('prioritizes direct actions for required updates', () {
+    test('required updates preserve the first manifest action', () {
       final packageAction = DownloadAndInstallPackageAction(
         packageUrl: Uri.parse('https://example.com/app.apk'),
         packageType: PackageType.apk,
@@ -172,7 +172,9 @@ void main() {
 
       expect(result, isA<UpdateAvailable>());
       expect(
-          (result as UpdateAvailable).recommendedAction, same(packageAction));
+        (result as UpdateAvailable).recommendedAction,
+        isA<OpenStoreAction>(),
+      );
       expect(result.isRequired, isTrue);
     });
 

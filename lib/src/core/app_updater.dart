@@ -6,6 +6,7 @@ import '../actions/update_action.dart';
 import '../download/package_downloader.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
+import '../models/update_distribution_policy.dart';
 import '../platform/android_market_executor.dart';
 import '../models/update_candidate.dart';
 import '../models/update_error_code.dart';
@@ -19,6 +20,7 @@ import '../platform/update_action_cancel_token.dart';
 import '../platform/update_action_executor.dart';
 import '../platform/update_action_event.dart';
 import '../utils/retry_strategy.dart';
+import 'update_action_selector.dart';
 import 'update_selector.dart';
 import 'update_source.dart';
 
@@ -32,6 +34,7 @@ class AppUpdater {
   final String? expectedAppId;
   final int maxDownloadBytes;
   final RetryStrategy downloadRetryStrategy;
+  final UpdateDistributionPolicy distributionPolicy;
 
   const AppUpdater({
     required this.source,
@@ -43,6 +46,7 @@ class AppUpdater {
     this.expectedAppId,
     this.maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     this.downloadRetryStrategy = RetryStrategy.standard,
+    this.distributionPolicy = UpdateDistributionPolicy.any,
   });
 
   factory AppUpdater.manifest({
@@ -59,6 +63,7 @@ class AppUpdater {
     List<UpdateActionExecutor>? executors,
     int maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     RetryStrategy downloadRetryStrategy = RetryStrategy.standard,
+    UpdateDistributionPolicy distributionPolicy = UpdateDistributionPolicy.any,
   }) {
     return AppUpdater(
       source: UpdateSource.manifest(
@@ -79,6 +84,7 @@ class AppUpdater {
       expectedAppId: expectedAppId,
       maxDownloadBytes: maxDownloadBytes,
       downloadRetryStrategy: downloadRetryStrategy,
+      distributionPolicy: distributionPolicy,
     );
   }
 
@@ -93,11 +99,15 @@ class AppUpdater {
       );
     }
 
+    final effectiveExecutors = _effectiveExecutors();
     return switch (source) {
       StaticManifestUpdateSource(:final manifest) =>
-        _selectManifest(manifest, effectiveSelector),
-      ManifestUpdateSource manifestSource =>
-        _checkRemoteManifest(manifestSource, effectiveSelector),
+        _selectManifest(manifest, effectiveSelector, effectiveExecutors),
+      ManifestUpdateSource manifestSource => _checkRemoteManifest(
+          manifestSource,
+          effectiveSelector,
+          effectiveExecutors,
+        ),
     };
   }
 
@@ -109,12 +119,13 @@ class AppUpdater {
       UpdateAvailable(
         :final candidate,
         :final recommendedAction,
+        :final actions,
         :final isRequired,
       ) =>
         PreparedUpdateAvailable(
           candidate: candidate,
           recommendedAction: recommendedAction,
-          actions: candidate.actions,
+          actions: actions,
           isRequired: isRequired,
         ),
       UpdateNotAvailable() => const PreparedUpdateNotAvailable(),
@@ -126,11 +137,12 @@ class AppUpdater {
   Future<UpdateCheckResult> _checkRemoteManifest(
     ManifestUpdateSource manifestSource,
     UpdateSelector effectiveSelector,
+    List<UpdateActionExecutor> effectiveExecutors,
   ) async {
     try {
       final json = await manifestFetcher.fetch(manifestSource);
       final manifest = const ManifestParser().parse(json);
-      return _selectManifest(manifest, effectiveSelector);
+      return _selectManifest(manifest, effectiveSelector, effectiveExecutors);
     } on FormatException catch (error) {
       return UpdateCheckFailed(
         code: UpdateErrorCode.manifestInvalid,
@@ -157,6 +169,7 @@ class AppUpdater {
   UpdateCheckResult _selectManifest(
     UpdateManifest manifest,
     UpdateSelector effectiveSelector,
+    List<UpdateActionExecutor> effectiveExecutors,
   ) {
     final configuredAppId = expectedAppId;
     final requiredAppId = configuredAppId?.trim();
@@ -173,7 +186,31 @@ class AppUpdater {
             'expected appId $requiredAppId.',
       );
     }
-    return effectiveSelector.select(manifest.releases);
+    final result = effectiveSelector.select(manifest.releases);
+    if (result is! UpdateAvailable) {
+      return result;
+    }
+
+    final supportedActions = UpdateActionSelector(
+      distributionPolicy: distributionPolicy,
+    ).supportedActions(
+      result.candidate.actions,
+      supports: (action) =>
+          effectiveExecutors.any((executor) => executor.supports(action)),
+    );
+    if (supportedActions.isEmpty) {
+      return UpdateCheckFailed(
+        code: UpdateErrorCode.noSupportedAction,
+        message: 'No executable action for ${result.candidate.version}.',
+      );
+    }
+
+    return UpdateAvailable(
+      candidate: result.candidate,
+      recommendedAction: supportedActions.first,
+      actions: supportedActions,
+      isRequired: result.isRequired,
+    );
   }
 
   Future<UpdateActionResult> perform(UpdateAction action) async {
@@ -192,7 +229,7 @@ class AppUpdater {
     UpdateAction action, {
     UpdateActionCancelToken? cancelToken,
   }) async* {
-    for (final executor in executors ?? _defaultExecutors()) {
+    for (final executor in _effectiveExecutors()) {
       if (!executor.supports(action)) {
         continue;
       }
@@ -270,16 +307,17 @@ class AppUpdater {
       retryStrategy: downloadRetryStrategy,
     );
     return [
-      StoreUpdateExecutor(),
-      AndroidMarketExecutor(),
+      StoreUpdateExecutor(targetPlatform: effectivePlatform),
+      AndroidMarketExecutor(targetPlatform: effectivePlatform),
       DownloadPackageExecutor(
         downloadDirectory: effectiveDownloadDirectory,
         downloader: downloader,
       ),
-      InstallPackageExecutor(),
+      InstallPackageExecutor(targetPlatform: effectivePlatform),
       DownloadAndInstallPackageExecutor(
         downloadDirectory: effectiveDownloadDirectory,
         downloader: downloader,
+        targetPlatform: effectivePlatform,
       ),
       DesktopInstallerExecutor(
         platform: effectivePlatform,
@@ -287,6 +325,10 @@ class AppUpdater {
         downloadDirectory: Directory(effectiveDownloadDirectory),
       ),
     ];
+  }
+
+  List<UpdateActionExecutor> _effectiveExecutors() {
+    return executors ?? _defaultExecutors();
   }
 }
 
