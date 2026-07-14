@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_app_updater/src/cli/hash_command.dart';
 import 'package:flutter_app_updater/src/cli/manifest_command.dart';
+import 'package:flutter_app_updater/src/manifest/manifest_signature.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -188,6 +190,75 @@ void main() {
         expect(result.exitCode, isNot(0));
         expect(result.stderr, contains('MANIFEST_INVALID'));
       }
+    });
+
+    test('sign emits an envelope accepted by the runtime verifier', () async {
+      final manifestFile = File('${tempDir.path}/manifest.json');
+      final signedFile = File('${tempDir.path}/manifest.signed.json');
+      final payload = utf8.encode(const ManifestCommand().generate());
+      await manifestFile.writeAsBytes(payload);
+      final seed = List<int>.generate(32, (index) => index);
+      final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+      final publicKey = await keyPair.extractPublicKey();
+      final privateKeyBase64 = base64.encode(seed);
+      final command = ManifestCommand(
+        environment: {
+          'FLUTTER_APP_UPDATER_ED25519_PRIVATE_KEY_BASE64': privateKeyBase64,
+        },
+        clock: () => DateTime.utc(2026, 7, 13, 12),
+      );
+
+      final result = await command.run([
+        'sign',
+        manifestFile.path,
+        '--key-id',
+        'release-2026-01',
+        '--expires-in',
+        '24h',
+        '--output',
+        signedFile.path,
+      ]);
+
+      expect(result.exitCode, 0);
+      final verified = await ManifestSignatureVerifier(
+        policy: ManifestSignaturePolicy.required(
+          trustedPublicKeys: {
+            'release-2026-01': base64.encode(publicKey.bytes),
+          },
+        ),
+        clock: () => DateTime.utc(2026, 7, 13, 13),
+      ).verify(await signedFile.readAsBytes());
+      expect(verified.payloadBytes, payload);
+      expect(result.stdout, isNot(contains(privateKeyBase64)));
+      expect(result.stderr, isNot(contains(privateKeyBase64)));
+      expect(
+          await signedFile.readAsString(), isNot(contains(privateKeyBase64)));
+    });
+
+    test('sign fails concisely when the private key environment is missing',
+        () async {
+      final manifestFile = File('${tempDir.path}/manifest.json');
+      await manifestFile.writeAsString(const ManifestCommand().generate());
+      final command = ManifestCommand(
+        environment: const {},
+        clock: () => DateTime.utc(2026, 7, 13, 12),
+      );
+
+      final result = await command.run([
+        'sign',
+        manifestFile.path,
+        '--key-id',
+        'release-2026-01',
+        '--expires-in',
+        '24h',
+        '--output',
+        '${tempDir.path}/manifest.signed.json',
+      ]);
+
+      expect(result.exitCode, 1);
+      expect(result.stderr,
+          contains('FLUTTER_APP_UPDATER_ED25519_PRIVATE_KEY_BASE64'));
+      expect(result.stderr, isNot(contains('null')));
     });
   });
 

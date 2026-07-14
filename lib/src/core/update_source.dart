@@ -1,4 +1,5 @@
 import '../manifest/update_manifest.dart';
+import '../manifest/manifest_signature.dart';
 
 sealed class UpdateSource {
   const UpdateSource();
@@ -8,6 +9,7 @@ sealed class UpdateSource {
     required String expectedAppId,
     Map<String, String>? headers,
     bool allowInsecureLoopback,
+    ManifestSignaturePolicy? signaturePolicy,
   }) = ManifestUpdateSource;
 
   const factory UpdateSource.staticManifest({
@@ -20,12 +22,14 @@ class ManifestUpdateSource extends UpdateSource {
   final String expectedAppId;
   final Map<String, String>? headers;
   final bool allowInsecureLoopback;
+  final ManifestSignaturePolicy signaturePolicy;
 
   factory ManifestUpdateSource({
     required Uri manifestUrl,
     required String expectedAppId,
     Map<String, String>? headers,
     bool allowInsecureLoopback = false,
+    ManifestSignaturePolicy? signaturePolicy,
   }) {
     final normalizedAppId = expectedAppId.trim();
     if (normalizedAppId.isEmpty) {
@@ -40,6 +44,7 @@ class ManifestUpdateSource extends UpdateSource {
       expectedAppId: normalizedAppId,
       headers: headers,
       allowInsecureLoopback: allowInsecureLoopback,
+      signaturePolicy: signaturePolicy ?? ManifestSignaturePolicy.optional(),
     );
   }
 
@@ -48,6 +53,7 @@ class ManifestUpdateSource extends UpdateSource {
     required this.expectedAppId,
     this.headers,
     required this.allowInsecureLoopback,
+    required this.signaturePolicy,
   });
 }
 

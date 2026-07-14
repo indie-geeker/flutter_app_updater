@@ -1,14 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import '../core/update_source.dart';
 import '../utils/retry_strategy.dart';
 import '../utils/trusted_update_uri.dart';
+import 'fetched_manifest.dart';
 
 abstract interface class ManifestFetcher {
-  Future<Map<String, Object?>> fetch(ManifestUpdateSource source);
+  Future<FetchedManifest> fetch(ManifestUpdateSource source);
 }
 
 class ManifestFetchException implements Exception {
@@ -43,7 +43,7 @@ class IoManifestFetcher implements ManifestFetcher {
   }) : assert(maxResponseBytes > 0);
 
   @override
-  Future<Map<String, Object?>> fetch(ManifestUpdateSource source) async {
+  Future<FetchedManifest> fetch(ManifestUpdateSource source) async {
     if (connectionTimeout.inMicroseconds <= 0 ||
         requestTimeout.inMicroseconds <= 0) {
       throw ArgumentError('Manifest timeouts must be greater than zero.');
@@ -70,7 +70,7 @@ class IoManifestFetcher implements ManifestFetcher {
     }
   }
 
-  Future<Map<String, Object?>> _fetchOnce(
+  Future<FetchedManifest> _fetchOnce(
     ManifestUpdateSource source,
   ) async {
     final client = HttpClient()..connectionTimeout = connectionTimeout;
@@ -87,7 +87,7 @@ class IoManifestFetcher implements ManifestFetcher {
     }
   }
 
-  Future<Map<String, Object?>> _fetchWithClient(
+  Future<FetchedManifest> _fetchWithClient(
     HttpClient client,
     ManifestUpdateSource source,
   ) async {
@@ -149,8 +149,15 @@ class IoManifestFetcher implements ManifestFetcher {
         bodyBytes.add(chunk);
       }
 
-      final body = utf8.decode(bodyBytes.takeBytes());
-      return _rootObject(jsonDecode(body));
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name.toLowerCase()] = values.join(',');
+      });
+      return FetchedManifest(
+        bodyBytes: bodyBytes.takeBytes(),
+        finalUri: currentUri,
+        responseHeaders: Map.unmodifiable(responseHeaders),
+      );
     }
   }
 
@@ -216,22 +223,5 @@ class IoManifestFetcher implements ManifestFetcher {
     return ManifestFetchException(
       message: 'Manifest request failed: $error',
     );
-  }
-
-  Map<String, Object?> _rootObject(Object? decoded) {
-    if (decoded is! Map) {
-      throw const FormatException('Manifest JSON root must be an object.');
-    }
-
-    final result = <String, Object?>{};
-    for (final entry in decoded.entries) {
-      if (entry.key is! String) {
-        throw const FormatException(
-          'Manifest JSON root contains a non-string key.',
-        );
-      }
-      result[entry.key as String] = entry.value;
-    }
-    return result;
   }
 }

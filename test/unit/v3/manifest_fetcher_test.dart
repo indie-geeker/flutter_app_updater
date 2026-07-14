@@ -80,7 +80,10 @@ void main() {
         createHttpClient: (_) => client,
       );
 
-      expect(result['appId'], 'com.example.app');
+      expect(
+        (jsonDecode(utf8.decode(result.bodyBytes)) as Map)['appId'],
+        'com.example.app',
+      );
       expect(client.requests, hasLength(1));
     });
 
@@ -220,7 +223,10 @@ void main() {
 
       final result = await fetcher.fetch(source(baseUri));
 
-      expect(result['appId'], 'com.example.app');
+      expect(
+        (jsonDecode(utf8.decode(result.bodyBytes)) as Map)['appId'],
+        'com.example.app',
+      );
       expect(requests, 2);
     });
 
@@ -411,6 +417,13 @@ class _MemoryHeaders extends Fake implements HttpHeaders {
 
   @override
   String? value(String name) => values[name.toLowerCase()];
+
+  @override
+  void forEach(void Function(String name, List<String> values) action) {
+    for (final entry in values.entries) {
+      action(entry.key, [entry.value]);
+    }
+  }
 }
 
 class _MemoryResponse extends Fake implements HttpClientResponse {

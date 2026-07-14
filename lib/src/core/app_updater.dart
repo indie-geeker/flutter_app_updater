@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import '../download/package_downloader.dart';
 import '../manifest/manifest_fetcher.dart';
 import '../manifest/manifest_parser.dart';
 import '../manifest/remote_manifest_policy.dart';
+import '../manifest/manifest_signature.dart';
 import '../models/update_distribution_policy.dart';
 import '../platform/android_market_executor.dart';
 import '../models/update_candidate.dart';
@@ -64,12 +66,14 @@ class AppUpdater {
     int maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     RetryStrategy downloadRetryStrategy = RetryStrategy.standard,
     UpdateDistributionPolicy distributionPolicy = UpdateDistributionPolicy.any,
+    ManifestSignaturePolicy? signaturePolicy,
   }) {
     return AppUpdater(
       source: UpdateSource.manifest(
         manifestUrl: manifestUrl,
         expectedAppId: expectedAppId,
         headers: headers,
+        signaturePolicy: signaturePolicy,
       ),
       selector: UpdateSelector(
         installedVersion: installedVersion,
@@ -144,7 +148,11 @@ class AppUpdater {
     List<UpdateActionExecutor> effectiveExecutors,
   ) async {
     try {
-      final json = await manifestFetcher.fetch(manifestSource);
+      final fetched = await manifestFetcher.fetch(manifestSource);
+      final verified = await ManifestSignatureVerifier(
+        policy: manifestSource.signaturePolicy,
+      ).verify(fetched.bodyBytes);
+      final json = _decodeManifestObject(verified.payloadBytes);
       final manifest = const ManifestParser().parse(json);
       if (manifest.appId != manifestSource.expectedAppId) {
         return UpdateCheckFailed(
@@ -153,7 +161,10 @@ class AppUpdater {
               'expected appId ${manifestSource.expectedAppId}.',
         );
       }
-      const RemoteManifestPolicy().validate(manifest);
+      const RemoteManifestPolicy().validate(
+        manifest,
+        isSigned: verified.isSigned,
+      );
       return _selectManifest(manifest, effectiveSelector, effectiveExecutors);
     } on FormatException catch (error) {
       return UpdateCheckFailed(
@@ -170,6 +181,11 @@ class AppUpdater {
         code: error.code,
         message: error.message,
       );
+    } on ManifestSignatureException catch (error) {
+      return UpdateCheckFailed(
+        code: error.code,
+        message: error.message,
+      );
     } on ManifestFetchException catch (error) {
       return UpdateCheckFailed(
         code: UpdateErrorCode.manifestFetchFailed,
@@ -181,6 +197,16 @@ class AppUpdater {
         message: 'Failed to fetch update manifest: $error',
       );
     }
+  }
+
+  Map<String, Object?> _decodeManifestObject(List<int> bytes) {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) {
+      throw const FormatException('Manifest JSON root must be an object.');
+    }
+    return decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
   }
 
   UpdateCheckResult _selectManifest(

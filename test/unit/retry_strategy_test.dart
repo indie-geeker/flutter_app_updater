@@ -271,6 +271,15 @@ void main() {
           );
         });
 
+        test('should not retry manifest signature failures', () {
+          for (final code in [
+            UpdateErrorCode.manifestSignatureRequired,
+            UpdateErrorCode.manifestSignatureInvalid,
+          ]) {
+            expect(strategy.shouldRetry(code, 0), isFalse);
+          }
+        });
+
         test('should not retry package install failures', () {
           expect(
             strategy.shouldRetry(

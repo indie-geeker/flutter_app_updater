@@ -4,9 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('public library exports v3 core model types', () {
+    final signaturePolicy = ManifestSignaturePolicy.required(
+      trustedPublicKeys: const {'release-key': 'public-key'},
+    );
     final source = UpdateSource.manifest(
       manifestUrl: Uri.parse('https://example.com/app-updates.json'),
       expectedAppId: 'com.example.app',
+      signaturePolicy: signaturePolicy,
+    );
+    final fetched = FetchedManifest(
+      bodyBytes: Uint8List(0),
+      finalUri: Uri.parse('https://example.com/app-updates.json'),
+      responseHeaders: const {},
     );
     final updater = AppUpdater(source: source);
     const policy = UpdatePolicy(
@@ -55,6 +64,8 @@ void main() {
       (source as ManifestUpdateSource).expectedAppId,
       'com.example.app',
     );
+    expect(source.signaturePolicy, same(signaturePolicy));
+    expect(fetched.bodyBytes, isEmpty);
     expect(candidate.policy, same(policy));
     expect(candidate.actions, [
       storeAction,

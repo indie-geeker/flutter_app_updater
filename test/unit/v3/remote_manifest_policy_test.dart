@@ -31,6 +31,42 @@ void main() {
       );
     });
 
+    test(
+        'unsigned manifests allow store actions but require signatures for artifacts',
+        () {
+      final storeManifest = _manifest([
+        OpenStoreAction(
+          store: StoreKind.googlePlay,
+          storeUrl: Uri.parse(
+            'https://play.google.com/store/apps/details?id=com.example.app',
+          ),
+        ),
+      ]);
+      final artifactManifest = _manifest([
+        DownloadPackageAction(
+          packageUrl: Uri.parse('https://cdn.example.com/app.apk'),
+          packageType: PackageType.apk,
+          packageSizeBytes: 42,
+          sha256: 'a' * 64,
+        ),
+      ]);
+
+      expect(
+        () => const RemoteManifestPolicy().validate(
+          storeManifest,
+          isSigned: false,
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => const RemoteManifestPolicy().validate(
+          artifactManifest,
+          isSigned: false,
+        ),
+        _policyFailure(UpdateErrorCode.manifestSignatureRequired),
+      );
+    });
+
     test('rejects remote installPackage actions', () {
       expect(
         () => const RemoteManifestPolicy().validate(

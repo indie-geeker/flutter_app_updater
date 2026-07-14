@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../manifest/manifest_parser.dart';
 import '../manifest/remote_manifest_policy.dart';
+import '../manifest/manifest_signature.dart';
 
 class CliCommandResult {
   final int exitCode;
@@ -17,7 +18,16 @@ class CliCommandResult {
 }
 
 class ManifestCommand {
-  const ManifestCommand();
+  static const _privateKeyEnvironment =
+      'FLUTTER_APP_UPDATER_ED25519_PRIVATE_KEY_BASE64';
+
+  final Map<String, String>? environment;
+  final DateTime Function()? clock;
+
+  const ManifestCommand({
+    this.environment,
+    this.clock,
+  });
 
   String generate() {
     const encoder = JsonEncoder.withIndent('  ');
@@ -92,7 +102,7 @@ class ManifestCommand {
     if (args.isEmpty || args.first == 'help') {
       return const CliCommandResult(
         exitCode: 0,
-        stdout: 'Usage: flutter_app_updater manifest <generate|verify>\n',
+        stdout: 'Usage: flutter_app_updater manifest <generate|verify|sign>\n',
       );
     }
 
@@ -103,11 +113,105 @@ class ManifestCommand {
           exitCode: 1,
           stderr: 'Usage: flutter_app_updater manifest verify <path>\n',
         ),
+      'sign' => _sign(args.skip(1).toList()),
       _ => CliCommandResult(
           exitCode: 1,
           stderr: 'Unknown manifest command: ${args.first}\n',
         ),
     };
+  }
+
+  Future<CliCommandResult> _sign(List<String> args) async {
+    const usage = 'Usage: flutter_app_updater manifest sign <path> '
+        '--key-id <id> --expires-in <hours>h --output <path>\n';
+    if (args.isEmpty) {
+      return const CliCommandResult(exitCode: 1, stderr: usage);
+    }
+
+    final inputPath = args.first;
+    String? keyId;
+    String? expiresIn;
+    String? outputPath;
+    for (var index = 1; index < args.length; index += 1) {
+      final option = args[index];
+      if (index + 1 >= args.length) {
+        return const CliCommandResult(exitCode: 1, stderr: usage);
+      }
+      final value = args[++index];
+      switch (option) {
+        case '--key-id':
+          keyId = value;
+        case '--expires-in':
+          expiresIn = value;
+        case '--output':
+          outputPath = value;
+        default:
+          return CliCommandResult(
+            exitCode: 1,
+            stderr: 'Unknown manifest sign option: $option\n',
+          );
+      }
+    }
+    if (keyId == null ||
+        keyId.trim().isEmpty ||
+        expiresIn == null ||
+        outputPath == null ||
+        outputPath.trim().isEmpty) {
+      return const CliCommandResult(exitCode: 1, stderr: usage);
+    }
+
+    final durationMatch = RegExp(r'^([1-9][0-9]*)h$').firstMatch(expiresIn);
+    final hours = durationMatch == null
+        ? null
+        : int.tryParse(durationMatch.group(1) ?? '');
+    if (hours == null || hours > 24 * 7) {
+      return const CliCommandResult(
+        exitCode: 1,
+        stderr: '--expires-in must be between 1h and 168h.\n',
+      );
+    }
+
+    final privateKey =
+        (environment ?? Platform.environment)[_privateKeyEnvironment];
+    if (privateKey == null || privateKey.trim().isEmpty) {
+      return const CliCommandResult(
+        exitCode: 1,
+        stderr: 'Missing $_privateKeyEnvironment.\n',
+      );
+    }
+
+    try {
+      final input = File(inputPath);
+      if (!await input.exists()) {
+        return CliCommandResult(
+          exitCode: 1,
+          stderr: 'Manifest file not found: $inputPath\n',
+        );
+      }
+      final issuedAt = (clock ?? DateTime.now)().toUtc();
+      final envelope = await ManifestSignatureSigner().sign(
+        payloadBytes: await input.readAsBytes(),
+        keyId: keyId,
+        issuedAt: issuedAt.toIso8601String(),
+        expiresAt: issuedAt.add(Duration(hours: hours)).toIso8601String(),
+        privateKeyBase64: privateKey,
+      );
+      await File(outputPath).writeAsBytes(envelope, flush: true);
+      return CliCommandResult(
+        exitCode: 0,
+        stdout: 'Signed manifest written to $outputPath\n',
+      );
+    } on FormatException catch (error) {
+      return CliCommandResult(
+        exitCode: 1,
+        stderr: 'MANIFEST_SIGNATURE_INVALID: ${error.message}\n',
+      );
+    } on FileSystemException catch (error) {
+      return CliCommandResult(
+        exitCode: 1,
+        stderr: 'Failed to sign manifest: ${error.message}\n',
+      );
+    }
   }
 
   Map<String, Object?> _asStringMap(Object? value) {

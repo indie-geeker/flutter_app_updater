@@ -1,6 +1,8 @@
 enum UpdateErrorCode {
   configurationInvalid('CONFIGURATION_INVALID'),
   manifestFetchFailed('MANIFEST_FETCH_FAILED'),
+  manifestSignatureRequired('MANIFEST_SIGNATURE_REQUIRED'),
+  manifestSignatureInvalid('MANIFEST_SIGNATURE_INVALID'),
   manifestInvalid('MANIFEST_INVALID'),
   appIdMismatch('APP_ID_MISMATCH'),
   unsupportedSchemaVersion('UNSUPPORTED_SCHEMA_VERSION'),

@@ -21,17 +21,29 @@ class RemoteManifestPolicy {
 
   const RemoteManifestPolicy();
 
-  void validate(UpdateManifest manifest) {
+  void validate(
+    UpdateManifest manifest, {
+    bool isSigned = true,
+  }) {
     for (final release in manifest.releases) {
       for (final action in release.actions) {
-        _validateAction(action, appId: manifest.appId);
+        _validateAction(
+          action,
+          appId: manifest.appId,
+          isSigned: isSigned,
+        );
       }
     }
   }
 
-  void _validateAction(UpdateAction action, {required String appId}) {
+  void _validateAction(
+    UpdateAction action, {
+    required String appId,
+    required bool isSigned,
+  }) {
     switch (action) {
       case DownloadPackageAction():
+        _requireSignature(isSigned);
         _validateArtifact(
           url: action.packageUrl,
           size: action.packageSizeBytes,
@@ -39,6 +51,7 @@ class RemoteManifestPolicy {
           field: 'packageUrl',
         );
       case DownloadAndInstallPackageAction():
+        _requireSignature(isSigned);
         _validateArtifact(
           url: action.packageUrl,
           size: action.packageSizeBytes,
@@ -46,6 +59,7 @@ class RemoteManifestPolicy {
           field: 'packageUrl',
         );
       case OpenInstallerAction():
+        _requireSignature(isSigned);
         _validateArtifact(
           url: action.installerUrl,
           size: action.installerSizeBytes,
@@ -70,6 +84,15 @@ class RemoteManifestPolicy {
         }
       case OpenStoreAction():
         _validateStore(action);
+    }
+  }
+
+  void _requireSignature(bool isSigned) {
+    if (!isSigned) {
+      throw const RemoteManifestPolicyException(
+        code: UpdateErrorCode.manifestSignatureRequired,
+        message: 'Self-hosted update actions require a signed manifest.',
+      );
     }
   }
 

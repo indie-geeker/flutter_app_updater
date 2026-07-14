@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +8,19 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('AppUpdater convenience flow', () {
     test('manifest factory builds a checkable updater', () async {
+      final seed = List<int>.generate(32, (index) => index);
+      final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+      final publicKey = await keyPair.extractPublicKey();
+      final now = DateTime.now().toUtc();
+      final signedManifest = await ManifestSignatureSigner().sign(
+        payloadBytes: Uint8List.fromList(
+          utf8.encode(jsonEncode(_manifestJson())),
+        ),
+        keyId: 'release-2026-01',
+        issuedAt: now.subtract(const Duration(minutes: 1)).toIso8601String(),
+        expiresAt: now.add(const Duration(hours: 24)).toIso8601String(),
+        privateKeyBase64: base64.encode(seed),
+      );
       final updater = AppUpdater.manifest(
         manifestUrl: Uri.parse('https://example.com/update.json'),
         expectedAppId: 'com.example.app',
@@ -12,7 +28,12 @@ void main() {
         platform: TargetPlatform.android,
         architecture: 'arm64',
         channel: 'stable',
-        manifestFetcher: _FakeManifestFetcher(_manifestJson()),
+        manifestFetcher: _FakeManifestFetcher.bytes(signedManifest),
+        signaturePolicy: ManifestSignaturePolicy.required(
+          trustedPublicKeys: {
+            'release-2026-01': base64.encode(publicKey.bytes),
+          },
+        ),
       );
 
       final result = await updater.checkAndPrepare();
@@ -213,12 +234,21 @@ OpenInstallerAction _installerAction() => OpenInstallerAction(
     );
 
 class _FakeManifestFetcher implements ManifestFetcher {
-  final Map<String, Object?> json;
+  final Uint8List bytes;
 
-  _FakeManifestFetcher(this.json);
+  _FakeManifestFetcher(Map<String, Object?> json)
+      : bytes = Uint8List.fromList(utf8.encode(jsonEncode(json)));
+
+  _FakeManifestFetcher.bytes(this.bytes);
 
   @override
-  Future<Map<String, Object?>> fetch(ManifestUpdateSource source) async => json;
+  Future<FetchedManifest> fetch(ManifestUpdateSource source) async {
+    return FetchedManifest(
+      bodyBytes: bytes,
+      finalUri: source.manifestUrl,
+      responseHeaders: const {},
+    );
+  }
 }
 
 Map<String, Object?> _manifestJson() {

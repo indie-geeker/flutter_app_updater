@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 import 'package:flutter_app_updater/src/manifest/manifest_parser.dart';
@@ -167,6 +170,107 @@ void main() {
       );
     });
 
+    test('unsigned self-hosted actions require a signed manifest', () async {
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+        ),
+        manifestFetcher: _FakeManifestFetcher(
+          _manifestJson(
+            version: '2.0.0',
+            action: {
+              'type': 'downloadPackage',
+              'packageUrl': 'https://example.com/app.apk',
+              'packageType': 'apk',
+              'packageSizeBytes': 42,
+              'sha256': 'a' * 64,
+            },
+          ),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.manifestSignatureRequired,
+      );
+    });
+
+    test('required signature policy rejects a bare store-only manifest',
+        () async {
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+          signaturePolicy: ManifestSignaturePolicy.required(
+            trustedPublicKeys: const {},
+          ),
+        ),
+        manifestFetcher: _FakeManifestFetcher(
+          _manifestJson(version: '2.0.0'),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.manifestSignatureRequired,
+      );
+    });
+
+    test('verifies a signed self-hosted manifest before selecting it',
+        () async {
+      final seed = List<int>.generate(32, (index) => 31 - index);
+      final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+      final publicKey = await keyPair.extractPublicKey();
+      final now = DateTime.now().toUtc();
+      final payload = Uint8List.fromList(
+        utf8.encode(
+          jsonEncode(
+            _manifestJson(
+              version: '2.0.0',
+              action: {
+                'type': 'downloadPackage',
+                'packageUrl': 'https://example.com/app.apk',
+                'packageType': 'apk',
+                'packageSizeBytes': 42,
+                'sha256': 'a' * 64,
+              },
+            ),
+          ),
+        ),
+      );
+      final envelope = await ManifestSignatureSigner().sign(
+        payloadBytes: payload,
+        keyId: 'release-2026-02',
+        issuedAt: now.subtract(const Duration(minutes: 1)).toIso8601String(),
+        expiresAt: now.add(const Duration(hours: 24)).toIso8601String(),
+        privateKeyBase64: base64.encode(seed),
+      );
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+          signaturePolicy: ManifestSignaturePolicy.required(
+            trustedPublicKeys: {
+              'release-2026-02': base64.encode(publicKey.bytes),
+            },
+          ),
+        ),
+        manifestFetcher: _FakeManifestFetcher.bytes(envelope),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).candidate.version, '2.0.0');
+    });
+
     test('invalid installed version is configurationInvalid for both sources',
         () async {
       for (final updater in _updatersForManifest(
@@ -297,22 +401,30 @@ List<AppUpdater> _updatersWithInvalidMinimumSupportedVersion() {
 }
 
 class _FakeManifestFetcher implements ManifestFetcher {
-  final Map<String, Object?>? _json;
+  final Uint8List? _bytes;
   final Object? _failure;
   final sources = <ManifestUpdateSource>[];
 
-  _FakeManifestFetcher(this._json) : _failure = null;
+  _FakeManifestFetcher(Map<String, Object?> json)
+      : _bytes = Uint8List.fromList(utf8.encode(jsonEncode(json))),
+        _failure = null;
 
-  _FakeManifestFetcher.throwing(this._failure) : _json = null;
+  _FakeManifestFetcher.bytes(this._bytes) : _failure = null;
+
+  _FakeManifestFetcher.throwing(this._failure) : _bytes = null;
 
   @override
-  Future<Map<String, Object?>> fetch(ManifestUpdateSource source) async {
+  Future<FetchedManifest> fetch(ManifestUpdateSource source) async {
     sources.add(source);
     final failure = _failure;
     if (failure != null) {
       throw failure;
     }
-    return _json!;
+    return FetchedManifest(
+      bodyBytes: _bytes!,
+      finalUri: source.manifestUrl,
+      responseHeaders: const {},
+    );
   }
 }
 
