@@ -7,6 +7,7 @@
 * **Safety**: Keep installation separate from download completion and revalidate file size, hash, package identity, and signing lineage before returning an install action.
 * **Testing**: Add Android unit/lint/merged-manifest CI gates plus a controllable protocol harness and an evidence template for future real-device qualification.
 * **Documentation**: Document host-owned manifest and notification setup, server requirements, Play policy implications, and force-stop, reboot, and OEM execution limits.
+* **Documentation**: Add a v2-to-v3 migration guide and a complete remote update security model.
 
 ## 3.0.0 - 2026-07-10
 

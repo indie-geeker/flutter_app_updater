@@ -59,6 +59,11 @@ The required `expectedAppId` binds a remote manifest to the consuming app.
 Manifests for another application fail with `APP_ID_MISMATCH` before release
 selection or action execution.
 
+Existing v2 integrations should follow the
+[v2-to-v3 migration guide](doc/migration-v2-to-v3.md). The complete transport,
+signature, artifact, and platform trust boundaries are documented in the
+[security model](doc/security-model.md).
+
 ## Progress and cancellation
 
 Download and installer actions expose started, progress, and one terminal event:
