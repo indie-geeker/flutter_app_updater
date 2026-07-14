@@ -20,6 +20,7 @@ import '../platform/update_action_cancel_token.dart';
 import '../platform/update_action_executor.dart';
 import '../platform/update_action_event.dart';
 import '../utils/retry_strategy.dart';
+import '../utils/version_comparator.dart';
 import 'update_action_selector.dart';
 import 'update_selector.dart';
 import 'update_source.dart';
@@ -31,7 +32,6 @@ class AppUpdater {
   final List<UpdateActionExecutor>? executors;
   final String? downloadDirectory;
   final TargetPlatform? platform;
-  final String? expectedAppId;
   final int maxDownloadBytes;
   final RetryStrategy downloadRetryStrategy;
   final UpdateDistributionPolicy distributionPolicy;
@@ -43,7 +43,6 @@ class AppUpdater {
     this.executors,
     this.downloadDirectory,
     this.platform,
-    this.expectedAppId,
     this.maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     this.downloadRetryStrategy = RetryStrategy.standard,
     this.distributionPolicy = UpdateDistributionPolicy.any,
@@ -68,6 +67,7 @@ class AppUpdater {
     return AppUpdater(
       source: UpdateSource.manifest(
         manifestUrl: manifestUrl,
+        expectedAppId: expectedAppId,
         headers: headers,
       ),
       selector: UpdateSelector(
@@ -81,7 +81,6 @@ class AppUpdater {
       executors: executors,
       downloadDirectory: downloadDirectory,
       platform: platform,
-      expectedAppId: expectedAppId,
       maxDownloadBytes: maxDownloadBytes,
       downloadRetryStrategy: downloadRetryStrategy,
       distributionPolicy: distributionPolicy,
@@ -94,9 +93,13 @@ class AppUpdater {
     final effectiveSelector = selector ?? this.selector;
     if (effectiveSelector == null) {
       return const UpdateCheckFailed(
-        code: UpdateErrorCode.manifestInvalid,
+        code: UpdateErrorCode.configurationInvalid,
         message: 'UpdateSelector is required before checking updates.',
       );
+    }
+    final configurationFailure = _validateSelector(effectiveSelector);
+    if (configurationFailure != null) {
+      return configurationFailure;
     }
 
     final effectiveExecutors = _effectiveExecutors();
@@ -142,6 +145,13 @@ class AppUpdater {
     try {
       final json = await manifestFetcher.fetch(manifestSource);
       final manifest = const ManifestParser().parse(json);
+      if (manifest.appId != manifestSource.expectedAppId) {
+        return UpdateCheckFailed(
+          code: UpdateErrorCode.appIdMismatch,
+          message: 'Manifest appId ${manifest.appId} does not match '
+              'expected appId ${manifestSource.expectedAppId}.',
+        );
+      }
       return _selectManifest(manifest, effectiveSelector, effectiveExecutors);
     } on FormatException catch (error) {
       return UpdateCheckFailed(
@@ -171,22 +181,15 @@ class AppUpdater {
     UpdateSelector effectiveSelector,
     List<UpdateActionExecutor> effectiveExecutors,
   ) {
-    final configuredAppId = expectedAppId;
-    final requiredAppId = configuredAppId?.trim();
-    if (configuredAppId != null && requiredAppId!.isEmpty) {
-      return const UpdateCheckFailed(
-        code: UpdateErrorCode.manifestInvalid,
-        message: 'expectedAppId must not be blank.',
-      );
-    }
-    if (requiredAppId != null && manifest.appId != requiredAppId) {
+    late final UpdateCheckResult result;
+    try {
+      result = effectiveSelector.select(manifest.releases);
+    } on FormatException catch (error) {
       return UpdateCheckFailed(
-        code: UpdateErrorCode.appIdMismatch,
-        message: 'Manifest appId ${manifest.appId} does not match '
-            'expected appId $requiredAppId.',
+        code: UpdateErrorCode.configurationInvalid,
+        message: error.message,
       );
     }
-    final result = effectiveSelector.select(manifest.releases);
     if (result is! UpdateAvailable) {
       return result;
     }
@@ -211,6 +214,30 @@ class AppUpdater {
       actions: supportedActions,
       isRequired: result.isRequired,
     );
+  }
+
+  UpdateCheckFailed? _validateSelector(UpdateSelector effectiveSelector) {
+    if (!VersionComparator.isValidVersion(
+      effectiveSelector.installedVersion,
+    )) {
+      return UpdateCheckFailed(
+        code: UpdateErrorCode.configurationInvalid,
+        message: 'Invalid installedVersion: '
+            '${effectiveSelector.installedVersion}.',
+      );
+    }
+
+    final buildNumber = effectiveSelector.installedBuildNumber;
+    if (buildNumber != null) {
+      final parsedBuildNumber = int.tryParse(buildNumber.trim());
+      if (parsedBuildNumber == null || parsedBuildNumber < 0) {
+        return UpdateCheckFailed(
+          code: UpdateErrorCode.configurationInvalid,
+          message: 'Invalid installedBuildNumber: $buildNumber.',
+        );
+      }
+    }
+    return null;
   }
 
   Future<UpdateActionResult> perform(UpdateAction action) async {

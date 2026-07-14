@@ -68,7 +68,6 @@ class UpdateDemoController extends ChangeNotifier {
       final manifest = const DemoManifestFactory().build(_scenario);
       final updater = AppUpdater(
         source: UpdateSource.staticManifest(manifest: manifest),
-        expectedAppId: DemoManifestFactory.appId,
         selector: _scenario.toSelector(),
         executors: [
           SimulatedUpdateExecutor(

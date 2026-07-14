@@ -174,6 +174,7 @@ class RetryStrategy {
       UpdateErrorCode.manifestFetchFailed ||
       UpdateErrorCode.packageDownloadFailed =>
         true,
+      UpdateErrorCode.configurationInvalid ||
       UpdateErrorCode.manifestInvalid ||
       UpdateErrorCode.appIdMismatch ||
       UpdateErrorCode.unsupportedSchemaVersion ||

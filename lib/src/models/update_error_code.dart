@@ -1,4 +1,5 @@
 enum UpdateErrorCode {
+  configurationInvalid('CONFIGURATION_INVALID'),
   manifestFetchFailed('MANIFEST_FETCH_FAILED'),
   manifestInvalid('MANIFEST_INVALID'),
   appIdMismatch('APP_ID_MISMATCH'),

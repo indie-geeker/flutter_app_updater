@@ -250,6 +250,13 @@ void main() {
       });
 
       group('UpdateErrorCode', () {
+        test('should not retry invalid configuration', () {
+          expect(
+            strategy.shouldRetry(UpdateErrorCode.configurationInvalid, 0),
+            isFalse,
+          );
+        });
+
         test('should retry on PACKAGE_DOWNLOAD_FAILED', () {
           expect(
             strategy.shouldRetry(UpdateErrorCode.packageDownloadFailed, 0),

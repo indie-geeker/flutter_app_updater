@@ -93,6 +93,7 @@ void main() {
       final androidUpdater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
         ),
         selector: const UpdateSelector(
           installedVersion: '1.0.0',
@@ -105,6 +106,7 @@ void main() {
       final windowsUpdater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
         ),
         selector: const UpdateSelector(
           installedVersion: '1.0.0',
@@ -154,6 +156,7 @@ AppUpdater _updater({
   return AppUpdater(
     source: UpdateSource.manifest(
       manifestUrl: Uri.parse('https://example.com/update.json'),
+      expectedAppId: 'com.example.app',
     ),
     executors: executors,
   );

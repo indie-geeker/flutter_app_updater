@@ -6,6 +6,7 @@ void main() {
   test('public library exports v3 core model types', () {
     final source = UpdateSource.manifest(
       manifestUrl: Uri.parse('https://example.com/app-updates.json'),
+      expectedAppId: 'com.example.app',
     );
     final updater = AppUpdater(source: source);
     const policy = UpdatePolicy(
@@ -48,6 +49,10 @@ void main() {
     );
 
     expect(updater.source, same(source));
+    expect(
+      (source as ManifestUpdateSource).expectedAppId,
+      'com.example.app',
+    );
     expect(candidate.policy, same(policy));
     expect(candidate.actions, [
       storeAction,

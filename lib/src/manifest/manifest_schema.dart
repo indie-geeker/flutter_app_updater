@@ -61,7 +61,11 @@ class ManifestSchema {
       final minSupportedVersion =
           _optionalString(policyMap, 'minSupportedVersion');
       if (minSupportedVersion != null) {
-        _validateVersion(minSupportedVersion, 'minSupportedVersion');
+        _validateVersion(
+          minSupportedVersion,
+          'minSupportedVersion',
+          code: UpdateErrorCode.configurationInvalid,
+        );
       }
     }
 
@@ -78,10 +82,14 @@ class ManifestSchema {
     }
   }
 
-  void _validateVersion(String value, String field) {
+  void _validateVersion(
+    String value,
+    String field, {
+    UpdateErrorCode code = UpdateErrorCode.manifestInvalid,
+  }) {
     if (!VersionComparator.isValidVersion(value)) {
       throw ManifestParseException(
-        code: UpdateErrorCode.manifestInvalid,
+        code: code,
         message: '$field must be a valid semantic version.',
       );
     }

@@ -29,7 +29,6 @@ void main() {
       final manifest = const DemoManifestFactory().build(scenario);
       final updater = AppUpdater(
         source: UpdateSource.staticManifest(manifest: manifest),
-        expectedAppId: DemoManifestFactory.appId,
         selector: scenario.toSelector(),
         executors: const [],
       );

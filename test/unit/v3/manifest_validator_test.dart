@@ -60,7 +60,7 @@ void main() {
           isA<ManifestParseException>().having(
             (error) => error.code,
             'code',
-            UpdateErrorCode.manifestInvalid,
+            UpdateErrorCode.configurationInvalid,
           ),
         ),
       );

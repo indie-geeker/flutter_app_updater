@@ -26,8 +26,10 @@ void main() {
   }
 
   ManifestUpdateSource source(Uri baseUri) {
-    return UpdateSource.manifest(manifestUrl: baseUri.resolve('/manifest'))
-        as ManifestUpdateSource;
+    return UpdateSource.manifest(
+      manifestUrl: baseUri.resolve('/manifest'),
+      expectedAppId: 'com.example.app',
+    ) as ManifestUpdateSource;
   }
 
   group('IoManifestFetcher', () {
@@ -119,6 +121,7 @@ void main() {
       );
       final hangingSource = UpdateSource.manifest(
         manifestUrl: Uri.parse('https://example.com/manifest.json'),
+        expectedAppId: 'com.example.app',
       ) as ManifestUpdateSource;
 
       await expectLater(
@@ -135,6 +138,7 @@ void main() {
       const fetcher = IoManifestFetcher(retryStrategy: RetryStrategy.disabled);
       final invalidSource = UpdateSource.manifest(
         manifestUrl: Uri.parse('file:///tmp/manifest.json'),
+        expectedAppId: 'com.example.app',
       ) as ManifestUpdateSource;
 
       expect(

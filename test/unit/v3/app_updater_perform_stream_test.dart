@@ -116,6 +116,7 @@ AppUpdater _updater(List<UpdateActionExecutor> executors) {
   return AppUpdater(
     source: UpdateSource.manifest(
       manifestUrl: Uri.parse('https://example.com/manifest.json'),
+      expectedAppId: 'com.example.app',
     ),
     executors: executors,
   );

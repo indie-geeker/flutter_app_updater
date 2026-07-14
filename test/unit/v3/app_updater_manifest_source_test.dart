@@ -9,6 +9,7 @@ void main() {
       final fetcher = _FakeManifestFetcher(_manifestJson(version: '2.0.0'));
       final source = UpdateSource.manifest(
         manifestUrl: Uri.parse('https://example.com/update.json'),
+        expectedAppId: 'com.example.app',
       );
       final updater = AppUpdater(
         source: source,
@@ -27,6 +28,7 @@ void main() {
       final fetcher = _FakeManifestFetcher(_manifestJson(version: '2.0.0'));
       final source = UpdateSource.manifest(
         manifestUrl: Uri.parse('https://example.com/update.json'),
+        expectedAppId: 'com.example.app',
         headers: headers,
       );
       final updater = AppUpdater(
@@ -43,8 +45,8 @@ void main() {
       final updater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.expected',
         ),
-        expectedAppId: 'com.example.expected',
         manifestFetcher: _FakeManifestFetcher(
           _manifestJson(version: '2.0.0', appId: 'com.example.other'),
         ),
@@ -59,42 +61,20 @@ void main() {
       );
     });
 
-    test('rejects a static manifest for a different application', () async {
-      final manifest = const ManifestParser().parse(
-        _manifestJson(version: '2.0.0', appId: 'com.example.other'),
-      );
-      final updater = AppUpdater(
-        source: UpdateSource.staticManifest(manifest: manifest),
-        expectedAppId: 'com.example.expected',
-      );
-
-      final result = await updater.check(selector: _selector());
-
-      expect(result, isA<UpdateCheckFailed>());
+    test('requires a nonblank application ID for remote sources', () {
       expect(
-        (result as UpdateCheckFailed).code,
-        UpdateErrorCode.appIdMismatch,
-      );
-    });
-
-    test('rejects a blank expected application ID as invalid configuration',
-        () async {
-      final updater = AppUpdater(
-        source: UpdateSource.manifest(
+        () => UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: '  ',
         ),
-        expectedAppId: '  ',
-        manifestFetcher: _FakeManifestFetcher(
-          _manifestJson(version: '2.0.0'),
-        ),
+        throwsArgumentError,
       );
-
-      final result = await updater.check(selector: _selector());
-
-      expect(result, isA<UpdateCheckFailed>());
       expect(
-        (result as UpdateCheckFailed).code,
-        UpdateErrorCode.manifestInvalid,
+        () => ManifestUpdateSource(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: '',
+        ),
+        throwsArgumentError,
       );
     });
 
@@ -102,6 +82,7 @@ void main() {
       final updater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
         ),
         manifestFetcher: _FakeManifestFetcher.throwing(
           const ManifestFetchException(
@@ -124,6 +105,7 @@ void main() {
       final updater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
         ),
         manifestFetcher: _FakeManifestFetcher.throwing(
           const FormatException('Unexpected character.'),
@@ -143,6 +125,7 @@ void main() {
       final updater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
         ),
         manifestFetcher: _FakeManifestFetcher.throwing(
           StateError('network down'),
@@ -157,7 +140,134 @@ void main() {
         UpdateErrorCode.manifestFetchFailed,
       );
     });
+
+    test('invalid installed version is configurationInvalid for both sources',
+        () async {
+      for (final updater in _updatersForManifest(
+        _manifestJson(version: '2.0.0'),
+      )) {
+        final result = await updater.check(
+          selector: _selector(installedVersion: 'not-a-version'),
+        );
+
+        expect(result, isA<UpdateCheckFailed>());
+        expect(
+          (result as UpdateCheckFailed).code,
+          UpdateErrorCode.configurationInvalid,
+        );
+      }
+    });
+
+    test('invalid installed build number is configurationInvalid', () async {
+      final updater = _updatersForManifest(
+        _manifestJson(version: '2.0.0'),
+      ).first;
+
+      final result = await updater.check(
+        selector: const UpdateSelector(
+          installedVersion: '1.0.0',
+          installedBuildNumber: '-1',
+          platform: TargetPlatform.android,
+          architecture: 'arm64',
+          channel: 'stable',
+        ),
+      );
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.configurationInvalid,
+      );
+    });
+
+    test(
+        'invalid minimum-supported version is configurationInvalid for both sources',
+        () async {
+      for (final updater in _updatersWithInvalidMinimumSupportedVersion()) {
+        final result = await updater.check(selector: _selector());
+
+        expect(result, isA<UpdateCheckFailed>());
+        expect(
+          (result as UpdateCheckFailed).code,
+          UpdateErrorCode.configurationInvalid,
+        );
+      }
+    });
+
+    test('checkAndPrepare does not leak invalid version exceptions', () async {
+      for (final updater in _updatersForManifest(
+        _manifestJson(version: '2.0.0'),
+      )) {
+        final result = await updater.checkAndPrepare(
+          selector: _selector(installedVersion: 'not-a-version'),
+        );
+
+        expect(result, isA<PreparedUpdateCheckFailed>());
+        expect(
+          (result as PreparedUpdateCheckFailed).code,
+          UpdateErrorCode.configurationInvalid,
+        );
+      }
+    });
   });
+}
+
+List<AppUpdater> _updatersForManifest(Map<String, Object?> json) {
+  final manifest = const ManifestParser().parse(json);
+  return [
+    AppUpdater(
+      source: UpdateSource.staticManifest(manifest: manifest),
+    ),
+    AppUpdater(
+      source: UpdateSource.manifest(
+        manifestUrl: Uri.parse('https://example.com/update.json'),
+        expectedAppId: 'com.example.app',
+      ),
+      manifestFetcher: _FakeManifestFetcher(json),
+    ),
+  ];
+}
+
+List<AppUpdater> _updatersWithInvalidMinimumSupportedVersion() {
+  final json = _manifestJson(
+    version: '2.0.0',
+    minSupportedVersion: 'not-a-version',
+  );
+  final staticManifest = UpdateManifest(
+    schemaVersion: 3,
+    appId: 'com.example.app',
+    channel: 'stable',
+    releases: [
+      UpdateCandidate(
+        version: '2.0.0',
+        channel: 'stable',
+        platform: TargetPlatform.android,
+        architecture: 'arm64',
+        releaseNotes: 'Bug fixes',
+        policy: const UpdatePolicy(
+          minSupportedVersion: 'not-a-version',
+        ),
+        actions: [
+          OpenStoreAction(
+            store: StoreKind.googlePlay,
+            storeUrl: Uri.parse(
+              'https://play.google.com/store/apps/details?id=com.example.app',
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+  return [
+    AppUpdater(source: UpdateSource.staticManifest(manifest: staticManifest)),
+    AppUpdater(
+      source: UpdateSource.manifest(
+        manifestUrl: Uri.parse('https://example.com/update.json'),
+        expectedAppId: 'com.example.app',
+      ),
+      manifestFetcher: _FakeManifestFetcher(json),
+    ),
+  ];
 }
 
 class _FakeManifestFetcher implements ManifestFetcher {
@@ -180,9 +290,9 @@ class _FakeManifestFetcher implements ManifestFetcher {
   }
 }
 
-UpdateSelector _selector() {
-  return const UpdateSelector(
-    installedVersion: '1.0.0',
+UpdateSelector _selector({String installedVersion = '1.0.0'}) {
+  return UpdateSelector(
+    installedVersion: installedVersion,
     platform: TargetPlatform.android,
     architecture: 'arm64',
     channel: 'stable',
@@ -192,6 +302,7 @@ UpdateSelector _selector() {
 Map<String, Object?> _manifestJson({
   required String version,
   String appId = 'com.example.app',
+  String? minSupportedVersion,
 }) {
   return {
     'schemaVersion': 3,
@@ -206,6 +317,8 @@ Map<String, Object?> _manifestJson({
         'architecture': 'arm64',
         'releaseNotes': 'Bug fixes',
         'releasedAt': '2026-07-03T00:00:00Z',
+        if (minSupportedVersion != null)
+          'policy': {'minSupportedVersion': minSupportedVersion},
         'actions': [
           {
             'type': 'openStore',

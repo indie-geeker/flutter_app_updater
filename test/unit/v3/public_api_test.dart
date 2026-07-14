@@ -9,6 +9,7 @@ void main() {
     final updater = AppUpdater(
       source: UpdateSource.manifest(
         manifestUrl: Uri.parse('https://example.com/app-updates.json'),
+        expectedAppId: 'com.example.app',
       ),
       selector: const UpdateSelector(
         installedVersion: '1.0.0',
@@ -60,6 +61,10 @@ void main() {
     );
 
     expect(updater.source, isA<ManifestUpdateSource>());
+    expect(
+      (updater.source as ManifestUpdateSource).expectedAppId,
+      'com.example.app',
+    );
     expect(manifest.releases.single, same(candidate));
     expect(candidate.actions, hasLength(6));
     expect(candidate.policy.level, UpdatePolicyLevel.required);
