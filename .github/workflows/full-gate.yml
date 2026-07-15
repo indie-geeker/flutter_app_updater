@@ -32,6 +32,8 @@ jobs:
         run: flutter analyze --no-pub
       - name: Test package
         run: flutter test --no-pub
+      - name: Verify executable package CLI
+        run: dart run tool/ci/verify_cli_executable.dart
       - name: Analyze example
         working-directory: example
         run: flutter analyze --no-pub
@@ -65,8 +67,8 @@ jobs:
         run: |
           awk '
             BEGIN {
-              critical = "(manifest_fetcher|manifest_schema|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
-              expected_critical = 9
+              critical = "(manifest_fetcher|manifest_schema|remote_action_policy|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
+              expected_critical = 10
             }
             /^SF:/ { file = substr($0, 4); lf = 0; lh = 0 }
             /^LF:/ { lf = substr($0, 4) + 0; total_lf += lf }

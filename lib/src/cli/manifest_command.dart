@@ -1,28 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../manifest/manifest_parser.dart';
-import '../manifest/remote_manifest_policy.dart';
+import '../manifest/manifest_document_parser.dart';
+import '../manifest/remote_action_policy.dart';
 import '../manifest/manifest_signature.dart';
-
-/// Captured process result returned by package CLI commands.
-class CliCommandResult {
-  /// Conventional process exit code.
-  final int exitCode;
-
-  /// Text intended for standard output.
-  final String stdout;
-
-  /// Text intended for standard error.
-  final String stderr;
-
-  /// Creates a captured CLI result.
-  const CliCommandResult({
-    required this.exitCode,
-    this.stdout = '',
-    this.stderr = '',
-  });
-}
+import 'cli_command_result.dart';
 
 /// Generates, validates, and signs v3 update manifests.
 class ManifestCommand {
@@ -87,8 +69,9 @@ class ManifestCommand {
       }
 
       final decoded = jsonDecode(await file.readAsString());
-      final manifest = const ManifestParser().parse(_asStringMap(decoded));
-      const RemoteManifestPolicy().validate(manifest);
+      final document =
+          const ManifestDocumentParser().parse(_asStringMap(decoded));
+      const RemoteActionPolicy().validateDocument(document);
 
       return const CliCommandResult(
         exitCode: 0,

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
 
-import 'manifest_command.dart';
+import 'cli_command_result.dart';
 
 /// Computes release-compatible SHA-256 artifact digests.
 class HashCommand {

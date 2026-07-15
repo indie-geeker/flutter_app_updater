@@ -2,15 +2,16 @@ import 'package:flutter/foundation.dart';
 
 import '../actions/update_action.dart';
 import '../models/update_candidate.dart';
-import '../models/update_error_code.dart';
 import '../models/update_policy.dart';
+import 'manifest_document.dart';
+import 'manifest_document_parser.dart';
 import 'manifest_validator.dart';
 import 'update_manifest.dart';
 
 export 'manifest_validator.dart' show ManifestParseException;
 export 'update_manifest.dart' show UpdateManifest;
 
-/// Converts schema-valid manifest JSON into immutable v3 models.
+/// Adapts a pure Dart manifest document into immutable Flutter v3 models.
 class ManifestParser {
   /// Structural validator run before any field is interpreted.
   final ManifestValidator validator;
@@ -25,291 +26,115 @@ class ManifestParser {
   /// Throws [ManifestParseException] for invalid schema, enum values, URLs,
   /// versions, timestamps, or action metadata.
   UpdateManifest parse(Map<String, Object?> json) {
-    validator.validate(json);
-
-    final channel = _requiredString(json, 'channel');
+    final document = ManifestDocumentParser(validator: validator).parse(json);
     return UpdateManifest(
-      schemaVersion: _requiredInt(json, 'schemaVersion'),
-      appId: _requiredString(json, 'appId'),
-      channel: channel,
-      releases: _requiredList(json, 'releases')
-          .map((release) => _parseRelease(_asMap(release, 'release'), channel))
-          .toList(growable: false),
+      schemaVersion: document.schemaVersion,
+      appId: document.appId,
+      channel: document.channel,
+      releases: document.releases.map(_adaptRelease).toList(growable: false),
     );
   }
 
-  UpdateCandidate _parseRelease(
-    Map<String, Object?> release,
-    String defaultChannel,
-  ) {
+  UpdateCandidate _adaptRelease(ManifestReleaseDocument release) {
     return UpdateCandidate(
-      version: _requiredString(release, 'version'),
-      buildNumber: _optionalString(release, 'buildNumber'),
-      channel: _optionalString(release, 'channel') ?? defaultChannel,
-      platform: _parsePlatform(_requiredString(release, 'platform')),
-      architecture: _optionalString(release, 'architecture'),
-      releaseNotes: _requiredString(release, 'releaseNotes'),
-      releasedAt: _parseOptionalDateTime(release['releasedAt']),
-      policy: _parsePolicy(_optionalMap(release, 'policy')),
-      actions: _requiredList(release, 'actions')
-          .map((action) => _parseAction(_asMap(action, 'action')))
-          .toList(growable: false),
+      version: release.version,
+      buildNumber: release.buildNumber,
+      channel: release.channel,
+      platform: _adaptPlatform(release.platform),
+      architecture: release.architecture,
+      releaseNotes: release.releaseNotes,
+      releasedAt: release.releasedAt,
+      policy: _adaptPolicy(release.policy),
+      actions: release.actions.map(_adaptAction).toList(growable: false),
     );
   }
 
-  UpdatePolicy _parsePolicy(Map<String, Object?>? policy) {
-    if (policy == null) {
-      return const UpdatePolicy();
-    }
+  TargetPlatform _adaptPlatform(ManifestPlatform platform) {
+    return switch (platform) {
+      ManifestPlatform.android => TargetPlatform.android,
+      ManifestPlatform.ios => TargetPlatform.iOS,
+      ManifestPlatform.macos => TargetPlatform.macOS,
+      ManifestPlatform.windows => TargetPlatform.windows,
+      ManifestPlatform.linux => TargetPlatform.linux,
+      ManifestPlatform.fuchsia => TargetPlatform.fuchsia,
+    };
+  }
 
+  UpdatePolicy _adaptPolicy(ManifestPolicyDocument policy) {
     return UpdatePolicy(
-      level: _parsePolicyLevel(
-        _optionalString(policy, 'level') ?? UpdatePolicyLevel.optional.name,
-      ),
-      minSupportedVersion: _optionalString(policy, 'minSupportedVersion'),
+      level: switch (policy.level) {
+        ManifestPolicyLevel.optional => UpdatePolicyLevel.optional,
+        ManifestPolicyLevel.recommended => UpdatePolicyLevel.recommended,
+        ManifestPolicyLevel.required => UpdatePolicyLevel.required,
+      },
+      minSupportedVersion: policy.minSupportedVersion,
     );
   }
 
-  UpdateAction _parseAction(Map<String, Object?> action) {
-    final type = _requiredString(action, 'type');
-    return switch (type) {
-      'openStore' => OpenStoreAction(
-          store: _parseStoreKind(_requiredString(action, 'store')),
-          storeUrl: _requiredAbsoluteUri(action, 'storeUrl'),
+  UpdateAction _adaptAction(ManifestAction action) {
+    return switch (action) {
+      ManifestOpenStoreAction() => OpenStoreAction(
+          store: switch (action.store) {
+            ManifestStoreKind.appStore => StoreKind.appStore,
+            ManifestStoreKind.macAppStore => StoreKind.macAppStore,
+            ManifestStoreKind.googlePlay => StoreKind.googlePlay,
+          },
+          storeUrl: action.storeUrl,
         ),
-      'openAndroidMarket' => OpenAndroidMarketAction(
-          market: _parseAndroidMarketKind(_requiredString(action, 'market')),
-          targetPackageName: _requiredString(action, 'targetPackageName'),
-          fallbackUrl: _optionalAbsoluteUri(action, 'fallbackUrl'),
+      ManifestOpenAndroidMarketAction() => OpenAndroidMarketAction(
+          market: switch (action.market) {
+            ManifestAndroidMarketKind.huawei => AndroidMarketKind.huawei,
+            ManifestAndroidMarketKind.honor => AndroidMarketKind.honor,
+            ManifestAndroidMarketKind.xiaomi => AndroidMarketKind.xiaomi,
+            ManifestAndroidMarketKind.oppo => AndroidMarketKind.oppo,
+            ManifestAndroidMarketKind.vivo => AndroidMarketKind.vivo,
+            ManifestAndroidMarketKind.meizu => AndroidMarketKind.meizu,
+            ManifestAndroidMarketKind.tencentMyApp =>
+              AndroidMarketKind.tencentMyApp,
+            ManifestAndroidMarketKind.generic => AndroidMarketKind.generic,
+          },
+          targetPackageName: action.targetPackageName,
+          fallbackUrl: action.fallbackUrl,
         ),
-      'downloadPackage' => DownloadPackageAction(
-          packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
-          packageType:
-              _parsePackageType(_requiredString(action, 'packageType')),
-          packageSizeBytes: _requiredInt(action, 'packageSizeBytes'),
-          sha256: _requiredString(action, 'sha256').toLowerCase(),
+      ManifestDownloadPackageAction() => DownloadPackageAction(
+          packageUrl: action.packageUrl,
+          packageType: _adaptPackageType(action.packageType),
+          packageSizeBytes: action.packageSizeBytes,
+          sha256: action.sha256,
         ),
-      'installPackage' => InstallPackageAction(
-          packagePath: _requiredString(action, 'packagePath'),
-          packageType: _parsePackageType(
-            _optionalString(action, 'packageType') ?? PackageType.apk.name,
-          ),
+      ManifestInstallPackageAction() => InstallPackageAction(
+          packagePath: action.packagePath,
+          packageType: _adaptPackageType(action.packageType),
         ),
-      'downloadAndInstallPackage' => DownloadAndInstallPackageAction(
-          packageUrl: _requiredAbsoluteUri(action, 'packageUrl'),
-          packageType:
-              _parsePackageType(_requiredString(action, 'packageType')),
-          packageSizeBytes: _requiredInt(action, 'packageSizeBytes'),
-          sha256: _requiredString(action, 'sha256').toLowerCase(),
+      ManifestDownloadAndInstallPackageAction() =>
+        DownloadAndInstallPackageAction(
+          packageUrl: action.packageUrl,
+          packageType: _adaptPackageType(action.packageType),
+          packageSizeBytes: action.packageSizeBytes,
+          sha256: action.sha256,
         ),
-      'openInstaller' => OpenInstallerAction(
-          installerUrl: _requiredAbsoluteUri(action, 'installerUrl'),
-          installerType: _parseInstallerType(
-            _requiredString(action, 'installerType'),
-          ),
-          installerSizeBytes: _requiredInt(action, 'installerSizeBytes'),
-          sha256: _requiredString(action, 'sha256').toLowerCase(),
-        ),
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.unsupportedActionType,
-          message: 'Unsupported action type: $type.',
-        ),
-    };
-  }
-
-  TargetPlatform _parsePlatform(String value) {
-    return switch (value) {
-      'android' => TargetPlatform.android,
-      'ios' => TargetPlatform.iOS,
-      'macos' => TargetPlatform.macOS,
-      'windows' => TargetPlatform.windows,
-      'linux' => TargetPlatform.linux,
-      'fuchsia' => TargetPlatform.fuchsia,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported platform: $value.',
+      ManifestOpenInstallerAction() => OpenInstallerAction(
+          installerUrl: action.installerUrl,
+          installerType: switch (action.installerType) {
+            ManifestInstallerType.msix => InstallerType.msix,
+            ManifestInstallerType.msi => InstallerType.msi,
+            ManifestInstallerType.exe => InstallerType.exe,
+            ManifestInstallerType.dmg => InstallerType.dmg,
+            ManifestInstallerType.zip => InstallerType.zip,
+            ManifestInstallerType.appImage => InstallerType.appImage,
+            ManifestInstallerType.deb => InstallerType.deb,
+            ManifestInstallerType.rpm => InstallerType.rpm,
+          },
+          installerSizeBytes: action.installerSizeBytes,
+          sha256: action.sha256,
         ),
     };
   }
 
-  UpdatePolicyLevel _parsePolicyLevel(String value) {
-    return switch (value) {
-      'optional' => UpdatePolicyLevel.optional,
-      'recommended' => UpdatePolicyLevel.recommended,
-      'required' => UpdatePolicyLevel.required,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported policy level: $value.',
-        ),
+  PackageType _adaptPackageType(ManifestPackageType packageType) {
+    return switch (packageType) {
+      ManifestPackageType.apk => PackageType.apk,
+      ManifestPackageType.aab => PackageType.aab,
     };
-  }
-
-  StoreKind _parseStoreKind(String value) {
-    return switch (value) {
-      'appStore' => StoreKind.appStore,
-      'macAppStore' => StoreKind.macAppStore,
-      'googlePlay' => StoreKind.googlePlay,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported store: $value.',
-        ),
-    };
-  }
-
-  AndroidMarketKind _parseAndroidMarketKind(String value) {
-    return switch (value) {
-      'huawei' => AndroidMarketKind.huawei,
-      'honor' => AndroidMarketKind.honor,
-      'xiaomi' => AndroidMarketKind.xiaomi,
-      'oppo' => AndroidMarketKind.oppo,
-      'vivo' => AndroidMarketKind.vivo,
-      'meizu' => AndroidMarketKind.meizu,
-      'tencentMyApp' => AndroidMarketKind.tencentMyApp,
-      'generic' => AndroidMarketKind.generic,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported Android market: $value.',
-        ),
-    };
-  }
-
-  PackageType _parsePackageType(String value) {
-    return switch (value) {
-      'apk' => PackageType.apk,
-      'aab' => PackageType.aab,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported package type: $value.',
-        ),
-    };
-  }
-
-  InstallerType _parseInstallerType(String value) {
-    return switch (value) {
-      'msix' => InstallerType.msix,
-      'msi' => InstallerType.msi,
-      'exe' => InstallerType.exe,
-      'dmg' => InstallerType.dmg,
-      'zip' => InstallerType.zip,
-      'appImage' => InstallerType.appImage,
-      'deb' => InstallerType.deb,
-      'rpm' => InstallerType.rpm,
-      _ => throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported installer type: $value.',
-        ),
-    };
-  }
-
-  DateTime? _parseOptionalDateTime(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is String) {
-      final parsed = DateTime.tryParse(value);
-      if (parsed != null) {
-        return parsed;
-      }
-    }
-    throw const ManifestParseException(
-      code: UpdateErrorCode.manifestInvalid,
-      message: 'releasedAt must be an ISO-8601 string.',
-    );
-  }
-
-  Uri _requiredAbsoluteUri(Map<String, Object?> map, String field) {
-    return _parseAbsoluteUri(_requiredString(map, field), field);
-  }
-
-  Uri? _optionalAbsoluteUri(Map<String, Object?> map, String field) {
-    final value = _optionalString(map, field);
-    return value == null ? null : _parseAbsoluteUri(value, field);
-  }
-
-  Uri _parseAbsoluteUri(String value, String field) {
-    final uri = Uri.tryParse(value);
-    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
-      throw ManifestParseException(
-        code: UpdateErrorCode.manifestInvalid,
-        message: '$field must be an absolute URL.',
-      );
-    }
-    return uri;
-  }
-
-  Map<String, Object?>? _optionalMap(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
-      return null;
-    }
-    return _asMap(value, field);
-  }
-
-  Map<String, Object?> _asMap(Object? value, String field) {
-    if (value is! Map) {
-      throw ManifestParseException(
-        code: UpdateErrorCode.manifestInvalid,
-        message: '$field must be an object.',
-      );
-    }
-
-    final result = <String, Object?>{};
-    for (final entry in value.entries) {
-      if (entry.key is! String) {
-        throw ManifestParseException(
-          code: UpdateErrorCode.manifestInvalid,
-          message: '$field contains a non-string key.',
-        );
-      }
-      result[entry.key as String] = entry.value;
-    }
-    return result;
-  }
-
-  List<Object?> _requiredList(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value is List) {
-      return value.cast<Object?>();
-    }
-    throw ManifestParseException(
-      code: UpdateErrorCode.missingRequiredField,
-      message: '$field is required.',
-    );
-  }
-
-  String _requiredString(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value is String && value.isNotEmpty) {
-      return value;
-    }
-    throw ManifestParseException(
-      code: UpdateErrorCode.missingRequiredField,
-      message: '$field is required.',
-    );
-  }
-
-  String? _optionalString(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
-      return null;
-    }
-    if (value is String && value.isNotEmpty) {
-      return value;
-    }
-    throw ManifestParseException(
-      code: UpdateErrorCode.manifestInvalid,
-      message: '$field must be a string.',
-    );
-  }
-
-  int _requiredInt(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value is int) {
-      return value;
-    }
-    throw ManifestParseException(
-      code: UpdateErrorCode.missingRequiredField,
-      message: '$field is required.',
-    );
   }
 }

@@ -4,7 +4,11 @@ import 'dart:io';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_app_updater/src/cli/hash_command.dart';
 import 'package:flutter_app_updater/src/cli/manifest_command.dart';
+import 'package:flutter_app_updater/src/manifest/manifest_document_parser.dart';
+import 'package:flutter_app_updater/src/manifest/manifest_parser.dart';
 import 'package:flutter_app_updater/src/manifest/manifest_signature.dart';
+import 'package:flutter_app_updater/src/manifest/remote_action_policy.dart';
+import 'package:flutter_app_updater/src/manifest/remote_manifest_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -139,22 +143,35 @@ void main() {
       expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
     });
 
-    test('applies the same remote store policy as runtime validation',
+    test('reports the exact shared document and runtime policy failure',
         () async {
+      final manifest = _manifestWithAction({
+        'type': 'openStore',
+        'store': 'googlePlay',
+        'storeUrl': 'https://evil.example.com/google-play',
+      });
       final manifestFile = await _writeManifest(
         tempDir,
-        _manifestWithAction({
-          'type': 'openStore',
-          'store': 'googlePlay',
-          'storeUrl': 'https://evil.example.com/google-play',
-        }),
+        manifest,
       );
 
       final result = await const ManifestCommand().verify(manifestFile.path);
+      final document = const ManifestDocumentParser().parse(manifest);
+      final runtime = const ManifestParser().parse(manifest);
+      final documentError = _capturePolicyFailure(
+        () => const RemoteActionPolicy().validateDocument(document),
+      );
+      final runtimeError = _capturePolicyFailure(
+        () => const RemoteManifestPolicy().validate(runtime),
+      );
 
       expect(result.exitCode, isNot(0));
-      expect(result.stderr, contains('MANIFEST_INVALID'));
-      expect(result.stderr, contains('storeUrl host'));
+      expect(documentError.code, runtimeError.code);
+      expect(documentError.message, runtimeError.message);
+      expect(
+        result.stderr,
+        '${documentError.code.value}: ${documentError.message}\n',
+      );
     });
 
     test('rejects relative action URLs', () async {
@@ -301,4 +318,13 @@ Map<String, Object?> _manifestWithAction(Map<String, Object?> action) {
       },
     ],
   };
+}
+
+RemoteManifestPolicyException _capturePolicyFailure(void Function() validate) {
+  try {
+    validate();
+  } on RemoteManifestPolicyException catch (error) {
+    return error;
+  }
+  fail('Expected RemoteManifestPolicyException.');
 }

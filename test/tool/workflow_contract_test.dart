@@ -29,6 +29,7 @@ void main() {
       'dart format --output=none --set-exit-if-changed .',
       'flutter analyze --no-pub',
       'flutter test --coverage --no-pub',
+      'dart run tool/ci/verify_cli_executable.dart',
       'Enforce total and critical 80% coverage',
       'dart doc --dry-run',
       'flutter analyze --no-pub',
@@ -51,6 +52,7 @@ void main() {
     for (final criticalFile in [
       'manifest_fetcher',
       'manifest_schema',
+      'remote_action_policy',
       'remote_manifest_policy',
       'manifest_signature',
       'package_downloader',
@@ -76,6 +78,15 @@ void main() {
         reason: 'final gate must include $dependency',
       );
     }
+
+    final minimumJob = workflow.substring(
+      workflow.indexOf('  quality-minimum:'),
+      workflow.indexOf('  quality-stable:'),
+    );
+    expect(
+      minimumJob,
+      contains('dart run tool/ci/verify_cli_executable.dart'),
+    );
   });
 
   test('normal CI delegates to the reusable full gate', () {

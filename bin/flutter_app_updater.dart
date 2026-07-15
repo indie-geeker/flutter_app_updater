@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 
+import 'package:flutter_app_updater/src/cli/cli_command_result.dart';
 import 'package:flutter_app_updater/src/cli/hash_command.dart';
 import 'package:flutter_app_updater/src/cli/manifest_command.dart';
 
