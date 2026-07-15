@@ -194,10 +194,9 @@ class AppUpdater {
       final json = _decodeManifestObject(verified.payloadBytes);
       final manifest = const ManifestParser().parse(json);
       if (manifest.appId != manifestSource.expectedAppId) {
-        return UpdateCheckFailed(
+        return const UpdateCheckFailed(
           code: UpdateErrorCode.appIdMismatch,
-          message: 'Manifest appId ${manifest.appId} does not match '
-              'expected appId ${manifestSource.expectedAppId}.',
+          message: 'Manifest appId does not match the expected application.',
         );
       }
       const RemoteManifestPolicy().validate(

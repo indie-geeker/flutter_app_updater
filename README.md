@@ -205,7 +205,7 @@ response object. If an existing API cannot return that shape, provide a custom
 `ManifestFetcher`. Caller headers are removed after a cross-origin redirect.
 
 For either delivery style, a bare response is accepted only for official-store
-and Android-market actions when `ManifestSignaturePolicy.optional` is used.
+or Android-market actions when `ManifestSignaturePolicy.optional` is used.
 Self-hosted package or installer actions require a valid Ed25519 envelope.
 Signing every production response is the recommended policy.
 
@@ -316,8 +316,8 @@ This JSON is the signed payload, not the network response. For self-hosted
 actions, encode the exact payload bytes in a versioned Ed25519 envelope with
 `keyId`, `issuedAt`, `expiresAt`, `payload`, and `signature`. Rotate keys by
 shipping an overlap period in which the host trusts both key IDs. Bare remote
-manifests are accepted only for official-store-only actions when the host uses
-the optional signature policy.
+manifests are accepted only for official-store or Android-market actions when
+the host uses the optional signature policy.
 
 Signed network response fields are all required. The envelope is also an exact
 allowlist; any extra field rejects the response:

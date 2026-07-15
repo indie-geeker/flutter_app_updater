@@ -40,7 +40,7 @@ class ManifestDocumentParser {
       platform: _parsePlatform(_requiredString(release, 'platform')),
       architecture: _optionalString(release, 'architecture'),
       releaseNotes: _requiredString(release, 'releaseNotes'),
-      releasedAt: _parseOptionalDateTime(release['releasedAt']),
+      releasedAt: _parseOptionalDateTime(release, 'releasedAt'),
       policy: _parsePolicy(_optionalMap(release, 'policy')),
       actions: _requiredList(release, 'actions').map(
         (action) => _parseAction(_asMap(action, 'action')),
@@ -192,10 +192,14 @@ class ManifestDocumentParser {
     };
   }
 
-  DateTime? _parseOptionalDateTime(Object? value) {
-    if (value == null) {
+  DateTime? _parseOptionalDateTime(
+    Map<String, Object?> map,
+    String field,
+  ) {
+    if (!map.containsKey(field)) {
       return null;
     }
+    final value = map[field];
     if (value is String) {
       final parsed = DateTime.tryParse(value);
       if (parsed != null) {
@@ -229,10 +233,10 @@ class ManifestDocumentParser {
   }
 
   Map<String, Object?>? _optionalMap(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
+    if (!map.containsKey(field)) {
       return null;
     }
+    final value = map[field];
     return _asMap(value, field);
   }
 
@@ -280,10 +284,10 @@ class ManifestDocumentParser {
   }
 
   String? _optionalString(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
+    if (!map.containsKey(field)) {
       return null;
     }
+    final value = map[field];
     if (value is String && value.isNotEmpty) {
       return value;
     }

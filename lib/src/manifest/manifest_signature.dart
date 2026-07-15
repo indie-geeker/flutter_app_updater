@@ -31,7 +31,7 @@ final class ManifestSignaturePolicy {
   })  : requireSignature = true,
         trustedPublicKeys = Map.unmodifiable(trustedPublicKeys);
 
-  /// Allows bare official-store manifests but authenticates envelopes if used.
+  /// Allows bare official-store and Android-market manifests but authenticates envelopes if used.
   ///
   /// Bare manifests containing self-hosted artifacts are still rejected by the
   /// remote manifest policy.
@@ -214,10 +214,10 @@ final class ManifestSignatureVerifier {
       );
     } on ManifestSignatureException {
       rethrow;
-    } catch (error) {
-      throw ManifestSignatureException(
+    } catch (_) {
+      throw const ManifestSignatureException(
         code: UpdateErrorCode.manifestSignatureInvalid,
-        message: 'Invalid signed manifest envelope: $error',
+        message: 'Invalid signed manifest envelope.',
       );
     }
   }

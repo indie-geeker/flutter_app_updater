@@ -45,23 +45,32 @@ void main() {
     });
 
     test('rejects a remote manifest for a different application', () async {
+      const expectedAppId = 'com.example.expected';
+      const hostileAppId = 'must-not-appear-in-app-id-error\nsecret';
       final updater = AppUpdater(
         source: UpdateSource.manifest(
           manifestUrl: Uri.parse('https://example.com/update.json'),
-          expectedAppId: 'com.example.expected',
+          expectedAppId: expectedAppId,
         ),
         manifestFetcher: _FakeManifestFetcher(
-          _manifestJson(version: '2.0.0', appId: 'com.example.other'),
+          _manifestJson(version: '2.0.0', appId: hostileAppId),
         ),
       );
 
       final result = await updater.check(selector: _selector());
 
       expect(result, isA<UpdateCheckFailed>());
+      final failure = result as UpdateCheckFailed;
       expect(
-        (result as UpdateCheckFailed).code,
+        failure.code,
         UpdateErrorCode.appIdMismatch,
       );
+      expect(
+        failure.message,
+        'Manifest appId does not match the expected application.',
+      );
+      expect(failure.message, isNot(contains(hostileAppId)));
+      expect(failure.message, isNot(contains(expectedAppId)));
     });
 
     test('requires a nonblank application ID for remote sources', () {

@@ -233,6 +233,40 @@ void main() {
     }
   });
 
+  test('optional signatures permit only store and Android-market manifests',
+      () {
+    final english = File('README.md').readAsStringSync();
+    final chinese = File('README.zh-CN.md').readAsStringSync();
+    final model = File('doc/security-model.md').readAsStringSync();
+    final signatureApi =
+        File('lib/src/manifest/manifest_signature.dart').readAsStringSync();
+
+    _expectNormalizedContains(
+      english,
+      'a bare response is accepted only for official-store or Android-market actions when `ManifestSignaturePolicy.optional` is used. Self-hosted package or installer actions require a valid Ed25519 envelope.',
+    );
+    _expectNormalizedContains(
+      chinese,
+      '只有在使用 `ManifestSignaturePolicy.optional` 且清单仅包含官方商店或 Android 市场动作时，才允许返回裸清单。自托管包或桌面安装器必须使用有效的 Ed25519 envelope。',
+    );
+    _expectNormalizedContains(
+      model,
+      'Optional policy permits a bare manifest containing only official-store or Android-market actions over trusted transport, but never permits a bare self-hosted artifact.',
+    );
+    _expectNormalizedContains(
+      signatureApi,
+      'Allows bare official-store and Android-market manifests but authenticates envelopes if used.',
+    );
+
+    for (final document in [english, model]) {
+      expect(
+        document,
+        isNot(contains('official-store-only')),
+        reason: 'Android-market-only manifests are also allowed by policy',
+      );
+    }
+  });
+
   test('docs distinguish foreground and durable URL credential boundaries', () {
     final english = File('README.md').readAsStringSync();
     final chinese = File('README.zh-CN.md').readAsStringSync();

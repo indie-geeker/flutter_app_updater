@@ -374,6 +374,66 @@ void main() {
       }
     });
 
+    test('rejects explicit null for every optional manifest field', () {
+      final cases = <({String name, Map<String, Object?> manifest})>[];
+
+      for (final field in [
+        'buildNumber',
+        'channel',
+        'architecture',
+        'releasedAt',
+      ]) {
+        final manifest = _manifestWithAction(_validActions().first);
+        _releaseOf(manifest)[field] = null;
+        cases.add((name: 'release.$field', manifest: manifest));
+      }
+
+      final nullPolicy = _manifestWithAction(_validActions().first);
+      _releaseOf(nullPolicy)['policy'] = null;
+      cases.add((name: 'release.policy', manifest: nullPolicy));
+
+      for (final field in ['level', 'minSupportedVersion']) {
+        final manifest = _manifestWithAction(_validActions().first);
+        _releaseOf(manifest)['policy'] = {field: null};
+        cases.add((name: 'policy.$field', manifest: manifest));
+      }
+
+      final nullFallback = _manifestWithAction({
+        'type': 'openAndroidMarket',
+        'market': 'huawei',
+        'targetPackageName': 'com.example.app',
+        'fallbackUrl': null,
+      });
+      cases.add((
+        name: 'openAndroidMarket.fallbackUrl',
+        manifest: nullFallback,
+      ));
+
+      final nullPackageType = _manifestWithAction({
+        'type': 'installPackage',
+        'packagePath': '/trusted/app.apk',
+        'packageType': null,
+      });
+      cases.add((
+        name: 'installPackage.packageType',
+        manifest: nullPackageType,
+      ));
+
+      for (final testCase in cases) {
+        expect(
+          () => const ManifestParser().parse(testCase.manifest),
+          throwsA(
+            isA<ManifestParseException>().having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestInvalid,
+            ),
+          ),
+          reason: testCase.name,
+        );
+      }
+    });
+
     test('action allowlists are not the union of every action field', () {
       expect(
         () => const ManifestParser().parse(_manifestWithAction({
@@ -567,12 +627,12 @@ List<Map<String, Object?>> _validActions() {
 }
 
 Map<String, Object?> _manifestWithAction(Map<String, Object?> action) {
-  return {
+  return <String, Object?>{
     'schemaVersion': 3,
     'appId': 'com.example.app',
     'channel': 'stable',
-    'releases': [
-      {
+    'releases': <Object?>[
+      <String, Object?>{
         'version': '2.0.0',
         'platform': 'android',
         'releaseNotes': 'Bug fixes',

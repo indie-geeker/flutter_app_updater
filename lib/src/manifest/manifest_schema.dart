@@ -138,13 +138,17 @@ class ManifestSchema {
     if (buildNumber != null) {
       _validateBuildNumber(buildNumber);
     }
+    _optionalString(release, 'channel');
     _requiredString(release, 'platform');
+    _optionalString(release, 'architecture');
     _requiredString(release, 'releaseNotes');
+    _optionalString(release, 'releasedAt');
 
     final policy = release['policy'];
-    if (policy != null) {
+    if (release.containsKey('policy')) {
       final policyMap = _asMap(policy, 'policy');
       _rejectUnknownFields(policyMap, _policyFields, '$path.policy');
+      _optionalString(policyMap, 'level');
       final minSupportedVersion =
           _optionalString(policyMap, 'minSupportedVersion');
       if (minSupportedVersion != null) {
@@ -344,10 +348,10 @@ class ManifestSchema {
   }
 
   String? _optionalString(Map<String, Object?> map, String field) {
-    final value = map[field];
-    if (value == null) {
+    if (!map.containsKey(field)) {
       return null;
     }
+    final value = map[field];
     if (value is String && value.isNotEmpty) {
       return value;
     }

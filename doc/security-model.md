@@ -58,9 +58,9 @@ The signed envelope rejects extra fields: its exact allowlist is `format`,
 
 The host configures trusted raw public keys with
 `ManifestSignaturePolicy.required` or `ManifestSignaturePolicy.optional`.
-Optional policy permits a bare official-store-only manifest over trusted
-transport, but never permits a bare self-hosted artifact. Required policy
-rejects every bare manifest.
+Optional policy permits a bare manifest containing only official-store or
+Android-market actions over trusted transport, but never permits a bare
+self-hosted artifact. Required policy rejects every bare manifest.
 
 Envelope time ranges must be positive, currently valid within configured clock
 skew, and no longer than the configured maximum. This limits replay while

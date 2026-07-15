@@ -146,6 +146,33 @@ void main() {
     }
   });
 
+  test('malformed envelope diagnostics do not expose field values', () async {
+    const hostileValue = 'must-not-appear-in-signature-error!';
+    final value = jsonDecode(utf8.decode(await envelope()))
+        as Map<String, Object?>
+      ..['payload'] = hostileValue;
+
+    await expectLater(
+      verifier().verify(Uint8List.fromList(utf8.encode(jsonEncode(value)))),
+      throwsA(
+        isA<ManifestSignatureException>()
+            .having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestSignatureInvalid,
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              allOf(
+                'Invalid signed manifest envelope.',
+                isNot(contains(hostileValue)),
+              ),
+            ),
+      ),
+    );
+  });
+
   test('rejects expired, future, inverted, and overlong validity windows',
       () async {
     final cases = [
