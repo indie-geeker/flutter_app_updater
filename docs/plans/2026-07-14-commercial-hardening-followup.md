@@ -114,6 +114,7 @@ git commit -m "fix: make manifest v3 validation fail closed"
 - Create: `lib/src/manifest/manifest_document.dart`
 - Create: `lib/src/manifest/manifest_document_parser.dart`
 - Create: `lib/src/manifest/remote_action_policy.dart`
+- Modify: `bin/flutter_app_updater.dart`
 - Modify: `lib/src/cli/hash_command.dart`
 - Modify: `lib/src/cli/manifest_command.dart`
 - Modify: `lib/src/manifest/manifest_parser.dart`
