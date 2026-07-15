@@ -119,9 +119,9 @@ class ManifestSchema {
       );
     }
     if (schemaVersion != 3) {
-      throw ManifestParseException(
+      throw const ManifestParseException(
         code: UpdateErrorCode.unsupportedSchemaVersion,
-        message: 'Unsupported schemaVersion: $schemaVersion.',
+        message: 'Unsupported schemaVersion.',
       );
     }
 
@@ -205,9 +205,9 @@ class ManifestSchema {
     final type = _requiredString(action, 'type');
     final allowedFields = _actionFields[type];
     if (allowedFields == null) {
-      throw ManifestParseException(
+      throw const ManifestParseException(
         code: UpdateErrorCode.unsupportedActionType,
-        message: 'Unsupported action type: $type.',
+        message: 'Unsupported action type.',
       );
     }
     _rejectUnknownFields(action, allowedFields, path);

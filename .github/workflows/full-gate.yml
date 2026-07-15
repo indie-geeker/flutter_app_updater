@@ -67,8 +67,8 @@ jobs:
         run: |
           awk '
             BEGIN {
-              critical = "(manifest_fetcher|manifest_schema|remote_action_policy|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
-              expected_critical = 10
+              critical = "(manifest_fetcher|manifest_document_parser|manifest_parser|manifest_schema|remote_action_policy|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
+              expected_critical = 12
             }
             /^SF:/ { file = substr($0, 4); lf = 0; lh = 0 }
             /^LF:/ { lf = substr($0, 4) + 0; total_lf += lf }

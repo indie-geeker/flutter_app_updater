@@ -51,6 +51,8 @@ void main() {
 
     for (final criticalFile in [
       'manifest_fetcher',
+      'manifest_document_parser',
+      'manifest_parser',
       'manifest_schema',
       'remote_action_policy',
       'remote_manifest_policy',

@@ -101,9 +101,9 @@ class ManifestDocumentParser {
           installerSizeBytes: _requiredInt(action, 'installerSizeBytes'),
           sha256: _requiredString(action, 'sha256').toLowerCase(),
         ),
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.unsupportedActionType,
-          message: 'Unsupported action type: $type.',
+          message: 'Unsupported action type.',
         ),
     };
   }
@@ -116,9 +116,9 @@ class ManifestDocumentParser {
       'windows' => ManifestPlatform.windows,
       'linux' => ManifestPlatform.linux,
       'fuchsia' => ManifestPlatform.fuchsia,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported platform: $value.',
+          message: 'Unsupported platform.',
         ),
     };
   }
@@ -128,9 +128,9 @@ class ManifestDocumentParser {
       'optional' => ManifestPolicyLevel.optional,
       'recommended' => ManifestPolicyLevel.recommended,
       'required' => ManifestPolicyLevel.required,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported policy level: $value.',
+          message: 'Unsupported policy level.',
         ),
     };
   }
@@ -140,9 +140,9 @@ class ManifestDocumentParser {
       'appStore' => ManifestStoreKind.appStore,
       'macAppStore' => ManifestStoreKind.macAppStore,
       'googlePlay' => ManifestStoreKind.googlePlay,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported store: $value.',
+          message: 'Unsupported store.',
         ),
     };
   }
@@ -157,9 +157,9 @@ class ManifestDocumentParser {
       'meizu' => ManifestAndroidMarketKind.meizu,
       'tencentMyApp' => ManifestAndroidMarketKind.tencentMyApp,
       'generic' => ManifestAndroidMarketKind.generic,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported Android market: $value.',
+          message: 'Unsupported Android market.',
         ),
     };
   }
@@ -168,9 +168,9 @@ class ManifestDocumentParser {
     return switch (value) {
       'apk' => ManifestPackageType.apk,
       'aab' => ManifestPackageType.aab,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported package type: $value.',
+          message: 'Unsupported package type.',
         ),
     };
   }
@@ -185,9 +185,9 @@ class ManifestDocumentParser {
       'appImage' => ManifestInstallerType.appImage,
       'deb' => ManifestInstallerType.deb,
       'rpm' => ManifestInstallerType.rpm,
-      _ => throw ManifestParseException(
+      _ => throw const ManifestParseException(
           code: UpdateErrorCode.manifestInvalid,
-          message: 'Unsupported installer type: $value.',
+          message: 'Unsupported installer type.',
         ),
     };
   }

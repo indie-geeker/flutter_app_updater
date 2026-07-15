@@ -69,7 +69,7 @@ class RemoteActionPolicy {
             );
           case ManifestOpenStoreAction():
             validateStore(
-              store: action.store.name,
+              store: action.store,
               storeUrl: action.storeUrl,
             );
         }
@@ -121,9 +121,9 @@ class RemoteActionPolicy {
     required Uri? fallbackUrl,
   }) {
     if (targetPackageName != appId) {
-      throw RemoteManifestPolicyException(
+      throw const RemoteManifestPolicyException(
         code: UpdateErrorCode.appIdMismatch,
-        message: 'Android market targetPackageName must equal $appId.',
+        message: 'Android market targetPackageName must equal manifest appId.',
       );
     }
     if (fallbackUrl != null) {
@@ -133,20 +133,21 @@ class RemoteActionPolicy {
 
   /// Validates an official-store URL against its declared [store].
   void validateStore({
-    required String store,
+    required ManifestStoreKind store,
     required Uri storeUrl,
   }) {
     _requireTrustedUri(storeUrl, field: 'storeUrl');
     final host = storeUrl.host.toLowerCase();
     final isAllowed = switch (store) {
-      'googlePlay' => host == 'play.google.com',
-      'appStore' || 'macAppStore' => _appleStoreHosts.contains(host),
-      _ => false,
+      ManifestStoreKind.googlePlay => host == 'play.google.com',
+      ManifestStoreKind.appStore ||
+      ManifestStoreKind.macAppStore =>
+        _appleStoreHosts.contains(host),
     };
     if (!isAllowed) {
       throw RemoteManifestPolicyException(
         code: UpdateErrorCode.manifestInvalid,
-        message: 'storeUrl host is not allowed for $store.',
+        message: 'storeUrl host is not allowed for ${store.name}.',
       );
     }
   }

@@ -1,4 +1,5 @@
 import '../actions/update_action.dart';
+import 'manifest_document.dart';
 import 'remote_action_policy.dart';
 import 'update_manifest.dart';
 
@@ -57,7 +58,11 @@ class RemoteManifestPolicy {
             );
           case OpenStoreAction():
             policy.validateStore(
-              store: action.store.name,
+              store: switch (action.store) {
+                StoreKind.appStore => ManifestStoreKind.appStore,
+                StoreKind.macAppStore => ManifestStoreKind.macAppStore,
+                StoreKind.googlePlay => ManifestStoreKind.googlePlay,
+              },
               storeUrl: action.storeUrl,
             );
         }

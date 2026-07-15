@@ -143,6 +143,114 @@ void main() {
       expect(result.stderr, contains('MISSING_REQUIRED_FIELD'));
     });
 
+    test('never echoes untrusted manifest field values', () async {
+      const hostileValue = 'SECRET\n\u001b[31mterminal-injection\u001b[0m\r';
+      final cases = <({
+        String name,
+        Map<String, Object?> manifest,
+        String expectedStderr,
+      })>[
+        (
+          name: 'schema-version',
+          manifest: _validStoreManifest()..['schemaVersion'] = hostileValue,
+          expectedStderr:
+              'UNSUPPORTED_SCHEMA_VERSION: Unsupported schemaVersion.\n',
+        ),
+        (
+          name: 'action-type',
+          manifest: _manifestWithAction({'type': hostileValue}),
+          expectedStderr: 'UNSUPPORTED_ACTION_TYPE: Unsupported action type.\n',
+        ),
+        (
+          name: 'platform',
+          manifest: _manifestWithReleaseField('platform', hostileValue),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported platform.\n',
+        ),
+        (
+          name: 'policy-level',
+          manifest: _manifestWithReleaseField('policy', {
+            'level': hostileValue,
+          }),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported policy level.\n',
+        ),
+        (
+          name: 'store',
+          manifest: _manifestWithAction({
+            'type': 'openStore',
+            'store': hostileValue,
+            'storeUrl': 'https://play.google.com/store/apps/details',
+          }),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported store.\n',
+        ),
+        (
+          name: 'android-market',
+          manifest: _manifestWithAction({
+            'type': 'openAndroidMarket',
+            'market': hostileValue,
+            'targetPackageName': 'com.example.app',
+          }),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported Android market.\n',
+        ),
+        (
+          name: 'package-type',
+          manifest: _manifestWithAction({
+            'type': 'downloadPackage',
+            'packageUrl': 'https://example.com/app.apk',
+            'packageType': hostileValue,
+            'packageSizeBytes': 42,
+            'sha256': 'a' * 64,
+          }),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported package type.\n',
+        ),
+        (
+          name: 'installer-type',
+          manifest: _manifestWithAction({
+            'type': 'openInstaller',
+            'installerUrl': 'https://example.com/app.dmg',
+            'installerType': hostileValue,
+            'installerSizeBytes': 42,
+            'sha256': 'a' * 64,
+          }),
+          expectedStderr: 'MANIFEST_INVALID: Unsupported installer type.\n',
+        ),
+        (
+          name: 'app-id',
+          manifest: _manifestWithAction({
+            'type': 'openAndroidMarket',
+            'market': 'generic',
+            'targetPackageName': 'com.example.other',
+          })
+            ..['appId'] = hostileValue,
+          expectedStderr: 'APP_ID_MISMATCH: Android market '
+              'targetPackageName must equal manifest appId.\n',
+        ),
+      ];
+
+      for (final testCase in cases) {
+        final manifestFile = await _writeManifest(
+          tempDir,
+          testCase.manifest,
+          name: '${testCase.name}.json',
+        );
+
+        final result = await const ManifestCommand().verify(manifestFile.path);
+
+        expect(result.exitCode, 1, reason: testCase.name);
+        expect(
+          result.stderr,
+          testCase.expectedStderr,
+          reason: testCase.name,
+        );
+        expect(result.stderr, isNot(contains('SECRET')), reason: testCase.name);
+        expect(result.stderr, isNot(contains('\u001b')), reason: testCase.name);
+        expect(
+          result.stderr,
+          isNot(contains('terminal-injection')),
+          reason: testCase.name,
+        );
+      }
+    });
+
     test('reports the exact shared document and runtime policy failure',
         () async {
       final manifest = _manifestWithAction({
@@ -318,6 +426,22 @@ Map<String, Object?> _manifestWithAction(Map<String, Object?> action) {
       },
     ],
   };
+}
+
+Map<String, Object?> _validStoreManifest() {
+  return _manifestWithAction({
+    'type': 'openStore',
+    'store': 'googlePlay',
+    'storeUrl': 'https://play.google.com/store/apps/details',
+  });
+}
+
+Map<String, Object?> _manifestWithReleaseField(String field, Object? value) {
+  final manifest = _validStoreManifest();
+  final release =
+      (manifest['releases'] as List<Object?>).single as Map<String, Object?>;
+  release[field] = value;
+  return manifest;
 }
 
 RemoteManifestPolicyException _capturePolicyFailure(void Function() validate) {

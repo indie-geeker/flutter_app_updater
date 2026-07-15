@@ -33,6 +33,16 @@ void main() {
       );
     });
 
+    test('primitive store policy accepts package-owned store kinds', () {
+      expect(
+        () => const RemoteActionPolicy().validateStore(
+          store: ManifestStoreKind.googlePlay,
+          storeUrl: Uri.parse('https://play.google.com/store/apps/details'),
+        ),
+        returnsNormally,
+      );
+    });
+
     test(
         'unsigned manifests allow store actions but require signatures for artifacts',
         () {
@@ -338,6 +348,179 @@ void main() {
         expect(documentError.message, runtimeError.message);
       }
     });
+
+    test('installer adapters accept the same valid signed action', () {
+      _expectPolicyParitySuccess(
+        documentAction: ManifestOpenInstallerAction(
+          installerUrl: Uri.parse('https://cdn.example.com/app.dmg'),
+          installerType: ManifestInstallerType.dmg,
+          installerSizeBytes: 42,
+          sha256: 'a' * 64,
+        ),
+        runtimeAction: OpenInstallerAction(
+          installerUrl: Uri.parse('https://cdn.example.com/app.dmg'),
+          installerType: InstallerType.dmg,
+          installerSizeBytes: 42,
+          sha256: 'a' * 64,
+        ),
+      );
+    });
+
+    test('installer adapters preserve exact policy failures', () {
+      final cases = <({
+        String name,
+        String url,
+        int size,
+        String sha256,
+        bool isSigned,
+        UpdateErrorCode code,
+        String message,
+      })>[
+        (
+          name: 'signature priority',
+          url: 'http://cdn.example.com/app.dmg',
+          size: 0,
+          sha256: 'not-a-digest',
+          isSigned: false,
+          code: UpdateErrorCode.manifestSignatureRequired,
+          message: 'Self-hosted update actions require a signed manifest.',
+        ),
+        (
+          name: 'untrusted URL',
+          url: 'http://cdn.example.com/app.dmg',
+          size: 42,
+          sha256: 'a' * 64,
+          isSigned: true,
+          code: UpdateErrorCode.manifestInvalid,
+          message: 'must use HTTPS; insecure HTTP is allowed only for '
+              'explicitly enabled loopback development URLs',
+        ),
+        (
+          name: 'invalid size',
+          url: 'https://cdn.example.com/app.dmg',
+          size: 0,
+          sha256: 'a' * 64,
+          isSigned: true,
+          code: UpdateErrorCode.missingRequiredField,
+          message: 'installerUrl requires a positive exact size.',
+        ),
+        (
+          name: 'invalid digest',
+          url: 'https://cdn.example.com/app.dmg',
+          size: 42,
+          sha256: 'not-a-digest',
+          isSigned: true,
+          code: UpdateErrorCode.missingRequiredField,
+          message: 'installerUrl requires a 64-character SHA-256.',
+        ),
+      ];
+
+      for (final testCase in cases) {
+        _expectPolicyParityFailure(
+          name: testCase.name,
+          documentAction: ManifestOpenInstallerAction(
+            installerUrl: Uri.parse(testCase.url),
+            installerType: ManifestInstallerType.dmg,
+            installerSizeBytes: testCase.size,
+            sha256: testCase.sha256,
+          ),
+          runtimeAction: OpenInstallerAction(
+            installerUrl: Uri.parse(testCase.url),
+            installerType: InstallerType.dmg,
+            installerSizeBytes: testCase.size,
+            sha256: testCase.sha256,
+          ),
+          isSigned: testCase.isSigned,
+          code: testCase.code,
+          message: testCase.message,
+        );
+      }
+    });
+
+    test('combined package adapters preserve success and key failures', () {
+      _expectPolicyParitySuccess(
+        documentAction: ManifestDownloadAndInstallPackageAction(
+          packageUrl: Uri.parse('https://cdn.example.com/app.apk'),
+          packageType: ManifestPackageType.apk,
+          packageSizeBytes: 42,
+          sha256: 'a' * 64,
+        ),
+        runtimeAction: DownloadAndInstallPackageAction(
+          packageUrl: Uri.parse('https://cdn.example.com/app.apk'),
+          packageType: PackageType.apk,
+          packageSizeBytes: 42,
+          sha256: 'a' * 64,
+        ),
+      );
+
+      final cases = <({
+        String name,
+        String url,
+        int size,
+        String sha256,
+        bool isSigned,
+        UpdateErrorCode code,
+        String message,
+      })>[
+        (
+          name: 'signature priority',
+          url: 'http://cdn.example.com/app.apk',
+          size: 0,
+          sha256: 'not-a-digest',
+          isSigned: false,
+          code: UpdateErrorCode.manifestSignatureRequired,
+          message: 'Self-hosted update actions require a signed manifest.',
+        ),
+        (
+          name: 'userinfo URL',
+          url: 'https://user:password@cdn.example.com/app.apk',
+          size: 42,
+          sha256: 'a' * 64,
+          isSigned: true,
+          code: UpdateErrorCode.manifestInvalid,
+          message: 'must not contain user information',
+        ),
+        (
+          name: 'invalid size',
+          url: 'https://cdn.example.com/app.apk',
+          size: 0,
+          sha256: 'a' * 64,
+          isSigned: true,
+          code: UpdateErrorCode.missingRequiredField,
+          message: 'packageUrl requires a positive exact size.',
+        ),
+        (
+          name: 'invalid digest',
+          url: 'https://cdn.example.com/app.apk',
+          size: 42,
+          sha256: 'not-a-digest',
+          isSigned: true,
+          code: UpdateErrorCode.missingRequiredField,
+          message: 'packageUrl requires a 64-character SHA-256.',
+        ),
+      ];
+
+      for (final testCase in cases) {
+        _expectPolicyParityFailure(
+          name: testCase.name,
+          documentAction: ManifestDownloadAndInstallPackageAction(
+            packageUrl: Uri.parse(testCase.url),
+            packageType: ManifestPackageType.apk,
+            packageSizeBytes: testCase.size,
+            sha256: testCase.sha256,
+          ),
+          runtimeAction: DownloadAndInstallPackageAction(
+            packageUrl: Uri.parse(testCase.url),
+            packageType: PackageType.apk,
+            packageSizeBytes: testCase.size,
+            sha256: testCase.sha256,
+          ),
+          isSigned: testCase.isSigned,
+          code: testCase.code,
+          message: testCase.message,
+        );
+      }
+    });
   });
 }
 
@@ -394,4 +577,47 @@ RemoteManifestPolicyException _capturePolicyFailure(void Function() validate) {
     return error;
   }
   fail('Expected RemoteManifestPolicyException.');
+}
+
+void _expectPolicyParitySuccess({
+  required ManifestAction documentAction,
+  required UpdateAction runtimeAction,
+}) {
+  expect(
+    () => const RemoteActionPolicy().validateDocument(
+      _document([documentAction]),
+    ),
+    returnsNormally,
+  );
+  expect(
+    () => const RemoteManifestPolicy().validate(_manifest([runtimeAction])),
+    returnsNormally,
+  );
+}
+
+void _expectPolicyParityFailure({
+  required String name,
+  required ManifestAction documentAction,
+  required UpdateAction runtimeAction,
+  required bool isSigned,
+  required UpdateErrorCode code,
+  required String message,
+}) {
+  final documentError = _capturePolicyFailure(
+    () => const RemoteActionPolicy().validateDocument(
+      _document([documentAction]),
+      isSigned: isSigned,
+    ),
+  );
+  final runtimeError = _capturePolicyFailure(
+    () => const RemoteManifestPolicy().validate(
+      _manifest([runtimeAction]),
+      isSigned: isSigned,
+    ),
+  );
+
+  expect(documentError.code, code, reason: name);
+  expect(documentError.message, message, reason: name);
+  expect(runtimeError.code, code, reason: name);
+  expect(runtimeError.message, message, reason: name);
 }
