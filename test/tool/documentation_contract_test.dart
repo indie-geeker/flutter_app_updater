@@ -318,7 +318,7 @@ void main() {
       () {
     final security = File('doc/security-model.md').readAsStringSync();
     final changelog = File('CHANGELOG.md').readAsStringSync();
-    final unreleased = changelog.split('## 3.0.0').first;
+    final release300 = changelog.split('## 3.0.0').last.split('## 2.1.0').first;
 
     for (final contract in [
       'exact allowlist',
@@ -339,9 +339,9 @@ void main() {
       'strict manifest and signed-envelope allowlists',
       'pure-Dart manifest CLI',
     ]) {
-      _expectNormalizedContains(unreleased, contract);
+      _expectNormalizedContains(release300, contract);
     }
-    expect(unreleased, isNot(contains('No changes yet.')));
+    expect(release300, isNot(contains('No changes yet.')));
   });
 
   test('public documentation does not leak local or internal work paths', () {

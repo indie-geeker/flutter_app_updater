@@ -1,21 +1,17 @@
-## Unreleased
-
-* **Breaking / Security**: Require Android durable downloads to start from a credential-free stable entry URL without userinfo, query, or fragment; short-lived signed URLs are accepted only as in-memory HTTPS redirect targets and are never persisted.
-* **Breaking / Storage**: Reset pre-release single-root background tasks and artifacts while separating durable state into `noBackupFilesDir` and FileProvider-backed APK data into `filesDir`.
-* **Security**: Enforce strict manifest and signed-envelope allowlists, reject unknown fields, validate non-negative decimal `buildNumber` values, and require `minSupportedVersion` not to exceed its release version.
-* **Tooling**: Repair the pure-Dart manifest CLI so `verify` uses the production parser and remote-action policy, and add a Flutter-engine-free executable smoke gate.
-
-## 3.0.0 - 2026-07-13
+## 3.0.0 - 2026-07-15
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
 * **Breaking**: Remove unfinished platform surfaces and require strict architecture matching for architecture-specific releases.
 * **Breaking**: Require positive exact sizes and SHA-256 digests for remote packages and installers; forbid remote local-path installation actions.
+* **Breaking / Security**: Require Android durable downloads to start from a credential-free stable entry URL without userinfo, query, or fragment; short-lived signed URLs are accepted only as in-memory HTTPS redirect targets and are never persisted.
+* **Breaking / Storage**: Reset pre-release single-root background tasks and artifacts while separating durable state into `noBackupFilesDir` and FileProvider-backed APK data into `filesDir`.
 * **Feature**: Add package install and download-then-install actions for Android self-hosted APK flows.
 * **Feature**: Add `AppUpdater.manifest`, `checkAndPrepare`, and `performRecommended` as the default UI-free integration flow.
 * **Feature**: Add manifest v3 parsing, application identity binding, validation, ordered release selection, host distribution policy, and executor capability filtering.
 * **Feature**: Add official store actions for App Store, Mac App Store, and Google Play URLs.
 * **Feature**: Add Chinese Android market descriptors and Android market opening support.
 * **Security**: Require trusted HTTPS transport and bounded redirects, authenticate self-hosted manifests with versioned Ed25519 envelopes, and support two-key rotation through `keyId`.
+* **Security**: Enforce strict manifest and signed-envelope allowlists, reject unknown fields, validate non-negative decimal `buildNumber` values, and require `minSupportedVersion` not to exceed its release version.
 * **Security**: Add native APK identity and signing-lineage verification before every Android installer handoff.
 * **Feature**: Add SHA-256 verified downloads with private URL-fingerprint checkpoint metadata and cross-process writer ownership.
 * **Feature**: Add desktop installer actions for verified Windows and macOS installers.
@@ -27,6 +23,7 @@
 * **Safety**: Make Android package-install permission opt-in and exclude machine-local platform configuration from published archives.
 * **Release**: Unify CI and publishing behind one full quality gate covering minimum/stable Flutter, root/example checks, coverage, docs, clean archive validation, native tests, and platform builds.
 * **Release**: Add tag/version/CHANGELOG/main-ancestry release provenance checks, immutable workflow action pins, download checksums, Dependabot coverage, and pub.dev OIDC publishing.
+* **Tooling**: Repair the pure-Dart manifest CLI so `verify` uses the production parser and remote-action policy, and add a Flutter-engine-free executable smoke gate.
 
 ## 2.1.0
 
