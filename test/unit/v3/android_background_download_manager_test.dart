@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +63,48 @@ void main() {
       await manager.start(_action(url: 'http://localhost:8080/update.apk'));
 
       expect(platform.startCalls, hasLength(3));
+    });
+
+    for (final vector in _urlVectors('persistentAccepted')) {
+      test('accepts shared persistent URL ${vector.name}', () async {
+        await manager.start(_action(url: vector.url));
+
+        expect(platform.startCalls.single.packageUrl, Uri.parse(vector.url));
+      });
+    }
+
+    for (final vector in <_UrlVector>[
+      ..._urlVectors('transportOnly'),
+      ..._urlVectors('rejected'),
+    ]) {
+      test('rejects shared durable URL ${vector.name} before platform calls',
+          () async {
+        await expectLater(
+          manager.start(_action(url: vector.url)),
+          throwsArgumentError,
+        );
+
+        expect(platform.startCalls, isEmpty);
+      });
+    }
+
+    test('does not invent raw userinfo that Dart Uri no longer exposes', () {
+      for (final vector in _urlVectors('nativeRawRejected')) {
+        final uri = Uri.parse(vector.url);
+        expect(uri.userInfo, isEmpty, reason: vector.name);
+        expect(uri.toString(), isNot(contains('@')), reason: vector.name);
+      }
+    });
+
+    test('rejects DNS labels longer than 63 ASCII characters', () async {
+      final host = '${'a' * 64}.example.test';
+
+      await expectLater(
+        manager.start(_action(url: 'https://$host/update.apk')),
+        throwsArgumentError,
+      );
+
+      expect(platform.startCalls, isEmpty);
     });
 
     test('rejects credentials in durable entry URLs before platform calls',
@@ -476,6 +520,30 @@ void main() {
       expect(platform.canceledTaskIds, isEmpty);
     });
   });
+}
+
+List<_UrlVector> _urlVectors(String category) {
+  final fixture = jsonDecode(
+    File('test/fixtures/background_download_url_vectors.json')
+        .readAsStringSync(),
+  ) as Map<String, dynamic>;
+  final entries = fixture[category] as List<dynamic>;
+  return entries
+      .cast<Map<String, dynamic>>()
+      .map(
+        (entry) => _UrlVector(
+          name: entry['name'] as String,
+          url: entry['url'] as String,
+        ),
+      )
+      .toList(growable: false);
+}
+
+class _UrlVector {
+  const _UrlVector({required this.name, required this.url});
+
+  final String name;
+  final String url;
 }
 
 DownloadPackageAction _action({

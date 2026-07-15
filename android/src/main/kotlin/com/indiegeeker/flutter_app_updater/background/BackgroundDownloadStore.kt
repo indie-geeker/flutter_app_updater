@@ -58,6 +58,7 @@ internal class BackgroundDownloadStore(
   private val recordFileFactory: BackgroundRecordFileFactory = AndroidAtomicRecordFileFactory,
   private val artifactVerifier: (File, BackgroundDownloadRecord) -> Boolean = { _, _ -> false },
   private val nowEpochMs: () -> Long = System::currentTimeMillis,
+  private val legacyFileDeleter: (File) -> Boolean = File::delete,
 ) {
   private val stateRootDirectory = stateRoot.canonicalFile
   private val artifactRootDirectory = artifactRoot.canonicalFile
@@ -570,13 +571,21 @@ internal class BackgroundDownloadStore(
       }
 
       val recordRemnants = LEGACY_RECORD_FILE_NAMES.map { File(directory, it).absoluteFile }
-      if (recordRemnants.none(::isExactDirectFile)) return@forEach
+      val retryMarker = recordRemnants.firstOrNull(::isExactDirectFile) ?: return@forEach
 
-      (LEGACY_RECORD_FILE_NAMES + LEGACY_ARTIFACT_FILE_NAMES).forEach { name ->
+      LEGACY_ARTIFACT_FILE_NAMES.forEach { name ->
         val file = File(directory, name).absoluteFile
-        if (isExactDirectFile(file) && !file.delete()) {
+        if (isExactDirectFile(file) && !legacyFileDeleter(file)) {
           throw BackgroundDownloadStateException("Unable to delete legacy background download file")
         }
+      }
+      recordRemnants.filterNot { it == retryMarker }.forEach { file ->
+        if (isExactDirectFile(file) && !legacyFileDeleter(file)) {
+          throw BackgroundDownloadStateException("Unable to delete legacy background download file")
+        }
+      }
+      if (isExactDirectFile(retryMarker) && !legacyFileDeleter(retryMarker)) {
+        throw BackgroundDownloadStateException("Unable to delete legacy background download file")
       }
       if (directory.list()?.isEmpty() == true && !directory.delete()) {
         throw BackgroundDownloadStateException("Unable to delete empty legacy task directory")

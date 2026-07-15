@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "persistentAccepted": [
+    {
+      "name": "https_dns_host",
+      "url": "https://downloads.example.com/update.apk"
+    },
+    {
+      "name": "https_punycode_host",
+      "url": "https://xn--xample-9ua.test/update.apk"
+    },
+    {
+      "name": "https_ipv4_literal",
+      "url": "https://192.0.2.1/update.apk"
+    },
+    {
+      "name": "https_ipv6_literal",
+      "url": "https://[2001:db8::1]/update.apk"
+    },
+    {
+      "name": "http_localhost",
+      "url": "http://localhost:8080/update.apk"
+    },
+    {
+      "name": "http_strict_ipv4_loopback",
+      "url": "http://127.255.1.2/update.apk"
+    },
+    {
+      "name": "http_literal_ipv6_loopback",
+      "url": "http://[::1]:8080/update.apk"
+    }
+  ],
+  "transportOnly": [
+    {
+      "name": "https_signed_query",
+      "url": "https://cdn.example.com/update.apk?token=secret-token&expires=4102444800"
+    },
+    {
+      "name": "https_empty_query",
+      "url": "https://cdn.example.com/update.apk?"
+    },
+    {
+      "name": "http_loopback_signed_query",
+      "url": "http://127.0.0.1:8080/update.apk?token=local-token"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "https_fragment",
+      "url": "https://downloads.example.com/update.apk#release"
+    },
+    {
+      "name": "https_empty_fragment",
+      "url": "https://downloads.example.com/update.apk#"
+    },
+    {
+      "name": "https_userinfo",
+      "url": "https://user:password@downloads.example.com/update.apk"
+    },
+    {
+      "name": "https_empty_host",
+      "url": "https://"
+    },
+    {
+      "name": "https_underscore_host",
+      "url": "https://exa_mple.test/update.apk"
+    },
+    {
+      "name": "https_unicode_host",
+      "url": "https://éxample.test/update.apk"
+    },
+    {
+      "name": "https_empty_dns_label",
+      "url": "https://bad..example/update.apk"
+    },
+    {
+      "name": "https_leading_hyphen_label",
+      "url": "https://-bad.example/update.apk"
+    },
+    {
+      "name": "https_trailing_hyphen_label",
+      "url": "https://bad-.example/update.apk"
+    },
+    {
+      "name": "http_pseudo_loopback_name",
+      "url": "http://127.evil.example/update.apk"
+    },
+    {
+      "name": "http_pseudo_loopback_suffix",
+      "url": "http://127.0.0.1.evil.example/update.apk"
+    },
+    {
+      "name": "http_short_ipv4_loopback",
+      "url": "http://127.1/update.apk"
+    },
+    {
+      "name": "http_integer_ipv4_loopback",
+      "url": "http://2130706433/update.apk"
+    },
+    {
+      "name": "http_expanded_ipv6_loopback",
+      "url": "http://[0:0:0:0:0:0:0:1]/update.apk"
+    },
+    {
+      "name": "http_ipv4_mapped_ipv6_loopback",
+      "url": "http://[::ffff:127.0.0.1]/update.apk"
+    },
+    {
+      "name": "http_non_loopback",
+      "url": "http://downloads.example.com/update.apk"
+    },
+    {
+      "name": "unsupported_scheme",
+      "url": "ftp://localhost/update.apk"
+    }
+  ],
+  "nativeRawRejected": [
+    {
+      "name": "https_empty_raw_userinfo",
+      "url": "https://@downloads.example.com/update.apk"
+    }
+  ]
+}

@@ -922,6 +922,87 @@ internal class BackgroundDownloadStoreTest {
   }
 
   @Test
+  fun legacyCleanupKeepsRecordMarkerWhenArtifactDeletionFailsAndReopenConverges() {
+    val stateRoot = newRoot()
+    val artifactRoot = newRoot()
+    val legacyTask = artifactRoot.resolve("legacy_artifact_retry").apply {
+      mkdirs()
+      resolve("task.json").writeText("legacy record")
+      resolve("artifact.download").writeBytes(byteArrayOf(1))
+      resolve("artifact.apk").writeBytes(byteArrayOf(2))
+    }
+    var failArtifactDeletion = true
+    val deleter: (File) -> Boolean = { file ->
+      if (failArtifactDeletion && file.name == "artifact.download") false else file.delete()
+    }
+
+    assertFailsWith<BackgroundDownloadStateException> {
+      BackgroundDownloadStore(
+        stateRoot = stateRoot,
+        artifactRoot = artifactRoot,
+        recordFileFactory = TestRecordFileFactory(),
+        legacyFileDeleter = deleter,
+      )
+    }
+
+    assertTrue(legacyTask.resolve("task.json").isFile)
+    assertTrue(legacyTask.resolve("artifact.download").isFile)
+    failArtifactDeletion = false
+
+    BackgroundDownloadStore(
+      stateRoot = stateRoot,
+      artifactRoot = artifactRoot,
+      recordFileFactory = TestRecordFileFactory(),
+      legacyFileDeleter = deleter,
+    )
+
+    assertFalse(legacyTask.exists())
+  }
+
+  @Test
+  fun legacyCleanupDeletesArtifactsAndOtherRecordsBeforeRetryMarker() {
+    val stateRoot = newRoot()
+    val artifactRoot = newRoot()
+    val legacyTask = artifactRoot.resolve("legacy_marker_retry").apply {
+      mkdirs()
+      resolve("task.json").writeText("legacy record")
+      resolve("task.json.bak").writeText("legacy backup")
+      resolve("task.json.new").writeText("legacy temporary")
+      resolve("artifact.download").writeBytes(byteArrayOf(1))
+      resolve("artifact.apk").writeBytes(byteArrayOf(2))
+    }
+    var failMarkerDeletion = true
+    val deleter: (File) -> Boolean = { file ->
+      if (failMarkerDeletion && file.name == "task.json") false else file.delete()
+    }
+
+    assertFailsWith<BackgroundDownloadStateException> {
+      BackgroundDownloadStore(
+        stateRoot = stateRoot,
+        artifactRoot = artifactRoot,
+        recordFileFactory = TestRecordFileFactory(),
+        legacyFileDeleter = deleter,
+      )
+    }
+
+    assertTrue(legacyTask.resolve("task.json").isFile)
+    assertFalse(legacyTask.resolve("task.json.bak").exists())
+    assertFalse(legacyTask.resolve("task.json.new").exists())
+    assertFalse(legacyTask.resolve("artifact.download").exists())
+    assertFalse(legacyTask.resolve("artifact.apk").exists())
+    failMarkerDeletion = false
+
+    BackgroundDownloadStore(
+      stateRoot = stateRoot,
+      artifactRoot = artifactRoot,
+      recordFileFactory = TestRecordFileFactory(),
+      legacyFileDeleter = deleter,
+    )
+
+    assertFalse(legacyTask.exists())
+  }
+
+  @Test
   fun legacyCleanupNeverFollowsTaskOrArtifactSymlinks() {
     val stateRoot = newRoot()
     val artifactRoot = newRoot()

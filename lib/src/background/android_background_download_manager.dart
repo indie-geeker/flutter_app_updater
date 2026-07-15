@@ -377,6 +377,10 @@ class AndroidBackgroundDownloadManager {
     if (!uri.hasAuthority) {
       return false;
     }
+    final host = uri.host.toLowerCase();
+    if (!_isNativeCompatibleHost(host)) {
+      return false;
+    }
     final scheme = uri.scheme.toLowerCase();
     if (scheme == 'https') {
       return true;
@@ -384,8 +388,58 @@ class AndroidBackgroundDownloadManager {
     if (scheme != 'http') {
       return false;
     }
-    final host = uri.host.toLowerCase();
     return host == 'localhost' ||
-        (InternetAddress.tryParse(host)?.isLoopback ?? false);
+        host == '::1' ||
+        (_parseStrictIpv4(host)?.firstOrNull == 127);
+  }
+
+  bool _isNativeCompatibleHost(String host) {
+    if (host.isEmpty) {
+      return false;
+    }
+    if (host.contains(':')) {
+      return InternetAddress.tryParse(host)?.type == InternetAddressType.IPv6;
+    }
+    if (host.contains('.') && RegExp(r'^[0-9.]+$').hasMatch(host)) {
+      return _parseStrictIpv4(host) != null;
+    }
+
+    final dnsHost =
+        host.endsWith('.') ? host.substring(0, host.length - 1) : host;
+    if (dnsHost.isEmpty) {
+      return false;
+    }
+    return dnsHost.split('.').every(_isValidAsciiDnsLabel);
+  }
+
+  bool _isValidAsciiDnsLabel(String label) {
+    if (label.isEmpty || label.length > 63) {
+      return false;
+    }
+    final asciiAlphaNumeric = RegExp(r'^[A-Za-z0-9]$');
+    if (!asciiAlphaNumeric.hasMatch(label[0]) ||
+        !asciiAlphaNumeric.hasMatch(label[label.length - 1])) {
+      return false;
+    }
+    return RegExp(r'^[A-Za-z0-9-]+$').hasMatch(label);
+  }
+
+  List<int>? _parseStrictIpv4(String host) {
+    final parts = host.split('.');
+    if (parts.length != 4) {
+      return null;
+    }
+    final octets = <int>[];
+    for (final part in parts) {
+      if (part.isEmpty || !RegExp(r'^[0-9]+$').hasMatch(part)) {
+        return null;
+      }
+      final octet = int.tryParse(part);
+      if (octet == null || octet < 0 || octet > 255) {
+        return null;
+      }
+      octets.add(octet);
+    }
+    return octets;
   }
 }

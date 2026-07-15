@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import org.json.JSONObject
 import org.mockito.Mockito
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -247,37 +248,16 @@ internal class BackgroundDownloadPluginTest {
 
   @Test
   fun nativeUrlPolicyRequiresCredentialFreePersistentEntries() {
-    for (url in listOf(
-      "https://example.com/update.apk",
-      "http://localhost:8080/update.apk",
-      "http://127.0.0.1:8080/update.apk",
-      "http://127.255.1.2/update.apk",
-      "http://[::1]:8080/update.apk",
-    )) {
-      assertTrue(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(url), url)
-      assertEquals(url, BackgroundDownloadUrlPolicy.requirePersistentEntry(url))
+    for (vector in urlVectors("persistentAccepted")) {
+      assertTrue(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(vector.url), vector.name)
+      assertEquals(vector.url, BackgroundDownloadUrlPolicy.requirePersistentEntry(vector.url))
     }
-    for (url in listOf(
-      "https://user:password@example.com/update.apk",
-      "https://@example.com/update.apk",
-      "https://example.com/update.apk?token=secret-token",
-      "https://example.com/update.apk?",
-      "https://example.com/update.apk#secret-fragment",
-      "https://example.com/update.apk#",
-      "http://127.evil.com/update.apk",
-      "http://127.0.0.1.evil.com/update.apk",
-      "http://127.0.0.1.nip.io/update.apk",
-      "http://127.1/update.apk",
-      "http://2130706433/update.apk",
-      "http://[::ffff:127.0.0.1]/update.apk",
-      "http://example.com/update.apk",
-      "ftp://localhost/update.apk",
-    )) {
-      assertFalse(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(url), url)
+    for (vector in urlVectors("transportOnly") + urlVectors("rejected") + urlVectors("nativeRawRejected")) {
+      assertFalse(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(vector.url), vector.name)
       val failure = assertFailsWith<IllegalArgumentException> {
-        BackgroundDownloadUrlPolicy.requirePersistentEntry(url)
+        BackgroundDownloadUrlPolicy.requirePersistentEntry(vector.url)
       }
-      assertFalse(failure.message.orEmpty().contains(url))
+      assertFalse(failure.message.orEmpty().contains(vector.url))
       assertFalse(failure.message.orEmpty().contains("secret-token"))
       assertFalse(failure.message.orEmpty().contains("password"))
     }
@@ -285,35 +265,16 @@ internal class BackgroundDownloadPluginTest {
 
   @Test
   fun nativeUrlPolicyAllowsSignedQueriesOnlyForSafeTransportTargets() {
-    for (url in listOf(
-      "https://cdn.example.com/update.apk?token=secret-token",
-      "https://cdn.example.com/update.apk?",
-      "http://localhost:8080/update.apk?token=local-token",
-      "http://127.0.0.1:8080/update.apk?token=local-token",
-      "http://[::1]:8080/update.apk?token=local-token",
-    )) {
-      assertTrue(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(url), url)
-      assertEquals(url, BackgroundDownloadUrlPolicy.requireTransportTarget(url))
+    for (vector in urlVectors("persistentAccepted") + urlVectors("transportOnly")) {
+      assertTrue(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(vector.url), vector.name)
+      assertEquals(vector.url, BackgroundDownloadUrlPolicy.requireTransportTarget(vector.url))
     }
-    for (url in listOf(
-      "https://user:password@example.com/update.apk?token=secret-token",
-      "https://@example.com/update.apk?token=secret-token",
-      "https://cdn.example.com/update.apk#secret-fragment",
-      "https://cdn.example.com/update.apk#",
-      "http://127.evil.com/update.apk?token=secret-token",
-      "http://127.0.0.1.evil.com/update.apk?token=secret-token",
-      "http://127.0.0.1.nip.io/update.apk?token=secret-token",
-      "http://127.1/update.apk?token=secret-token",
-      "http://2130706433/update.apk?token=secret-token",
-      "http://[::ffff:127.0.0.1]/update.apk?token=secret-token",
-      "http://example.com/update.apk?token=secret-token",
-      "ftp://localhost/update.apk?token=secret-token",
-    )) {
-      assertFalse(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(url), url)
+    for (vector in urlVectors("rejected") + urlVectors("nativeRawRejected")) {
+      assertFalse(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(vector.url), vector.name)
       val failure = assertFailsWith<IllegalArgumentException> {
-        BackgroundDownloadUrlPolicy.requireTransportTarget(url)
+        BackgroundDownloadUrlPolicy.requireTransportTarget(vector.url)
       }
-      assertFalse(failure.message.orEmpty().contains(url))
+      assertFalse(failure.message.orEmpty().contains(vector.url))
       assertFalse(failure.message.orEmpty().contains("secret-token"))
       assertFalse(failure.message.orEmpty().contains("password"))
     }
@@ -425,7 +386,22 @@ internal class BackgroundDownloadPluginTest {
       delegate.installVerifications,
     )
   }
+
+  private fun urlVectors(category: String): List<UrlVector> {
+    val fixture = JSONObject(
+      checkNotNull(javaClass.classLoader?.getResourceAsStream("background_download_url_vectors.json"))
+        .bufferedReader()
+        .use { it.readText() },
+    )
+    val entries = fixture.getJSONArray(category)
+    return (0 until entries.length()).map { index ->
+      val entry = entries.getJSONObject(index)
+      UrlVector(entry.getString("name"), entry.getString("url"))
+    }
+  }
 }
+
+private data class UrlVector(val name: String, val url: String)
 
 private fun eventRecord(
   revision: Long,
