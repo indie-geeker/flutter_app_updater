@@ -352,7 +352,7 @@ dart doc --dry-run
 dart run tool/ci/verify_cli_executable.dart
 ```
 
-Apply the CI coverage awk gate and require total plus all nine critical files to
+Apply the CI coverage awk gate and require total plus all twelve critical files to
 remain at least 80 percent.
 
 **Step 2: Run Android native gates**
