@@ -478,6 +478,70 @@ internal class BackgroundDownloadEngineTest {
   }
 
   @Test
+  fun httpsRedirectToLoopbackHttpIsRejectedBeforeOpeningDowngradeTarget() {
+    val stableEntry = "https://downloads.example.test/app.apk"
+    val loopbackTarget = "http://127.0.0.1/app.apk"
+    val expected = "package".toByteArray()
+    val env = environment(
+      expected = expected,
+      packageUrl = stableEntry,
+      responses = listOf(
+        response(302, byteArrayOf(), mapOf("Location" to loopbackTarget)),
+        response(200, expected),
+      ),
+    )
+
+    val result = env.engine.execute(TASK_ID)
+
+    assertEquals(listOf(stableEntry), env.factory.requests.map { it.url })
+    assertEquals(BackgroundDownloadExecutionOutcome.failed, result.outcome)
+    assertFailure(env.store.read(TASK_ID), "PACKAGE_DOWNLOAD_FAILED", "protocol_error")
+  }
+
+  @Test
+  fun httpsHopRedirectToLoopbackHttpIsRejectedBeforeOpeningDowngradeTarget() {
+    val loopbackEntry = "http://127.0.0.1/start.apk"
+    val httpsHop = "https://downloads.example.test/app.apk"
+    val loopbackTarget = "http://127.0.0.1/final.apk"
+    val expected = "package".toByteArray()
+    val env = environment(
+      expected = expected,
+      packageUrl = loopbackEntry,
+      responses = listOf(
+        response(302, byteArrayOf(), mapOf("Location" to httpsHop)),
+        response(302, byteArrayOf(), mapOf("Location" to loopbackTarget)),
+        response(200, expected),
+      ),
+    )
+
+    val result = env.engine.execute(TASK_ID)
+
+    assertEquals(listOf(loopbackEntry, httpsHop), env.factory.requests.map { it.url })
+    assertEquals(BackgroundDownloadExecutionOutcome.failed, result.outcome)
+    assertFailure(env.store.read(TASK_ID), "PACKAGE_DOWNLOAD_FAILED", "protocol_error")
+  }
+
+  @Test
+  fun loopbackHttpRedirectRemainsAllowedForDevelopmentTransport() {
+    val loopbackEntry = "http://127.0.0.1/start.apk"
+    val loopbackTarget = "http://127.255.1.2/app.apk"
+    val expected = "package".toByteArray()
+    val env = environment(
+      expected = expected,
+      packageUrl = loopbackEntry,
+      responses = listOf(
+        response(302, byteArrayOf(), mapOf("Location" to loopbackTarget)),
+        response(200, expected),
+      ),
+    )
+
+    val result = env.engine.execute(TASK_ID)
+
+    assertEquals(BackgroundDownloadExecutionOutcome.completed, result.outcome)
+    assertEquals(listOf(loopbackEntry, loopbackTarget), env.factory.requests.map { it.url })
+  }
+
+  @Test
   fun redirectsAreLimitedToFiveAndKeepResumeHeaders() {
     val maxRedirects = sharedVectors().getJSONObject("redirect_resume")
       .getJSONObject("expected").getInt("maxRedirects")

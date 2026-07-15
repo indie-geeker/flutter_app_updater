@@ -819,15 +819,14 @@ internal class BackgroundDownloadEngine(
       }
       if (location.isNullOrBlank()) throw BackgroundDownloadProtocolException("Redirect is missing Location")
       if (redirects++ >= MAX_REDIRECTS) throw BackgroundDownloadProtocolException("Too many redirects")
-      current = URI(current).resolve(location).toString()
-      requireAllowedUrl(current)
-      val from = URI(originalUrl)
-      val to = URI(current)
-      if (from.scheme.equals("https", true) && to.scheme.equals("http", true) &&
-        !BackgroundDownloadUrlPolicy.isAllowedTransportTarget(to.toString())
-      ) {
+      val from = URI(current)
+      val next = from.resolve(location)
+      if (from.scheme.equals("https", true) && next.scheme.equals("http", true)) {
         throw BackgroundDownloadProtocolException("HTTPS redirect downgrade is not allowed")
       }
+      val nextUrl = next.toString()
+      requireAllowedUrl(nextUrl)
+      current = nextUrl
     }
   }
 
