@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../production/production_app_metadata.dart';
 import '../production/production_update_configuration.dart';
 import '../production/production_update_controller.dart';
+import 'app_card.dart';
 import 'production_action_confirmation_dialog.dart';
 
 /// Opt-in page that exercises the package's real production boundaries.
@@ -174,7 +175,7 @@ final class _ProductionIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
+    return const AppCard(
       child: Padding(
         padding: EdgeInsets.all(20),
         child: Column(
@@ -206,7 +207,7 @@ final class _AvailableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final update = controller.preparedUpdate!;
-    return Card(
+    return AppCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -237,7 +238,7 @@ final class _FailureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return AppCard(
       color: Theme.of(context).colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -265,7 +266,7 @@ final class _MessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return AppCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app_updater/flutter_app_updater.dart';
 
 import '../demo/demo_scenario.dart';
+import 'app_card.dart';
 
 class ScenarioForm extends StatefulWidget {
   final DemoScenario scenario;
@@ -128,7 +129,10 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 rebuildValue: widget.scenario.platform,
                 child: DropdownButtonFormField<TargetPlatform>(
                   key: const Key('platform-field'),
-                  initialValue: widget.scenario.platform,
+                  // `value` keeps the example compatible with Flutter 3.22;
+                  // it was renamed to `initialValue` in newer SDKs.
+                  // ignore: deprecated_member_use
+                  value: widget.scenario.platform,
                   decoration: const InputDecoration(labelText: 'Platform'),
                   items: _platforms
                       .map(
@@ -155,7 +159,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 rebuildValue: widget.scenario.runtimeChannel,
                 child: DropdownButtonFormField<String>(
                   key: const Key('runtime-channel-field'),
-                  initialValue: widget.scenario.runtimeChannel,
+                  // ignore: deprecated_member_use
+                  value: widget.scenario.runtimeChannel,
                   decoration:
                       const InputDecoration(labelText: 'Runtime channel'),
                   items: const [
@@ -236,7 +241,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                     rebuildValue: widget.scenario.releaseChannel,
                     child: DropdownButtonFormField<String>(
                       key: const Key('release-channel-field'),
-                      initialValue: widget.scenario.releaseChannel,
+                      // ignore: deprecated_member_use
+                      value: widget.scenario.releaseChannel,
                       decoration:
                           const InputDecoration(labelText: 'Release channel'),
                       items: const [
@@ -314,7 +320,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                     rebuildValue: widget.scenario.delivery,
                     child: DropdownButtonFormField<DemoDelivery>(
                       key: const Key('delivery-field'),
-                      initialValue: widget.scenario.delivery,
+                      // ignore: deprecated_member_use
+                      value: widget.scenario.delivery,
                       isExpanded: true,
                       decoration:
                           const InputDecoration(labelText: 'Primary delivery'),
@@ -335,7 +342,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                     rebuildValue: widget.scenario.fallbackDelivery,
                     child: DropdownButtonFormField<DemoDelivery?>(
                       key: const Key('fallback-delivery-field'),
-                      initialValue: widget.scenario.fallbackDelivery,
+                      // ignore: deprecated_member_use
+                      value: widget.scenario.fallbackDelivery,
                       isExpanded: true,
                       decoration:
                           const InputDecoration(labelText: 'Fallback delivery'),
@@ -399,7 +407,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 rebuildValue: widget.scenario.executionDuration,
                 child: DropdownButtonFormField<Duration>(
                   key: const Key('duration-field'),
-                  initialValue: widget.scenario.executionDuration,
+                  // ignore: deprecated_member_use
+                  value: widget.scenario.executionDuration,
                   decoration:
                       const InputDecoration(labelText: 'Simulation duration'),
                   items: const [
@@ -440,7 +449,8 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 rebuildValue: widget.scenario.outcome,
                 child: DropdownButtonFormField<DemoOutcome>(
                   key: const Key('outcome-field'),
-                  initialValue: widget.scenario.outcome,
+                  // ignore: deprecated_member_use
+                  value: widget.scenario.outcome,
                   isExpanded: true,
                   decoration:
                       const InputDecoration(labelText: 'Terminal outcome'),
@@ -558,7 +568,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
+    return AppCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
