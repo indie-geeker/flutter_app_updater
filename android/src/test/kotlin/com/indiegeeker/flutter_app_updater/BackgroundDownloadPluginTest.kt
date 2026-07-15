@@ -246,7 +246,7 @@ internal class BackgroundDownloadPluginTest {
   }
 
   @Test
-  fun nativeUrlPolicyAcceptsOnlyRealLoopbackHttpHosts() {
+  fun nativeUrlPolicyRequiresCredentialFreePersistentEntries() {
     for (url in listOf(
       "https://example.com/update.apk",
       "http://localhost:8080/update.apk",
@@ -254,15 +254,68 @@ internal class BackgroundDownloadPluginTest {
       "http://127.255.1.2/update.apk",
       "http://[::1]:8080/update.apk",
     )) {
-      assertTrue(BackgroundDownloadUrlPolicy.isAllowed(url), url)
+      assertTrue(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(url), url)
+      assertEquals(url, BackgroundDownloadUrlPolicy.requirePersistentEntry(url))
     }
     for (url in listOf(
+      "https://user:password@example.com/update.apk",
+      "https://@example.com/update.apk",
+      "https://example.com/update.apk?token=secret-token",
+      "https://example.com/update.apk?",
+      "https://example.com/update.apk#secret-fragment",
+      "https://example.com/update.apk#",
       "http://127.evil.com/update.apk",
       "http://127.0.0.1.evil.com/update.apk",
+      "http://127.0.0.1.nip.io/update.apk",
+      "http://127.1/update.apk",
+      "http://2130706433/update.apk",
+      "http://[::ffff:127.0.0.1]/update.apk",
       "http://example.com/update.apk",
       "ftp://localhost/update.apk",
     )) {
-      assertFalse(BackgroundDownloadUrlPolicy.isAllowed(url), url)
+      assertFalse(BackgroundDownloadUrlPolicy.isAllowedPersistentEntry(url), url)
+      val failure = assertFailsWith<IllegalArgumentException> {
+        BackgroundDownloadUrlPolicy.requirePersistentEntry(url)
+      }
+      assertFalse(failure.message.orEmpty().contains(url))
+      assertFalse(failure.message.orEmpty().contains("secret-token"))
+      assertFalse(failure.message.orEmpty().contains("password"))
+    }
+  }
+
+  @Test
+  fun nativeUrlPolicyAllowsSignedQueriesOnlyForSafeTransportTargets() {
+    for (url in listOf(
+      "https://cdn.example.com/update.apk?token=secret-token",
+      "https://cdn.example.com/update.apk?",
+      "http://localhost:8080/update.apk?token=local-token",
+      "http://127.0.0.1:8080/update.apk?token=local-token",
+      "http://[::1]:8080/update.apk?token=local-token",
+    )) {
+      assertTrue(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(url), url)
+      assertEquals(url, BackgroundDownloadUrlPolicy.requireTransportTarget(url))
+    }
+    for (url in listOf(
+      "https://user:password@example.com/update.apk?token=secret-token",
+      "https://@example.com/update.apk?token=secret-token",
+      "https://cdn.example.com/update.apk#secret-fragment",
+      "https://cdn.example.com/update.apk#",
+      "http://127.evil.com/update.apk?token=secret-token",
+      "http://127.0.0.1.evil.com/update.apk?token=secret-token",
+      "http://127.0.0.1.nip.io/update.apk?token=secret-token",
+      "http://127.1/update.apk?token=secret-token",
+      "http://2130706433/update.apk?token=secret-token",
+      "http://[::ffff:127.0.0.1]/update.apk?token=secret-token",
+      "http://example.com/update.apk?token=secret-token",
+      "ftp://localhost/update.apk?token=secret-token",
+    )) {
+      assertFalse(BackgroundDownloadUrlPolicy.isAllowedTransportTarget(url), url)
+      val failure = assertFailsWith<IllegalArgumentException> {
+        BackgroundDownloadUrlPolicy.requireTransportTarget(url)
+      }
+      assertFalse(failure.message.orEmpty().contains(url))
+      assertFalse(failure.message.orEmpty().contains("secret-token"))
+      assertFalse(failure.message.orEmpty().contains("password"))
     }
   }
 

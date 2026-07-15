@@ -63,6 +63,36 @@ void main() {
       expect(platform.startCalls, hasLength(3));
     });
 
+    test('rejects credentials in durable entry URLs before platform calls',
+        () async {
+      final sensitiveUrls = <String>[
+        'https://user:password@example.com/update.apk',
+        'https://example.com/update.apk?token=secret-token',
+        'https://example.com/update.apk?',
+        'https://example.com/update.apk#secret-fragment',
+        'https://example.com/update.apk#',
+      ];
+
+      for (final url in sensitiveUrls) {
+        Object? failure;
+        try {
+          await manager.start(_action(url: url));
+        } catch (error) {
+          failure = error;
+        }
+
+        expect(failure, isA<ArgumentError>());
+        final message = failure.toString();
+        expect(message, contains('credential-free stable entry URL'));
+        expect(message, contains('redirect to a short-lived signed URL'));
+        expect(message, isNot(contains(url)));
+        expect(message, isNot(contains('secret-token')));
+        expect(message, isNot(contains('password')));
+      }
+
+      expect(platform.startCalls, isEmpty);
+    });
+
     test('rejects invalid actions without calling the platform', () async {
       final invalidActions = <DownloadPackageAction>[
         DownloadPackageAction(

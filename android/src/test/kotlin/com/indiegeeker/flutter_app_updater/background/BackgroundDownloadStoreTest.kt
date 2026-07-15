@@ -1,5 +1,6 @@
 package com.indiegeeker.flutter_app_updater.background
 
+import android.content.ContextWrapper
 import java.io.File
 import java.io.IOException
 import java.math.BigInteger
@@ -202,6 +203,42 @@ internal class BackgroundDownloadStoreTest {
   }
 
   @Test
+  fun persistedRecordRejectsCredentialBearingEntryUrlsWithoutEchoingThem() {
+    val persistedUrls = listOf(
+      "https://user:password@downloads.example.test/app.apk",
+      "https://downloads.example.test/app.apk?token=secret-token",
+      "https://downloads.example.test/app.apk?",
+      "https://downloads.example.test/app.apk#secret-fragment",
+    )
+
+    persistedUrls.forEachIndexed { index, packageUrl ->
+      val id = "tampered_$index"
+      val json = record(id = id).toJson().put("packageUrl", packageUrl)
+      val failure = assertFailsWith<IllegalArgumentException> {
+        BackgroundDownloadRecord.fromJson(json)
+      }
+      assertFalse(failure.message.orEmpty().contains(packageUrl))
+      assertFalse(failure.message.orEmpty().contains("secret-token"))
+      assertFalse(failure.message.orEmpty().contains("password"))
+
+      val root = newRoot()
+      val store = store(root, TestRecordFileFactory())
+      writeRawRecord(root, id, json.toString())
+
+      val recovered = store.read(id)
+
+      assertEquals(BackgroundDownloadStatus.failed, recovered.status)
+      assertEquals("corrupt_state", recovered.errorCode)
+      assertEquals("https://invalid.invalid/recovered-state", recovered.packageUrl)
+      val rewritten = root.resolve("$id/task.json").readText()
+      assertFalse(rewritten.contains(packageUrl))
+      assertFalse(rewritten.contains("secret-token"))
+      assertFalse(rewritten.contains("password"))
+      assertEquals(recovered, BackgroundDownloadRecord.fromJson(JSONObject(rewritten)))
+    }
+  }
+
+  @Test
   fun listNeverCrashesForUnsupportedOrCorruptJson() {
     val root = newRoot()
     val factory = TestRecordFileFactory()
@@ -240,6 +277,7 @@ internal class BackgroundDownloadStoreTest {
 
       assertEquals(id, listed.id)
       assertEquals(BackgroundDownloadStatus.failed, listed.status)
+      assertEquals("https://invalid.invalid/recovered-state", listed.packageUrl)
       assertEquals(listed, store.read(id))
       store.remove(id)
       assertFalse(root.resolve(id).exists())
@@ -741,6 +779,189 @@ internal class BackgroundDownloadStoreTest {
   }
 
   @Test
+  fun separateRootsKeepStateAndArtifactsIsolatedAcrossLifecycleOperations() {
+    val stateRoot = newRoot()
+    val artifactRoot = newRoot()
+    val store = BackgroundDownloadStore(
+      stateRoot = stateRoot,
+      artifactRoot = artifactRoot,
+      recordFileFactory = TestRecordFileFactory(),
+      artifactVerifier = { _, _ -> false },
+      nowEpochMs = { 500 },
+    )
+    val active = record(status = BackgroundDownloadStatus.running, downloadedBytes = 5)
+
+    store.create(active)
+
+    assertTrue(stateRoot.resolve("${active.id}/task.json").isFile)
+    assertFalse(artifactRoot.resolve("${active.id}/task.json").exists())
+    assertEquals(artifactRoot.resolve(active.id).canonicalFile, store.taskDirectory(active.id))
+    assertEquals(
+      artifactRoot.resolve("${active.id}/artifact.download").canonicalFile,
+      store.partialFile(active.id),
+    )
+    assertEquals(
+      artifactRoot.resolve("${active.id}/artifact.apk").canonicalFile,
+      store.apkFile(active.id),
+    )
+    assertFalse(stateRoot.resolve("${active.id}/artifact.download").exists())
+    assertFalse(stateRoot.resolve("${active.id}/artifact.apk").exists())
+
+    store.partialFile(active.id).writeBytes(ByteArray(12) { 1 })
+    store.apkFile(active.id).writeBytes(byteArrayOf(2))
+    assertEquals(active, store.list().single())
+    assertEquals(active, store.reconcileArtifacts(active.id))
+    assertEquals(5, store.partialFile(active.id).length())
+    assertEquals(active.id, store.managedApkTaskId(store.apkFile(active.id).path))
+    assertNull(store.managedApkTaskId(stateRoot.resolve("${active.id}/artifact.apk").path))
+
+    val canceled = store.cancelArtifactsAndWriteTombstone(active.id, active.revision)
+    assertFalse(store.partialFile(active.id).exists())
+    assertFalse(store.apkFile(active.id).exists())
+    assertEquals(canceled, store.read(active.id))
+    store.remove(active.id)
+    assertFalse(stateRoot.resolve(active.id).exists())
+    assertFalse(artifactRoot.resolve(active.id).exists())
+  }
+
+  @Test
+  fun contextConstructorUsesNoBackupForStateAndFilesDirForArtifacts() {
+    val noBackup = newRoot()
+    val files = newRoot()
+    val context = object : ContextWrapper(null) {
+      override fun getNoBackupFilesDir(): File = noBackup
+      override fun getFilesDir(): File = files
+    }
+    val store = BackgroundDownloadStore(context, artifactVerifier = { _, _ -> false })
+    val id = "context_task"
+    val stateRoot = noBackup.resolve("flutter_app_updater/background")
+    val artifactRoot = files.resolve("flutter_app_updater/background")
+
+    assertTrue(stateRoot.isDirectory)
+    assertTrue(artifactRoot.isDirectory)
+    assertEquals(artifactRoot.resolve(id).canonicalFile, store.taskDirectory(id))
+    assertEquals(
+      artifactRoot.resolve("$id/artifact.download").canonicalFile,
+      store.partialFile(id),
+    )
+    assertEquals(artifactRoot.resolve("$id/artifact.apk").canonicalFile, store.apkFile(id))
+  }
+
+  @Test
+  fun splitStoreCleansOnlyRecognizedLegacyLayoutAndIsIdempotent() {
+    val sameRoot = newRoot()
+    val sameRootTask = sameRoot.resolve("same_root").apply {
+      mkdirs()
+      resolve("task.json").writeText("same-root record")
+      resolve("artifact.download").writeBytes(byteArrayOf(1))
+      resolve("artifact.apk").writeBytes(byteArrayOf(2))
+    }
+    BackgroundDownloadStore(sameRoot, TestRecordFileFactory())
+    assertTrue(sameRootTask.resolve("task.json").isFile)
+    assertTrue(sameRootTask.resolve("artifact.download").isFile)
+    assertTrue(sameRootTask.resolve("artifact.apk").isFile)
+
+    val stateRoot = newRoot()
+    val artifactRoot = newRoot()
+    val legacyIds = mapOf(
+      "legacy_base" to "task.json",
+      "legacy_backup" to "task.json.bak",
+      "legacy_new" to "task.json.new",
+    )
+    legacyIds.forEach { (id, recordName) ->
+      artifactRoot.resolve(id).apply {
+        mkdirs()
+        resolve(recordName).writeText("legacy token=secret-token")
+        resolve("artifact.download").writeBytes(byteArrayOf(1))
+        resolve("artifact.apk").writeBytes(byteArrayOf(2))
+      }
+    }
+    val legacyWithUnknown = artifactRoot.resolve("legacy_unknown").apply {
+      mkdirs()
+      resolve("task.json").writeText("legacy token=secret-token")
+      resolve("artifact.download").writeBytes(byteArrayOf(1))
+      resolve("artifact.apk").writeBytes(byteArrayOf(2))
+      resolve("keep.me").writeText("keep")
+    }
+    val newLayoutArtifact = artifactRoot.resolve("new_layout").apply {
+      mkdirs()
+      resolve("artifact.download").writeBytes(byteArrayOf(3))
+      resolve("artifact.apk").writeBytes(byteArrayOf(4))
+    }
+    val invalidTask = artifactRoot.resolve("invalid task").apply {
+      mkdirs()
+      resolve("task.json").writeText("legacy")
+      resolve("artifact.apk").writeBytes(byteArrayOf(5))
+    }
+
+    fun openStore() = BackgroundDownloadStore(
+      stateRoot = stateRoot,
+      artifactRoot = artifactRoot,
+      recordFileFactory = TestRecordFileFactory(),
+    )
+
+    openStore()
+
+    legacyIds.keys.forEach { id -> assertFalse(artifactRoot.resolve(id).exists(), id) }
+    assertTrue(legacyWithUnknown.resolve("keep.me").isFile)
+    assertFalse(legacyWithUnknown.resolve("task.json").exists())
+    assertFalse(legacyWithUnknown.resolve("artifact.download").exists())
+    assertFalse(legacyWithUnknown.resolve("artifact.apk").exists())
+    assertTrue(newLayoutArtifact.resolve("artifact.download").isFile)
+    assertTrue(newLayoutArtifact.resolve("artifact.apk").isFile)
+    assertTrue(invalidTask.resolve("task.json").isFile)
+    assertTrue(invalidTask.resolve("artifact.apk").isFile)
+
+    openStore()
+
+    assertTrue(legacyWithUnknown.resolve("keep.me").isFile)
+    assertTrue(newLayoutArtifact.resolve("artifact.download").isFile)
+    assertTrue(newLayoutArtifact.resolve("artifact.apk").isFile)
+    assertTrue(invalidTask.resolve("task.json").isFile)
+    assertTrue(invalidTask.resolve("artifact.apk").isFile)
+  }
+
+  @Test
+  fun legacyCleanupNeverFollowsTaskOrArtifactSymlinks() {
+    val stateRoot = newRoot()
+    val artifactRoot = newRoot()
+    val outsideTask = newRoot().resolve("outside_task").apply {
+      mkdirs()
+      resolve("task.json").writeText("outside record")
+      resolve("artifact.download").writeBytes(byteArrayOf(1))
+      resolve("artifact.apk").writeBytes(byteArrayOf(2))
+    }
+    val taskLink = artifactRoot.resolve("linked_task")
+    createSymlinkOrSkip(taskLink.toPath(), outsideTask.toPath())
+
+    val protectedArtifact = newRoot().resolve("protected.apk").apply {
+      writeBytes(byteArrayOf(9, 8, 7))
+    }
+    val legacyTask = artifactRoot.resolve("legacy_symlink").apply {
+      mkdirs()
+      resolve("task.json").writeText("legacy record")
+      resolve("artifact.download").writeBytes(byteArrayOf(3))
+    }
+    val artifactLink = legacyTask.resolve("artifact.apk")
+    createSymlinkOrSkip(artifactLink.toPath(), protectedArtifact.toPath())
+
+    BackgroundDownloadStore(
+      stateRoot = stateRoot,
+      artifactRoot = artifactRoot,
+      recordFileFactory = TestRecordFileFactory(),
+    )
+
+    assertTrue(Files.isSymbolicLink(taskLink.toPath()))
+    assertTrue(outsideTask.resolve("task.json").isFile)
+    assertTrue(outsideTask.resolve("artifact.download").isFile)
+    assertTrue(outsideTask.resolve("artifact.apk").isFile)
+    assertFalse(legacyTask.resolve("task.json").exists())
+    assertFalse(legacyTask.resolve("artifact.download").exists())
+    assertTrue(Files.isSymbolicLink(artifactLink.toPath()))
+    assertContentEquals(byteArrayOf(9, 8, 7), protectedArtifact.readBytes())
+  }
+
+  @Test
   fun taskLockAllocationIsFixedAndBounded() {
     val store = store(newRoot(), TestRecordFileFactory())
     repeat(256) { index ->
@@ -868,7 +1089,7 @@ private fun createSymlinkOrSkip(link: Path, target: Path) {
 internal fun record(
   id: String = "task_1",
   revision: Long = 1,
-  packageUrl: String = "https://downloads.example.test/app.apk?token=secret",
+  packageUrl: String = "https://downloads.example.test/app.apk",
   status: BackgroundDownloadStatus = BackgroundDownloadStatus.queued,
   downloadedBytes: Long = 0,
   totalBytes: Long? = null,

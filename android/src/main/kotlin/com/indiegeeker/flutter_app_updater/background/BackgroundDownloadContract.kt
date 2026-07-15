@@ -157,7 +157,9 @@ internal data class BackgroundDownloadRecord(
         schemaVersion = schemaVersion,
         revision = json.requiredLong("revision"),
         id = json.requiredString("id"),
-        packageUrl = json.requiredString("packageUrl"),
+        packageUrl = BackgroundDownloadUrlPolicy.requirePersistentEntry(
+          json.requiredString("packageUrl"),
+        ),
         status = status,
         downloadedBytes = json.requiredLong("downloadedBytes"),
         totalBytes = json.nullableLong("totalBytes"),

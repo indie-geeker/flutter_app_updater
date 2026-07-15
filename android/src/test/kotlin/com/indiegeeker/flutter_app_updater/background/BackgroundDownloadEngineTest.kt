@@ -441,6 +441,43 @@ internal class BackgroundDownloadEngineTest {
   }
 
   @Test
+  fun stableEntryRedirectsToSignedTransportWithoutPersistingCredentials() {
+    val stableEntry = "https://downloads.example.test/app.apk"
+    val signedTarget = "https://cdn.example.test/app.apk?token=secret-token"
+    val expected = "hello world".toByteArray()
+    val env = environment(
+      expected = expected,
+      packageUrl = stableEntry,
+      responses = listOf(
+        response(302, byteArrayOf(), mapOf("Location" to signedTarget)),
+        response(
+          206,
+          " world".toByteArray(),
+          mapOf(
+            "Content-Range" to "bytes 5-10/11",
+            "Content-Length" to "6",
+            "ETag" to "\"v1\"",
+          ),
+        ),
+      ),
+      downloaded = "hello".toByteArray(),
+      checkpointBytes = 5,
+      etag = "\"v1\"",
+    )
+
+    val result = env.engine.execute(TASK_ID)
+
+    assertEquals(BackgroundDownloadExecutionOutcome.completed, result.outcome)
+    assertEquals(listOf(stableEntry, signedTarget), env.factory.requests.map { it.url })
+    assertTrue(env.factory.requests.all { it.headers["Range"] == "bytes=5-" })
+    assertTrue(env.factory.requests.all { it.headers["If-Range"] == "\"v1\"" })
+    val completed = env.store.read(TASK_ID)
+    assertEquals(stableEntry, completed.packageUrl)
+    assertFalse(completed.toJson().toString().contains("secret-token"))
+    assertFalse(completed.toJson().toString().contains("?token="))
+  }
+
+  @Test
   fun redirectsAreLimitedToFiveAndKeepResumeHeaders() {
     val maxRedirects = sharedVectors().getJSONObject("redirect_resume")
       .getJSONObject("expected").getInt("maxRedirects")

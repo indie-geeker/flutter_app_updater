@@ -360,11 +360,15 @@ class AndroidBackgroundDownloadManager {
         'Must contain exactly 64 hexadecimal characters.',
       );
     }
-    if (!_isAllowedPackageUrl(action.packageUrl)) {
-      throw ArgumentError.value(
-        action.packageUrl,
+    final packageUrl = action.packageUrl;
+    if (packageUrl.userInfo.isNotEmpty ||
+        packageUrl.hasQuery ||
+        packageUrl.hasFragment ||
+        !_isAllowedPackageUrl(packageUrl)) {
+      throw ArgumentError(
+        'Background downloads require a credential-free stable entry URL; '
+            'the server may redirect to a short-lived signed URL.',
         'action.packageUrl',
-        'Must use HTTPS outside a loopback host.',
       );
     }
   }

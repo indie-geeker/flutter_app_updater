@@ -3,7 +3,6 @@ package com.indiegeeker.flutter_app_updater.background
 import android.content.Context
 import io.flutter.plugin.common.EventChannel
 import java.io.File
-import java.net.URI
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -163,32 +162,6 @@ internal class BackgroundDownloadEventBus {
   }
 }
 
-internal object BackgroundDownloadUrlPolicy {
-  fun isAllowed(value: String): Boolean {
-    val uri = try {
-      URI(value)
-    } catch (_: Exception) {
-      return false
-    }
-    val rawHost = uri.host?.lowercase()?.trim().orEmpty()
-    if (!uri.isAbsolute || rawHost.isBlank()) return false
-    if (uri.scheme.equals("https", true)) return true
-    if (!uri.scheme.equals("http", true)) return false
-    val host = rawHost.removePrefix("[").removeSuffix("]")
-    return host == "localhost" || host == "::1" || isIpv4Loopback(host)
-  }
-
-  private fun isIpv4Loopback(host: String): Boolean {
-    val parts = host.split('.')
-    if (parts.size != 4) return false
-    val octets = parts.map { part ->
-      if (part.isEmpty() || part.any { !it.isDigit() }) return false
-      part.toIntOrNull()?.takeIf { it in 0..255 } ?: return false
-    }
-    return octets.first() == 127
-  }
-}
-
 internal class BackgroundDownloadPluginException(
   val code: String,
   message: String,
@@ -302,8 +275,14 @@ internal class RuntimeBackgroundDownloadPluginDelegate(
     } catch (error: IllegalArgumentException) {
       invalidArgument("sha256 must be 64 lowercase hexadecimal characters", error)
     }
-    if (!BackgroundDownloadUrlPolicy.isAllowed(packageUrl)) {
-      invalidArgument("packageUrl must use HTTPS outside loopback")
+    try {
+      BackgroundDownloadUrlPolicy.requirePersistentEntry(packageUrl)
+    } catch (error: IllegalArgumentException) {
+      invalidArgument(
+        "packageUrl must be a credential-free stable entry URL; " +
+          "the server may redirect to a short-lived signed URL",
+        error,
+      )
     }
     val now = System.currentTimeMillis()
     val candidate = BackgroundDownloadRecord(

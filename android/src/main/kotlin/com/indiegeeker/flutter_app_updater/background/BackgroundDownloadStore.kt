@@ -53,19 +53,35 @@ private class AndroidAtomicRecordFile(file: File) : BackgroundRecordFile {
 }
 
 internal class BackgroundDownloadStore(
-  root: File,
+  stateRoot: File,
+  artifactRoot: File = stateRoot,
   private val recordFileFactory: BackgroundRecordFileFactory = AndroidAtomicRecordFileFactory,
   private val artifactVerifier: (File, BackgroundDownloadRecord) -> Boolean = { _, _ -> false },
   private val nowEpochMs: () -> Long = System::currentTimeMillis,
 ) {
-  private val rootDirectory = root.canonicalFile
+  private val stateRootDirectory = stateRoot.canonicalFile
+  private val artifactRootDirectory = artifactRoot.canonicalFile
   private val taskLocks = Array(LOCK_STRIPE_COUNT) { ReentrantLock() }
+
+  constructor(
+    root: File,
+    legacyRecordFileFactory: BackgroundRecordFileFactory,
+    legacyArtifactVerifier: (File, BackgroundDownloadRecord) -> Boolean = { _, _ -> false },
+    legacyNowEpochMs: () -> Long = System::currentTimeMillis,
+  ) : this(
+    root,
+    root,
+    legacyRecordFileFactory,
+    legacyArtifactVerifier,
+    legacyNowEpochMs,
+  )
 
   constructor(
     context: Context,
     artifactVerifier: (File, BackgroundDownloadRecord) -> Boolean,
     nowEpochMs: () -> Long = System::currentTimeMillis,
   ) : this(
+    File(context.noBackupFilesDir, "flutter_app_updater/background"),
     File(context.filesDir, "flutter_app_updater/background"),
     AndroidAtomicRecordFileFactory,
     artifactVerifier,
@@ -73,16 +89,26 @@ internal class BackgroundDownloadStore(
   )
 
   init {
-    require(rootDirectory.mkdirs() || rootDirectory.isDirectory) {
-      "Unable to create background download storage root"
+    require(stateRootDirectory.mkdirs() || stateRootDirectory.isDirectory) {
+      "Unable to create background download state root"
+    }
+    require(artifactRootDirectory.mkdirs() || artifactRootDirectory.isDirectory) {
+      "Unable to create background download artifact root"
+    }
+    if (stateRootDirectory != artifactRootDirectory) {
+      cleanupLegacyArtifactRoot()
     }
   }
 
   fun create(record: BackgroundDownloadRecord): BackgroundDownloadRecord =
     withTaskLock(record.id) {
-      val directory = taskDirectory(record.id)
-      require(directory.mkdirs() || directory.isDirectory) {
-        "Unable to create background download task directory"
+      val stateDirectory = stateTaskDirectory(record.id)
+      require(stateDirectory.mkdirs() || stateDirectory.isDirectory) {
+        "Unable to create background download state directory"
+      }
+      val artifactDirectory = taskDirectory(record.id)
+      require(artifactDirectory.mkdirs() || artifactDirectory.isDirectory) {
+        "Unable to create background download artifact directory"
       }
       val recordFile = recordFile(record.id)
       if (recordFile.exists()) {
@@ -104,7 +130,7 @@ internal class BackgroundDownloadStore(
   }
 
   fun list(): List<BackgroundDownloadRecord> {
-    val directories = rootDirectory.listFiles()
+    val directories = stateRootDirectory.listFiles()
       ?.asSequence()
       ?.filter { it.isDirectory && BackgroundDownloadContract.isValidId(it.name) }
       ?.sortedBy { it.name }
@@ -128,24 +154,24 @@ internal class BackgroundDownloadStore(
     )
   }
 
-  fun taskDirectory(id: String): File = checkedTaskDirectory(id)
+  fun taskDirectory(id: String): File = checkedArtifactTaskDirectory(id)
 
-  fun partialFile(id: String): File = checkedTaskFile(id, PARTIAL_FILE_NAME)
+  fun partialFile(id: String): File = checkedArtifactTaskFile(id, PARTIAL_FILE_NAME)
 
-  fun apkFile(id: String): File = checkedTaskFile(id, APK_FILE_NAME)
+  fun apkFile(id: String): File = checkedArtifactTaskFile(id, APK_FILE_NAME)
 
   /** Returns the owning task for a lexical path inside managed APK storage. */
   fun managedApkTaskId(path: String): String? {
     // URI normalization removes dot segments without following symlinks and is
     // available on every supported Android API level.
     val candidate = File(File(path).absoluteFile.toURI().normalize()).absoluteFile
-    val rootPath = rootDirectory.absolutePath
+    val rootPath = artifactRootDirectory.absolutePath
     val candidatePath = candidate.absolutePath
     if (candidatePath != rootPath && !candidatePath.startsWith("$rootPath${File.separator}")) {
       return null
     }
     val directory = candidate.parentFile
-    if (directory?.parentFile != rootDirectory || candidate.name != APK_FILE_NAME) {
+    if (directory?.parentFile != artifactRootDirectory || candidate.name != APK_FILE_NAME) {
       throw InvalidBackgroundDownloadPathException("Managed APK path is not an exact task artifact")
     }
     val id = BackgroundDownloadContract.requireValidId(directory.name)
@@ -328,9 +354,16 @@ internal class BackgroundDownloadStore(
     deleteArtifact(partialFile(id))
     deleteArtifact(apkFile(id))
     recordFile(id).delete()
-    val directory = taskDirectory(id)
-    if (directory.exists() && !directory.delete()) {
-      throw BackgroundDownloadStateException("Unable to remove background download task directory")
+    val stateDirectory = stateTaskDirectory(id)
+    val artifactDirectory = taskDirectory(id)
+    if (artifactDirectory != stateDirectory &&
+      artifactDirectory.exists() &&
+      !artifactDirectory.delete()
+    ) {
+      throw BackgroundDownloadStateException("Unable to remove background download artifact directory")
+    }
+    if (stateDirectory.exists() && !stateDirectory.delete()) {
+      throw BackgroundDownloadStateException("Unable to remove background download state directory")
     }
   }
 
@@ -438,7 +471,7 @@ internal class BackgroundDownloadStore(
     BackgroundDownloadRecord(
       revision = 1,
       id = id,
-      packageUrl = "invalid://recovered-state",
+      packageUrl = "https://invalid.invalid/recovered-state",
       status = BackgroundDownloadStatus.failed,
       downloadedBytes = 0,
       totalBytes = null,
@@ -492,11 +525,17 @@ internal class BackgroundDownloadStore(
   }
 
   private fun recordFile(id: String): BackgroundRecordFile =
-    recordFileFactory.create(checkedTaskFile(id, RECORD_FILE_NAME))
+    recordFileFactory.create(checkedStateTaskFile(id, RECORD_FILE_NAME))
 
-  private fun checkedTaskDirectory(id: String): File {
+  private fun stateTaskDirectory(id: String): File =
+    checkedTaskDirectory(stateRootDirectory, id)
+
+  private fun checkedArtifactTaskDirectory(id: String): File =
+    checkedTaskDirectory(artifactRootDirectory, id)
+
+  private fun checkedTaskDirectory(root: File, id: String): File {
     val validId = BackgroundDownloadContract.requireValidId(id)
-    val directory = File(rootDirectory, validId).absoluteFile
+    val directory = File(root, validId).absoluteFile
     if (canonicalFile(directory) != directory) {
       throw InvalidBackgroundDownloadPathException(
         "Background download task path is not an exact direct child",
@@ -505,8 +544,14 @@ internal class BackgroundDownloadStore(
     return directory
   }
 
-  private fun checkedTaskFile(id: String, name: String): File {
-    val directory = checkedTaskDirectory(id)
+  private fun checkedStateTaskFile(id: String, name: String): File =
+    checkedTaskFile(stateRootDirectory, id, name)
+
+  private fun checkedArtifactTaskFile(id: String, name: String): File =
+    checkedTaskFile(artifactRootDirectory, id, name)
+
+  private fun checkedTaskFile(root: File, id: String, name: String): File {
+    val directory = checkedTaskDirectory(root, id)
     val file = File(directory, name).absoluteFile
     if (canonicalFile(file) != file) {
       throw InvalidBackgroundDownloadPathException(
@@ -514,6 +559,41 @@ internal class BackgroundDownloadStore(
       )
     }
     return file
+  }
+
+  private fun cleanupLegacyArtifactRoot() {
+    artifactRootDirectory.listFiles().orEmpty().forEach { listedDirectory ->
+      if (!BackgroundDownloadContract.isValidId(listedDirectory.name)) return@forEach
+      val directory = File(artifactRootDirectory, listedDirectory.name).absoluteFile
+      if (listedDirectory.absoluteFile != directory || !isExactDirectDirectory(directory)) {
+        return@forEach
+      }
+
+      val recordRemnants = LEGACY_RECORD_FILE_NAMES.map { File(directory, it).absoluteFile }
+      if (recordRemnants.none(::isExactDirectFile)) return@forEach
+
+      (LEGACY_RECORD_FILE_NAMES + LEGACY_ARTIFACT_FILE_NAMES).forEach { name ->
+        val file = File(directory, name).absoluteFile
+        if (isExactDirectFile(file) && !file.delete()) {
+          throw BackgroundDownloadStateException("Unable to delete legacy background download file")
+        }
+      }
+      if (directory.list()?.isEmpty() == true && !directory.delete()) {
+        throw BackgroundDownloadStateException("Unable to delete empty legacy task directory")
+      }
+    }
+  }
+
+  private fun isExactDirectDirectory(directory: File): Boolean =
+    canonicalFileOrNull(directory) == directory && directory.isDirectory
+
+  private fun isExactDirectFile(file: File): Boolean =
+    canonicalFileOrNull(file) == file && file.isFile
+
+  private fun canonicalFileOrNull(file: File): File? = try {
+    file.canonicalFile
+  } catch (_: IOException) {
+    null
   }
 
   private fun canonicalFile(file: File): File = try {
@@ -540,6 +620,12 @@ internal class BackgroundDownloadStore(
     const val RECORD_FILE_NAME = "task.json"
     const val PARTIAL_FILE_NAME = "artifact.download"
     const val APK_FILE_NAME = "artifact.apk"
+    val LEGACY_RECORD_FILE_NAMES = listOf(
+      RECORD_FILE_NAME,
+      "$RECORD_FILE_NAME.bak",
+      "$RECORD_FILE_NAME.new",
+    )
+    val LEGACY_ARTIFACT_FILE_NAMES = listOf(PARTIAL_FILE_NAME, APK_FILE_NAME)
   }
 }
 

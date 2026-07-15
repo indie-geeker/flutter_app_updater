@@ -268,6 +268,11 @@ internal class BackgroundDownloadEngine(
       else BackgroundDownloadExecutionOutcome.failed,
       record,
     )
+    try {
+      BackgroundDownloadUrlPolicy.requirePersistentEntry(record.packageUrl)
+    } catch (_: IllegalArgumentException) {
+      return fail(record, "protocol_error", null)
+    }
     if (record.status == BackgroundDownloadStatus.verifying) {
       val reconciled = try {
         store.reconcileArtifacts(id)
@@ -819,7 +824,7 @@ internal class BackgroundDownloadEngine(
       val from = URI(originalUrl)
       val to = URI(current)
       if (from.scheme.equals("https", true) && to.scheme.equals("http", true) &&
-        !BackgroundDownloadUrlPolicy.isAllowed(to.toString())
+        !BackgroundDownloadUrlPolicy.isAllowedTransportTarget(to.toString())
       ) {
         throw BackgroundDownloadProtocolException("HTTPS redirect downgrade is not allowed")
       }
@@ -1198,8 +1203,11 @@ internal class BackgroundDownloadEngine(
   }
 
   private fun requireAllowedUrl(value: String) {
-    if (BackgroundDownloadUrlPolicy.isAllowed(value)) return
-    throw BackgroundDownloadProtocolException("Download URL must use HTTPS")
+    try {
+      BackgroundDownloadUrlPolicy.requireTransportTarget(value)
+    } catch (_: IllegalArgumentException) {
+      throw BackgroundDownloadProtocolException("Download transport target is not allowed")
+    }
   }
 
   private fun isStrongEtag(value: String): Boolean =
