@@ -1,6 +1,9 @@
 ## Unreleased
 
-No changes yet.
+* **Breaking / Security**: Require Android durable downloads to start from a credential-free stable entry URL without userinfo, query, or fragment; short-lived signed URLs are accepted only as in-memory HTTPS redirect targets and are never persisted.
+* **Breaking / Storage**: Reset pre-release single-root background tasks and artifacts while separating durable state into `noBackupFilesDir` and FileProvider-backed APK data into `filesDir`.
+* **Security**: Enforce strict manifest and signed-envelope allowlists, reject unknown fields, validate non-negative decimal `buildNumber` values, and require `minSupportedVersion` not to exceed its release version.
+* **Tooling**: Repair the pure-Dart manifest CLI so `verify` uses the production parser and remote-action policy, and add a Flutter-engine-free executable smoke gate.
 
 ## 3.0.0 - 2026-07-13
 

@@ -53,6 +53,8 @@ The versioned envelope contains a `keyId`, exact issue and expiry timestamp
 strings, a Base64 payload, and a signature. Verification uses a
 domain-separated preimage that includes the exact header strings and decoded
 payload bytes. Payload JSON is parsed only after signature verification.
+The signed envelope rejects extra fields: its exact allowlist is `format`,
+`keyId`, `issuedAt`, `expiresAt`, `payload`, and `signature`.
 
 The host configures trusted raw public keys with
 `ManifestSignaturePolicy.required` or `ManifestSignaturePolicy.optional`.
@@ -79,9 +81,21 @@ client binaries, logs, manifests, and CI output.
 
 ## Manifest and distribution policy
 
-Schema version 3 rejects removed legacy fields and unknown action types. Remote
-`installPackage` actions are forbidden because a network document must never
-select an arbitrary local path. Official store URLs and Android market
+Schema version 3 uses an exact allowlist for the root, every release, every
+policy, and every action object. It rejects unknown fields, removed legacy
+fields, and unknown action types. There is no `extensions` escape hatch.
+Publishers that need another field must define a new schema version; v3 never
+silently ignores it. Every action object requires `type`, and fields that do not
+belong to the selected action type reject the complete response.
+
+The optional `buildNumber` must be a non-negative ASCII decimal integer string.
+Leading zeroes are valid and parsing is numeric; malformed, signed, negative,
+or non-ASCII values reject the complete response. An optional
+`minSupportedVersion` must be a valid semantic version no greater than the
+containing release `version`. These checks occur before release selection.
+
+Remote `installPackage` actions are forbidden because a network document must
+never select an arbitrary local path. Official store URLs and Android market
 fallbacks are restricted to trusted destinations.
 
 `UpdateDistributionPolicy` is a host-side restriction applied without
@@ -102,13 +116,29 @@ Every remote package or installer action must contain a positive exact
 downloader enforces configured maximums, validates received byte counts while
 streaming, and computes SHA-256 before committing the final file.
 
-Resumable checkpoints bind the complete source URL through a SHA-256
-fingerprint without persisting query tokens or the raw URL. Resume requires
-safe range semantics and strong server validators. A process-local ownership
-guard and a persistent operating-system lock prevent two writers from targeting
-the same artifact path. Protocol, storage, cancellation, size, and digest
-failures release ownership and preserve or remove checkpoint state according to
-whether a safe resume remains possible.
+A foreground checkpoint binds the complete source URL through a SHA-256
+fingerprint without persisting the raw URL or query token. Resume requires safe
+range semantics and strong server validators. A process-local ownership guard
+and a persistent operating-system lock prevent two writers from targeting the
+same artifact path. Protocol, storage, cancellation, size, and digest failures
+release ownership and preserve or remove checkpoint state according to whether
+a safe resume remains possible.
+
+### Android durable URL and storage boundary
+
+Android durable downloads deliberately use a stricter contract than the
+foreground downloader. `start()` accepts and the task record persists only a
+credential-free stable entry URL with no userinfo, query, or fragment. For
+expiring credentials, the stable endpoint may return an HTTPS redirect to a
+short-lived signed URL. Each redirect hop is revalidated; HTTPS never
+downgrades to HTTP. The signed URL is an in-memory transport target and is never
+persisted, so resume always begins again at the stable entry.
+
+Durable task state lives below Android `noBackupFilesDir`. APK and partial
+artifacts live in the app-private, FileProvider-backed `filesDir` tree. On first
+use of this split layout, tasks and artifacts from the pre-release single-root
+layout are reset rather than migrated. That prevents stale records from
+silently referring to artifacts under the former storage boundary.
 
 ## Android package identity
 

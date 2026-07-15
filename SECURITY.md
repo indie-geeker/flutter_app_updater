@@ -25,8 +25,19 @@ the digest detects changed bytes but is not a substitute for publisher code
 signing.
 
 Remote manifests must be bound to the expected application. Android installer
-handoff independently checks package identity and signing lineage. Resumable
-checkpoints fingerprint the source without storing raw URLs or query tokens, and
-cross-process ownership prevents two writers from sharing an artifact target.
-See [the complete security model](doc/security-model.md) for trust boundaries,
-redirect rules, failure behavior, and host responsibilities.
+handoff independently checks package identity and signing lineage.
+
+Foreground and Android durable downloads have distinct credential-persistence
+boundaries. A foreground checkpoint stores only a SHA-256 URL fingerprint,
+without raw URLs or query tokens, and cross-process ownership prevents two
+writers from sharing an artifact target. An Android durable task accepts and
+persists only a credential-free stable entry URL with no userinfo, query, or
+fragment. That endpoint may redirect over HTTPS to a short-lived signed URL;
+the redirect is only an in-memory transport target and is never persisted.
+Durable state is stored below `noBackupFilesDir`, while private APK and partial
+artifacts remain below the FileProvider-backed `filesDir` tree. Upgrading from
+the pre-release single-root layout resets those old tasks and artifacts.
+
+See [the complete security model](doc/security-model.md) for exact manifest and
+envelope schemas, trust boundaries, redirect rules, failure behavior, and host
+responsibilities.

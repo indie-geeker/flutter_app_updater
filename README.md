@@ -1,5 +1,7 @@
 # Flutter App Updater
 
+English | [简体中文](README.zh-CN.md)
+
 [![CI](https://github.com/indie-geeker/flutter_app_updater/actions/workflows/ci.yml/badge.svg)](https://github.com/indie-geeker/flutter_app_updater/actions/workflows/ci.yml)
 [![pub package](https://img.shields.io/pub/v/flutter_app_updater.svg)](https://pub.dev/packages/flutter_app_updater)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -118,7 +120,96 @@ result is sufficient.
   `UpdateDistributionPolicy.storeOnly` or
   `UpdateDistributionPolicy.selfHostedOnly` to make the host boundary explicit.
 
-## Manifest v3
+## Getting update information
+
+`AppUpdater.manifest` uses an HTTPS `GET` request for both a static JSON file and
+a RESTful API. The two delivery styles use the same manifest v3 response schema.
+
+### Static JSON file
+
+Publish the manifest payload, or its signed envelope, as an immutable file on a
+CDN, object store, or web server. The repository includes a complete payload at
+[`doc/examples/update-manifest-v3.json`](doc/examples/update-manifest-v3.json).
+Here, static JSON means a document hosted over HTTPS. `AppUpdater.manifest`
+does not read local `file://` URLs or Flutter asset paths. A trusted adapter can
+instead construct an `UpdateManifest` and use `UpdateSource.staticManifest`.
+
+```dart
+final updater = AppUpdater.manifest(
+  manifestUrl: Uri.parse(
+    'https://cdn.example.com/releases/app-updates.json',
+  ),
+  expectedAppId: 'com.example.app',
+  installedVersion: '1.0.0',
+  platform: defaultTargetPlatform,
+  architecture: 'arm64',
+  channel: 'stable',
+  downloadDirectory: downloadDirectory,
+  signaturePolicy: ManifestSignaturePolicy.required(
+    trustedPublicKeys: trustedManifestPublicKeys,
+  ),
+);
+
+final result = await updater.checkAndPrepare();
+```
+
+### RESTful API
+
+A REST endpoint can select releases dynamically from request parameters. The
+default fetcher sends a `GET`, so put selection inputs in the URL and optional
+credentials in `headers`:
+
+```http
+GET /v1/apps/com.example.app/updates?platform=android&architecture=arm64&channel=stable&installedVersion=1.0.0 HTTP/1.1
+Host: updates.example.com
+Accept: application/json
+Authorization: Bearer <short-lived-token>
+```
+
+```dart
+final endpoint = Uri.https(
+  'updates.example.com',
+  '/v1/apps/com.example.app/updates',
+  {
+    'platform': 'android',
+    'architecture': 'arm64',
+    'channel': 'stable',
+    'installedVersion': '1.0.0',
+  },
+);
+
+final updater = AppUpdater.manifest(
+  manifestUrl: endpoint,
+  expectedAppId: 'com.example.app',
+  headers: {
+    'Accept': 'application/json',
+    'Authorization': 'Bearer $accessToken',
+  },
+  installedVersion: '1.0.0',
+  platform: defaultTargetPlatform,
+  architecture: 'arm64',
+  channel: 'stable',
+  downloadDirectory: downloadDirectory,
+  signaturePolicy: ManifestSignaturePolicy.required(
+    trustedPublicKeys: trustedManifestPublicKeys,
+  ),
+);
+
+final result = await updater.checkAndPrepare();
+```
+
+The default transport requires HTTP 200, accepts at most 1 MiB, and parses the
+response body directly as either a manifest v3 object or a signed envelope. Do
+not wrap it in `{ "data": ... }`, `{ "result": ... }`, or another business
+response object. If an existing API cannot return that shape, provide a custom
+`ManifestFetcher`. Caller headers are removed after a cross-origin redirect.
+
+For either delivery style, a bare response is accepted only for official-store
+and Android-market actions when `ManifestSignaturePolicy.optional` is used.
+Self-hosted package or installer actions require a valid Ed25519 envelope.
+Signing every production response is the recommended policy.
+
+## Manifest v3 response schema
 
 ```json
 {
@@ -151,16 +242,75 @@ result is sufficient.
 }
 ```
 
-Direct field names:
+### Manifest fields: required and optional
 
-- `storeUrl`
-- `packageUrl`
-- `installerUrl`
-- `packageSizeBytes`
-- `installerSizeBytes`
-- `releaseNotes`
-- `releasedAt`
-- `sha256`
+Root object:
+
+| Field | Required | Type and constraints | Meaning |
+| --- | --- | --- | --- |
+| `schemaVersion` | Yes | Integer, exactly `3` | Selects the manifest contract. |
+| `appId` | Yes | Non-empty string | Must equal the client's `expectedAppId`. |
+| `channel` | Yes | Non-empty string | Default channel inherited by releases that omit `channel`. |
+| `releases` | Yes | Array | Ordered release candidates; it may be empty when no release exists. |
+
+Each item in `releases`:
+
+| Field | Required | Type and constraints | Meaning |
+| --- | --- | --- | --- |
+| `version` | Yes | Semantic-version string | Used as the primary update ordering key. |
+| `platform` | Yes | `android`, `ios`, `macos`, or `windows` for the stable package | Must exactly match the client platform. |
+| `releaseNotes` | Yes | Non-empty string | Publisher text shown by the host application. |
+| `actions` | Yes | Non-empty array | Delivery choices in publisher order; the first allowed supported action is recommended. |
+| `buildNumber` | No | Non-negative ASCII decimal integer string | Breaks ties when semantic versions are equal; leading zeroes are allowed and the value is parsed as an integer. |
+| `channel` | No | Non-empty string | Overrides the root `channel` for this release. |
+| `architecture` | No | Non-empty string | Exact runtime architecture; omit it for a universal release. |
+| `releasedAt` | No | ISO-8601 string | Publisher release timestamp. |
+| `policy` | No | Object | Update recommendation and minimum supported version. |
+
+Optional `policy` fields:
+
+| Field | Required | Type and constraints | Meaning |
+| --- | --- | --- | --- |
+| `level` | No | `optional`, `recommended`, or `required`; defaults to `optional` | How strongly the host should present the update. |
+| `minSupportedVersion` | No | Semantic-version string no greater than this release's `version` | Makes the update required when the installed version is older. |
+
+Action-specific fields:
+
+Every action object requires a non-empty `type` discriminator. The value selects
+one row below; the remaining required and optional fields are exact for that
+action type.
+
+| `type` | Required fields | Optional fields | Notes |
+| --- | --- | --- | --- |
+| `openStore` | `store`, `storeUrl` | None | `store` is `googlePlay`, `appStore`, or `macAppStore`; the remote URL must use the matching official host. |
+| `openAndroidMarket` | `market`, `targetPackageName` | `fallbackUrl` | `targetPackageName` must equal the manifest `appId`. |
+| `downloadPackage` | `packageUrl`, `packageType`, `packageSizeBytes`, `sha256` | None | Exact positive size and a 64-hex-character SHA-256 are mandatory. |
+| `downloadAndInstallPackage` | `packageUrl`, `packageType`, `packageSizeBytes`, `sha256` | None | Runtime installation supports Android APKs only. |
+| `openInstaller` | `installerUrl`, `installerType`, `installerSizeBytes`, `sha256` | None | Stable types are Windows `msix`/`msi`/`exe` and macOS `dmg`/`zip`. |
+| `installPackage` | `packagePath` | `packageType` (defaults to `apk`) | Trusted local typed code only; remote manifests reject this action. |
+
+`buildNumber` is optional. When present it must be a non-negative ASCII decimal
+integer string (`0`, `42`, and `00042` are valid). Leading zeroes are allowed
+and the value is parsed as an integer. Any other value rejects the entire
+response. `minSupportedVersion`, when present, must be less than or equal to
+that release's `version`.
+
+Manifest v3 is an exact allowlist at every object boundary: the root, each
+release, policy, and action object reject unknown fields. There is no
+`extensions` escape hatch. The signed envelope also rejects extra fields.
+Adding a field requires a new schema version. A v3 response with any unknown,
+mis-typed, or invalid field rejects the entire response rather than ignoring
+the field.
+
+All remote URLs must be absolute. Remote policy further requires HTTPS, exact
+positive artifact sizes, and a 64-character hexadecimal `sha256` for every
+self-hosted artifact. Removed earlier-schema field names are rejected anywhere
+in the document; use only the v3 fields listed above.
+
+The parser also recognizes `linux`/`fuchsia` platform values and
+`appImage`/`deb`/`rpm` installer values for typed model compatibility. They are
+not stable default executor or plugin-registration support in v3 and can end in
+`NO_SUPPORTED_ACTION`; the platform matrix below is the executable contract.
 
 This JSON is the signed payload, not the network response. For self-hosted
 actions, encode the exact payload bytes in a versioned Ed25519 envelope with
@@ -168,6 +318,29 @@ actions, encode the exact payload bytes in a versioned Ed25519 envelope with
 shipping an overlap period in which the host trusts both key IDs. Bare remote
 manifests are accepted only for official-store-only actions when the host uses
 the optional signature policy.
+
+Signed network response fields are all required. The envelope is also an exact
+allowlist; any extra field rejects the response:
+
+```json
+{
+  "format": "flutter_app_updater.ed25519.v1",
+  "keyId": "release-2026-01",
+  "issuedAt": "2026-07-14T12:00:00Z",
+  "expiresAt": "2026-07-15T12:00:00Z",
+  "payload": "<Base64 of the exact manifest JSON bytes>",
+  "signature": "<Base64 Ed25519 signature>"
+}
+```
+
+| Field | Required | Type and constraints |
+| --- | --- | --- |
+| `format` | Yes | Exactly `flutter_app_updater.ed25519.v1`. |
+| `keyId` | Yes | Non-empty key identifier present in `trustedPublicKeys`. |
+| `issuedAt` | Yes | ISO-8601 validity-window start. |
+| `expiresAt` | Yes | ISO-8601 validity-window end; later than `issuedAt` and within the configured maximum validity. |
+| `payload` | Yes | Base64 of the exact manifest v3 JSON bytes. |
+| `signature` | Yes | Base64 Ed25519 signature over the package's domain-separated input. |
 
 ## Recipes
 
@@ -242,9 +415,24 @@ handoff.
 
 `AndroidBackgroundDownloadManager` is an opt-in API for one durable,
 user-visible APK transfer at a time. It is separate from the default
-`AppUpdater` action flow and is available only on Android. A start request must
-come from a visible, user-initiated host flow and must include an HTTPS URL, the
-exact content length, and a lowercase or uppercase SHA-256 digest:
+`AppUpdater` action flow and is available only on Android.
+
+Foreground downloads and Android durable downloads have different URL
+persistence contracts. The foreground action flow may use an HTTPS artifact URL
+with short-lived query credentials. The foreground checkpoint stores only a
+SHA-256 URL fingerprint, never the raw URL or query token. Android durable
+`start()` accepts only a stable, credential-free entry URL with no userinfo,
+query, or fragment. The durable task record persists only that stable entry URL.
+
+For expiring download credentials, configure the stable entry endpoint to
+return an HTTPS redirect to a short-lived signed URL. The signed redirect target
+exists only as the current process's in-memory transport target and is never
+persisted. Each redirect target is revalidated, and every HTTPS-to-HTTP
+downgrade is rejected.
+
+A start request must come from a visible, user-initiated host flow and must
+include that stable HTTPS URL, the exact content length, and a lowercase or
+uppercase SHA-256 digest:
 
 ```dart
 final downloads = AndroidBackgroundDownloadManager();
@@ -267,6 +455,12 @@ UI with durable native state. Call `resume()` only in response to a user action
 when a task is waiting or paused. `cancel()` is terminal. Call `remove()` only
 after cancel or another terminal result; it then deletes the durable task and
 its private artifact.
+
+Durable task state is stored under Android `noBackupFilesDir`; APK and partial
+artifacts are stored under the app-private `filesDir` exposed by the package's
+FileProvider. On first use after upgrading, tasks and artifacts from the
+pre-release single-root layout are reset instead of migrated. Hosts must treat
+those old tasks as no longer resumable and start a fresh user-visible transfer.
 
 ### Required host manifest
 
@@ -375,7 +569,8 @@ background execution on any OEM family.
   "type": "openInstaller",
   "installerUrl": "https://example.com/app.msi",
   "installerType": "msi",
-  "installerSizeBytes": 82000000
+  "installerSizeBytes": 82000000,
+  "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 }
 ```
 
