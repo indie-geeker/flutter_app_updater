@@ -74,6 +74,37 @@ void main() {
     expect(result.payloadBytes, payload);
   });
 
+  test('rejects unknown signed-envelope fields without exposing values',
+      () async {
+    const unknownKey = 'unexpected"\nfield';
+    const secretValue = 'must-not-appear-in-the-error';
+    final value = jsonDecode(utf8.decode(await envelope()))
+        as Map<String, Object?>
+      ..[unknownKey] = {'secret': secretValue};
+
+    await expectLater(
+      verifier().verify(
+        Uint8List.fromList(utf8.encode(jsonEncode(value))),
+      ),
+      throwsA(
+        isA<ManifestSignatureException>()
+            .having(
+              (error) => error.code,
+              'code',
+              UpdateErrorCode.manifestSignatureInvalid,
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              allOf(
+                contains(jsonEncode(unknownKey)),
+                isNot(contains(secretValue)),
+              ),
+            ),
+      ),
+    );
+  });
+
   test('rejects one-byte payload changes and modified signed headers',
       () async {
     final valid =

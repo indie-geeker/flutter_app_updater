@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../models/update_error_code.dart';
 import '../utils/version_comparator.dart';
 
@@ -29,6 +31,66 @@ class ManifestSchema {
     'md5',
     'artifactUri',
   };
+  static const _rootFields = {
+    'schemaVersion',
+    'appId',
+    'channel',
+    'releases',
+  };
+  static const _releaseFields = {
+    'version',
+    'buildNumber',
+    'channel',
+    'platform',
+    'architecture',
+    'releaseNotes',
+    'releasedAt',
+    'policy',
+    'actions',
+  };
+  static const _policyFields = {
+    'level',
+    'minSupportedVersion',
+  };
+  static const _actionFields = <String, Set<String>>{
+    'openStore': {
+      'type',
+      'store',
+      'storeUrl',
+    },
+    'openAndroidMarket': {
+      'type',
+      'market',
+      'targetPackageName',
+      'fallbackUrl',
+    },
+    'downloadPackage': {
+      'type',
+      'packageUrl',
+      'packageType',
+      'packageSizeBytes',
+      'sha256',
+    },
+    'installPackage': {
+      'type',
+      'packagePath',
+      'packageType',
+    },
+    'downloadAndInstallPackage': {
+      'type',
+      'packageUrl',
+      'packageType',
+      'packageSizeBytes',
+      'sha256',
+    },
+    'openInstaller': {
+      'type',
+      'installerUrl',
+      'installerType',
+      'installerSizeBytes',
+      'sha256',
+    },
+  };
 
   /// Creates a stateless v3 schema validator.
   const ManifestSchema();
@@ -37,12 +99,18 @@ class ManifestSchema {
   void validate(Map<String, Object?> manifest) {
     _rejectLegacyFields(manifest);
     _validateRoot(manifest);
-    for (final release in _requiredList(manifest, 'releases')) {
-      _validateRelease(_asMap(release, 'release'));
+    final releases = _requiredList(manifest, 'releases');
+    for (var index = 0; index < releases.length; index += 1) {
+      _validateRelease(
+        _asMap(releases[index], 'release'),
+        '\$.releases[$index]',
+      );
     }
   }
 
   void _validateRoot(Map<String, Object?> manifest) {
+    _rejectUnknownFields(manifest, _rootFields, r'$');
+
     final schemaVersion = manifest['schemaVersion'];
     if (schemaVersion == null) {
       throw const ManifestParseException(
@@ -61,14 +129,22 @@ class ManifestSchema {
     _requiredString(manifest, 'channel');
   }
 
-  void _validateRelease(Map<String, Object?> release) {
-    _validateVersion(_requiredString(release, 'version'), 'version');
+  void _validateRelease(Map<String, Object?> release, String path) {
+    _rejectUnknownFields(release, _releaseFields, path);
+
+    final version = _requiredString(release, 'version');
+    _validateVersion(version, 'version');
+    final buildNumber = _optionalString(release, 'buildNumber');
+    if (buildNumber != null) {
+      _validateBuildNumber(buildNumber);
+    }
     _requiredString(release, 'platform');
     _requiredString(release, 'releaseNotes');
 
     final policy = release['policy'];
     if (policy != null) {
       final policyMap = _asMap(policy, 'policy');
+      _rejectUnknownFields(policyMap, _policyFields, '$path.policy');
       final minSupportedVersion =
           _optionalString(policyMap, 'minSupportedVersion');
       if (minSupportedVersion != null) {
@@ -77,6 +153,12 @@ class ManifestSchema {
           'minSupportedVersion',
           code: UpdateErrorCode.configurationInvalid,
         );
+        if (VersionComparator.compare(minSupportedVersion, version) > 0) {
+          throw const ManifestParseException(
+            code: UpdateErrorCode.configurationInvalid,
+            message: 'minSupportedVersion must not exceed version.',
+          );
+        }
       }
     }
 
@@ -88,8 +170,21 @@ class ManifestSchema {
       );
     }
 
-    for (final action in actions) {
-      _validateAction(_asMap(action, 'action'));
+    for (var index = 0; index < actions.length; index += 1) {
+      _validateAction(
+        _asMap(actions[index], 'action'),
+        '$path.actions[$index]',
+      );
+    }
+  }
+
+  void _validateBuildNumber(String value) {
+    final parsed = int.tryParse(value);
+    if (!RegExp(r'^[0-9]+$').hasMatch(value) || parsed == null || parsed < 0) {
+      throw const ManifestParseException(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'buildNumber must be a non-negative integer string.',
+      );
     }
   }
 
@@ -106,8 +201,17 @@ class ManifestSchema {
     }
   }
 
-  void _validateAction(Map<String, Object?> action) {
+  void _validateAction(Map<String, Object?> action, String path) {
     final type = _requiredString(action, 'type');
+    final allowedFields = _actionFields[type];
+    if (allowedFields == null) {
+      throw ManifestParseException(
+        code: UpdateErrorCode.unsupportedActionType,
+        message: 'Unsupported action type: $type.',
+      );
+    }
+    _rejectUnknownFields(action, allowedFields, path);
+
     switch (type) {
       case 'openStore':
         _requiredString(action, 'store');
@@ -134,11 +238,6 @@ class ManifestSchema {
         _requiredString(action, 'installerType');
         _requiredPositiveInt(action, 'installerSizeBytes');
         _requiredSha256(action);
-      default:
-        throw ManifestParseException(
-          code: UpdateErrorCode.unsupportedActionType,
-          message: 'Unsupported action type: $type.',
-        );
     }
   }
 
@@ -182,6 +281,21 @@ class ManifestSchema {
     if (value is Iterable) {
       for (final item in value) {
         _rejectLegacyFields(item);
+      }
+    }
+  }
+
+  void _rejectUnknownFields(
+    Map<String, Object?> map,
+    Set<String> allowedFields,
+    String path,
+  ) {
+    for (final field in map.keys) {
+      if (!allowedFields.contains(field)) {
+        throw ManifestParseException(
+          code: UpdateErrorCode.manifestInvalid,
+          message: 'Unknown field ${jsonEncode(field)} at $path.',
+        );
       }
     }
   }

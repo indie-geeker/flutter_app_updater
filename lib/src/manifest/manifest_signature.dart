@@ -88,6 +88,14 @@ final class VerifiedManifestPayload {
 final class ManifestSignatureVerifier {
   /// Supported signed-envelope format identifier.
   static const format = 'flutter_app_updater.ed25519.v1';
+  static const _envelopeFields = {
+    'format',
+    'keyId',
+    'issuedAt',
+    'expiresAt',
+    'payload',
+    'signature',
+  };
 
   /// Trust policy used to select keys and enforce signature requirements.
   final ManifestSignaturePolicy policy;
@@ -145,6 +153,7 @@ final class ManifestSignatureVerifier {
         message: 'Unsupported signed manifest format.',
       );
     }
+    _rejectUnknownFields(outer);
 
     try {
       final keyId = _requiredString(outer, 'keyId');
@@ -253,6 +262,18 @@ final class ManifestSignatureVerifier {
       return value;
     }
     throw FormatException('$field is required.');
+  }
+
+  void _rejectUnknownFields(Map<String, Object?> envelope) {
+    for (final field in envelope.keys) {
+      if (!_envelopeFields.contains(field)) {
+        throw ManifestSignatureException(
+          code: UpdateErrorCode.manifestSignatureInvalid,
+          message: 'Unknown signed manifest envelope field '
+              '${jsonEncode(field)}.',
+        );
+      }
+    }
   }
 }
 

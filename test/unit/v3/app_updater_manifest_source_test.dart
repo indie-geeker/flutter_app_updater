@@ -271,6 +271,49 @@ void main() {
       expect((result as UpdateAvailable).candidate.version, '2.0.0');
     });
 
+    test('maps unknown signed-envelope fields to manifestSignatureInvalid',
+        () async {
+      final seed = List<int>.generate(32, (index) => 31 - index);
+      final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+      final publicKey = await keyPair.extractPublicKey();
+      final now = DateTime.now().toUtc();
+      final payload = Uint8List.fromList(
+        utf8.encode(jsonEncode(_manifestJson(version: '2.0.0'))),
+      );
+      final envelope = await ManifestSignatureSigner().sign(
+        payloadBytes: payload,
+        keyId: 'release-2026-02',
+        issuedAt: now.subtract(const Duration(minutes: 1)).toIso8601String(),
+        expiresAt: now.add(const Duration(hours: 24)).toIso8601String(),
+        privateKeyBase64: base64.encode(seed),
+      );
+      final envelopeJson = jsonDecode(utf8.decode(envelope))
+          as Map<String, Object?>
+        ..['extensions'] = {'vendor': 'example'};
+      final updater = AppUpdater(
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+          signaturePolicy: ManifestSignaturePolicy.required(
+            trustedPublicKeys: {
+              'release-2026-02': base64.encode(publicKey.bytes),
+            },
+          ),
+        ),
+        manifestFetcher: _FakeManifestFetcher.bytes(
+          Uint8List.fromList(utf8.encode(jsonEncode(envelopeJson))),
+        ),
+      );
+
+      final result = await updater.check(selector: _selector());
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect(
+        (result as UpdateCheckFailed).code,
+        UpdateErrorCode.manifestSignatureInvalid,
+      );
+    });
+
     test('invalid installed version is configurationInvalid for both sources',
         () async {
       for (final updater in _updatersForManifest(
