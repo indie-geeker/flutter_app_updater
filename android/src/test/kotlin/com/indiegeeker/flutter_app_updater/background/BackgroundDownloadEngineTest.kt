@@ -1392,7 +1392,7 @@ internal class BackgroundDownloadEngineTest {
     nativeCode: String,
   ) {
     assertEquals(publicCode, record.errorCode)
-    assertEquals(nativeCode, record.nativeErrorCode)
+    assertEquals(nativeCode, record.nativeErrorCode, record.errorMessage)
   }
 
   private fun environment(
@@ -1525,7 +1525,7 @@ internal class BackgroundDownloadEngineTest {
 
     override fun open(request: HttpDownloadRequest): HttpDownloadConnection {
       requests += request
-      val next = synchronized(responses) { responses.removeFirst() }
+      val next = synchronized(responses) { responses.removeAt(0) }
       if (next is Throwable) throw next
       val response = next as FakeResponse
       response.beforeOpen()
