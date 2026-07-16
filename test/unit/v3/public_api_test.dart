@@ -310,7 +310,7 @@ void main() {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
     expect(pubspec, contains("sdk: '>=3.4.0 <4.0.0'"));
-    expect(pubspec, contains("flutter: '>=3.22.0'"));
+    expect(pubspec, contains("flutter: '>=3.29.0'"));
   });
 
   test('pubspec and native packages contain release metadata', () {

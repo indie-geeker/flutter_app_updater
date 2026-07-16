@@ -633,7 +633,7 @@ and runnable commands.
 
 ## Maintainer Verification
 
-The supported floor is Flutter 3.22.0. The reusable full gate tests that exact
+The supported floor is Flutter 3.29.0. The reusable full gate tests that exact
 version and current stable Flutter, validates root/example analysis and tests,
 enforces total and critical coverage at 80%, generates API docs, builds every
 registered platform example, runs Android and Windows native tests, and checks a

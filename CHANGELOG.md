@@ -1,6 +1,7 @@
 ## 3.0.0 - 2026-07-15
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.
+* **Breaking**: Raise the minimum supported Flutter SDK to 3.29.0.
 * **Breaking**: Remove unfinished platform surfaces and require strict architecture matching for architecture-specific releases.
 * **Breaking**: Require positive exact sizes and SHA-256 digests for remote packages and installers; forbid remote local-path installation actions.
 * **Breaking / Security**: Require Android durable downloads to start from a credential-free stable entry URL without userinfo, query, or fragment; short-lived signed URLs are accepted only as in-memory HTTPS redirect targets and are never persisted.

@@ -14,7 +14,7 @@ compatibility improvements, tests, and documentation corrections are welcome.
 ## Local checks
 
 The supported floor is the exact version in
-`tool/ci/flutter_min_version.txt` (currently Flutter 3.22.0). Changes must pass
+`tool/ci/flutter_min_version.txt` (currently Flutter 3.29.0). Changes must pass
 both that version and the current stable Flutter SDK. The canonical automation
 is `.github/workflows/full-gate.yml`; run the stable local subset with:
 

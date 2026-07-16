@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const minimumFlutter = '3.22.0';
+  const minimumFlutter = '3.29.0';
 
   test('minimum Flutter version is exact and agrees with pubspec', () {
     final versionFile = File('tool/ci/flutter_min_version.txt');

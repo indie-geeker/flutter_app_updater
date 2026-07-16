@@ -101,7 +101,7 @@ void main() {
       'signing lineage',
       'URL fingerprint',
       'operating-system lock',
-      'Flutter 3.22.0',
+      'Flutter 3.29.0',
       'verify_release_metadata.dart',
     ]) {
       expect(readme, contains(contract), reason: 'Missing $contract');
@@ -398,7 +398,7 @@ void main() {
         isNot(contains('Make package and installer hashes optional')));
     expect(changelog, isNot(contains('explicit remote mode')));
 
-    expect(contributing, contains('Flutter 3.22.0'));
+    expect(contributing, contains('Flutter 3.29.0'));
     expect(contributing, contains('v{{version}}'));
     expect(contributing, contains('origin/main'));
     expect(contributing, contains('verify_release_metadata.dart'));

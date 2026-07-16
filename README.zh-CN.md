@@ -455,7 +455,7 @@ final installResult = await updater.perform(installAction);
 
 ## 维护者验证
 
-最低支持 Flutter 3.22.0。完整 CI 同时验证该最低版本和当前 stable，覆盖根项目与 example 的分析/测试、总覆盖率与关键文件 80% 门槛、Dart API 文档、所有已注册平台的 example 构建、Android/Windows 原生测试及干净发布包。
+最低支持 Flutter 3.29.0。完整 CI 同时验证该最低版本和当前 stable，覆盖根项目与 example 的分析/测试、总覆盖率与关键文件 80% 门槛、Dart API 文档、所有已注册平台的 example 构建、Android/Windows 原生测试及干净发布包。
 
 ```bash
 flutter pub get

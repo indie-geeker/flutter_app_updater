@@ -6,7 +6,7 @@
 
 **Architecture:** Split manifest wire parsing into a pure Dart document layer followed by a Flutter model adapter, with one primitive remote-action policy shared by CLI and runtime. Split Android background state and artifacts across `noBackupFilesDir` and FileProvider-compatible `filesDir`, persisting only a credential-free stable entry URL while allowing signed redirect targets in memory. Keep `ManifestSchema` as the exact v3 field and cross-field validation choke point.
 
-**Tech Stack:** Dart 3.4+, Flutter 3.22+, Kotlin/JVM 17, Android API 21+, Flutter tests, Kotlin/JUnit tests, GitHub Actions, Ed25519, SHA-256.
+**Tech Stack:** Dart 3.4+, Flutter 3.29+, Kotlin/JVM 17, Android API 21+, Flutter tests, Kotlin/JUnit tests, GitHub Actions, Ed25519, SHA-256.
 
 ---
 

@@ -129,7 +129,7 @@ class _ScenarioFormState extends State<ScenarioForm> {
                 rebuildValue: widget.scenario.platform,
                 child: DropdownButtonFormField<TargetPlatform>(
                   key: const Key('platform-field'),
-                  // `value` keeps the example compatible with Flutter 3.22;
+                  // `value` keeps the example compatible with Flutter 3.29;
                   // it was renamed to `initialValue` in newer SDKs.
                   // ignore: deprecated_member_use
                   value: widget.scenario.platform,
