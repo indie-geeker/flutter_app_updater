@@ -8,6 +8,8 @@ import 'package:flutter_app_updater_example/production/production_update_configu
 import 'package:flutter_app_updater_example/production/production_update_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_finders.dart';
+
 void main() {
   testWidgets('disabled page does not load runtime boundaries', (tester) async {
     final loader = _RuntimeLoader(_metadata());
@@ -43,14 +45,14 @@ void main() {
     );
 
     await tester.tap(
-      find.widgetWithText(FilledButton, 'Check production update'),
+      widgetSubtypeWithText<FilledButton>('Check production update'),
     );
     await tester.pumpAndSettle();
     expect(find.text('Update 2.0.0 available'), findsOneWidget);
     expect(executor.calls, 0);
 
     await tester.tap(
-      find.widgetWithText(FilledButton, 'Review recommended action'),
+      widgetSubtypeWithText<FilledButton>('Review recommended action'),
     );
     await tester.pumpAndSettle();
     expect(find.text('Confirm update action'), findsOneWidget);
@@ -69,11 +71,11 @@ void main() {
     expect(executor.calls, 0);
 
     await tester.tap(
-      find.widgetWithText(FilledButton, 'Review recommended action'),
+      widgetSubtypeWithText<FilledButton>('Review recommended action'),
     );
     await tester.pumpAndSettle();
     await tester.tap(
-      find.widgetWithText(FilledButton, 'Confirm and execute'),
+      widgetSubtypeWithText<FilledButton>('Confirm and execute'),
     );
     await tester.pumpAndSettle();
 
@@ -94,7 +96,7 @@ void main() {
     );
 
     await tester.tap(
-      find.widgetWithText(FilledButton, 'Check production update'),
+      widgetSubtypeWithText<FilledButton>('Check production update'),
     );
     await tester.pumpAndSettle();
 

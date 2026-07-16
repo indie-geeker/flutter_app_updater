@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_app_updater_example/main.dart';
 
+import 'test_finders.dart';
+
 void main() {
   testWidgets('renders the configurable update simulator', (tester) async {
     await tester.pumpWidget(const MyApp());
@@ -34,9 +36,11 @@ void main() {
     expect(find.byKey(const Key('duration-field')), findsOneWidget);
     expect(find.byKey(const Key('outcome-field')), findsOneWidget);
     expect(find.byKey(const Key('retry-succeeds-switch')), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Reset'), findsOneWidget);
+    expect(widgetSubtypeWithText<OutlinedButton>('Reset'), findsOneWidget);
     expect(
-        find.widgetWithText(FilledButton, 'Check for update'), findsOneWidget);
+      widgetSubtypeWithText<FilledButton>('Check for update'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('keeps the simulator default and production flow opt-in',
@@ -135,7 +139,7 @@ void main() {
     );
     expect(find.text('2. Open official store'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Later'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Update now'), findsOneWidget);
+    expect(widgetSubtypeWithText<FilledButton>('Update now'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(TextButton, 'Later'));
     await tester.pumpAndSettle();
@@ -183,15 +187,17 @@ void main() {
     );
     await _checkForUpdate(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Update now'));
+    await tester.tap(widgetSubtypeWithText<FilledButton>('Update now'));
     await tester.pump(const Duration(milliseconds: 130));
 
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.textContaining('25%'), findsWidgets);
     expect(
-        find.widgetWithText(OutlinedButton, 'Cancel update'), findsOneWidget);
+      widgetSubtypeWithText<OutlinedButton>('Cancel update'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel update'));
+    await tester.tap(widgetSubtypeWithText<OutlinedButton>('Cancel update'));
     await tester.pumpAndSettle();
 
     expect(find.text('ACTION_CANCELED'), findsOneWidget);
@@ -209,13 +215,13 @@ void main() {
     );
     await _checkForUpdate(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Update now'));
+    await tester.tap(widgetSubtypeWithText<FilledButton>('Update now'));
     await tester.pumpAndSettle();
 
     expect(find.text('PACKAGE_DOWNLOAD_FAILED'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+    expect(widgetSubtypeWithText<FilledButton>('Retry'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+    await tester.tap(widgetSubtypeWithText<FilledButton>('Retry'));
     await tester.pumpAndSettle();
 
     expect(find.text('Simulation complete'), findsOneWidget);
@@ -259,7 +265,7 @@ void main() {
     );
     await _checkForUpdate(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Update now'));
+    await tester.tap(widgetSubtypeWithText<FilledButton>('Update now'));
     await tester.pumpAndSettle();
 
     expect(find.text('PACKAGE_INSTALL_PERMISSION_REQUIRED'), findsOneWidget);
@@ -281,7 +287,7 @@ void main() {
     );
     await _checkForUpdate(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Update now'));
+    await tester.tap(widgetSubtypeWithText<FilledButton>('Update now'));
     await tester.pumpAndSettle();
 
     expect(find.text('Simulation complete'), findsOneWidget);
@@ -303,7 +309,7 @@ Future<UpdateDemoController> _pumpScenario(
 }
 
 Future<void> _checkForUpdate(WidgetTester tester) async {
-  final button = find.widgetWithText(FilledButton, 'Check for update');
+  final button = widgetSubtypeWithText<FilledButton>('Check for update');
   await tester.ensureVisible(button);
   await tester.pumpAndSettle();
   await tester.tap(button);
