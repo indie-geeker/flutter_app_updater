@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -31,12 +33,15 @@ final class PluginProductionRuntimeLoader implements ProductionRuntimeLoader {
   Future<ProductionAppMetadata> load() async {
     final packageInfo = await PackageInfo.fromPlatform();
     final supportDirectory = await getApplicationSupportDirectory();
+    final suffix = defaultTargetPlatform == TargetPlatform.android
+        ? 'flutter_app_updater${Platform.pathSeparator}foreground'
+        : 'updates';
     return ProductionAppMetadata(
       version: packageInfo.version,
       buildNumber: packageInfo.buildNumber,
       appId: packageInfo.packageName,
       downloadDirectory:
-          '${supportDirectory.path}${Platform.pathSeparator}updates',
+          '${supportDirectory.path}${Platform.pathSeparator}$suffix',
     );
   }
 }
