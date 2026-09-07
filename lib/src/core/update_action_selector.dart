@@ -16,10 +16,8 @@ final class UpdateActionSelector {
     List<UpdateAction> actions, {
     required bool Function(UpdateAction action) supports,
   }) {
-    return actions
-        .where(_isAllowedByDistribution)
-        .where(supports)
-        .toList(growable: false);
+    return List.unmodifiable(
+        actions.where(_isAllowedByDistribution).where(supports));
   }
 
   bool _isAllowedByDistribution(UpdateAction action) {

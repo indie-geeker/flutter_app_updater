@@ -280,6 +280,62 @@ void main() {
       expect((result as UpdateAvailable).candidate.version, '2.0.0');
     });
 
+    test('signed iOS APK manifest is valid but has no executable action',
+        () async {
+      final seed = List<int>.generate(32, (index) => 31 - index);
+      final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+      final publicKey = await keyPair.extractPublicKey();
+      final now = DateTime.now().toUtc();
+      final payload = Uint8List.fromList(
+        utf8.encode(
+          jsonEncode(
+            _manifestJson(
+              version: '2.0.0',
+              targetPlatform: 'ios',
+              action: {
+                'type': 'downloadPackage',
+                'packageUrl': 'https://example.com/app.apk',
+                'packageType': 'apk',
+                'packageSizeBytes': 42,
+                'sha256': 'a' * 64,
+              },
+            ),
+          ),
+        ),
+      );
+      final envelope = await ManifestSignatureSigner().sign(
+        payloadBytes: payload,
+        keyId: 'release-2026-02',
+        issuedAt: now.subtract(const Duration(minutes: 1)).toIso8601String(),
+        expiresAt: now.add(const Duration(hours: 24)).toIso8601String(),
+        privateKeyBase64: base64.encode(seed),
+      );
+      final updater = AppUpdater(
+        platform: TargetPlatform.iOS,
+        source: UpdateSource.manifest(
+          manifestUrl: Uri.parse('https://example.com/update.json'),
+          expectedAppId: 'com.example.app',
+          signaturePolicy: ManifestSignaturePolicy.required(
+            trustedPublicKeys: {
+              'release-2026-02': base64.encode(publicKey.bytes),
+            },
+          ),
+        ),
+        manifestFetcher: _FakeManifestFetcher.bytes(envelope),
+      );
+
+      final result = await updater.check(
+          selector: const UpdateSelector(
+              installedVersion: '1.0.0',
+              platform: TargetPlatform.iOS,
+              architecture: 'arm64',
+              channel: 'stable'));
+
+      expect(result, isA<UpdateCheckFailed>());
+      expect((result as UpdateCheckFailed).code,
+          UpdateErrorCode.noSupportedAction);
+    });
+
     test('maps unknown signed-envelope fields to manifestSignatureInvalid',
         () async {
       final seed = List<int>.generate(32, (index) => 31 - index);
@@ -492,6 +548,7 @@ UpdateSelector _selector({String installedVersion = '1.0.0'}) {
 Map<String, Object?> _manifestJson({
   required String version,
   String appId = 'com.example.app',
+  String targetPlatform = 'android',
   String? minSupportedVersion,
   Map<String, Object?>? action,
 }) {
@@ -504,7 +561,7 @@ Map<String, Object?> _manifestJson({
         'version': version,
         'buildNumber': '20',
         'channel': 'stable',
-        'platform': 'android',
+        'platform': targetPlatform,
         'architecture': 'arm64',
         'releaseNotes': 'Bug fixes',
         'releasedAt': '2026-07-03T00:00:00Z',

@@ -10,6 +10,7 @@ import '../manifest/manifest_parser.dart';
 import '../manifest/remote_manifest_policy.dart';
 import '../manifest/manifest_signature.dart';
 import '../models/update_distribution_policy.dart';
+import '../models/update_selection_policy.dart';
 import '../platform/android_market_executor.dart';
 import '../models/update_candidate.dart';
 import '../models/update_error_code.dart';
@@ -62,6 +63,9 @@ class AppUpdater {
   /// Host restriction applied to candidate delivery actions.
   final UpdateDistributionPolicy distributionPolicy;
 
+  /// Whether a newer non-executable optional release may be skipped.
+  final UpdateSelectionPolicy selectionPolicy;
+
   /// Creates an updater from explicit source and runtime boundaries.
   const AppUpdater({
     required this.source,
@@ -73,6 +77,7 @@ class AppUpdater {
     this.maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     this.downloadRetryStrategy = RetryStrategy.standard,
     this.distributionPolicy = UpdateDistributionPolicy.any,
+    this.selectionPolicy = UpdateSelectionPolicy.latestRelease,
   });
 
   /// Creates an updater backed by a remote v3 manifest.
@@ -96,6 +101,7 @@ class AppUpdater {
     int maxDownloadBytes = PackageDownloader.defaultMaxDownloadBytes,
     RetryStrategy downloadRetryStrategy = RetryStrategy.standard,
     UpdateDistributionPolicy distributionPolicy = UpdateDistributionPolicy.any,
+    UpdateSelectionPolicy selectionPolicy = UpdateSelectionPolicy.latestRelease,
     ManifestSignaturePolicy? signaturePolicy,
   }) {
     return AppUpdater(
@@ -119,6 +125,7 @@ class AppUpdater {
       maxDownloadBytes: maxDownloadBytes,
       downloadRetryStrategy: downloadRetryStrategy,
       distributionPolicy: distributionPolicy,
+      selectionPolicy: selectionPolicy,
     );
   }
 
@@ -137,6 +144,14 @@ class AppUpdater {
         message: 'UpdateSelector is required before checking updates.',
       );
     }
+    final executionPlatform =
+        platform ?? this.selector?.platform ?? defaultTargetPlatform;
+    if (effectiveSelector.platform != executionPlatform) {
+      return const UpdateCheckFailed(
+        code: UpdateErrorCode.configurationInvalid,
+        message: 'Selector platform must match the updater execution platform.',
+      );
+    }
     final configurationFailure = _validateSelector(effectiveSelector);
     if (configurationFailure != null) {
       return configurationFailure;
@@ -144,8 +159,8 @@ class AppUpdater {
 
     final effectiveExecutors = _effectiveExecutors();
     return switch (source) {
-      StaticManifestUpdateSource(:final manifest) =>
-        _selectManifest(manifest, effectiveSelector, effectiveExecutors),
+      StaticManifestUpdateSource(:final manifest) => _selectManifest(
+          manifest.snapshot(), effectiveSelector, effectiveExecutors),
       ManifestUpdateSource manifestSource => _checkRemoteManifest(
           manifestSource,
           effectiveSelector,
@@ -252,39 +267,25 @@ class AppUpdater {
     UpdateSelector effectiveSelector,
     List<UpdateActionExecutor> effectiveExecutors,
   ) {
-    late final UpdateCheckResult result;
     try {
-      result = effectiveSelector.select(manifest.releases);
+      return effectiveSelector.select(
+        manifest.releases,
+        selectionPolicy: selectionPolicy,
+        actionsForCandidate: (candidate) => UpdateActionSelector(
+          distributionPolicy: distributionPolicy,
+        ).supportedActions(candidate.actions,
+            supports: (action) => effectiveExecutors
+                .any((executor) => executor.supports(action))),
+      );
     } on FormatException catch (error) {
       return UpdateCheckFailed(
+          code: UpdateErrorCode.configurationInvalid, message: error.message);
+    } catch (_) {
+      return const UpdateCheckFailed(
         code: UpdateErrorCode.configurationInvalid,
-        message: error.message,
+        message: 'Unable to evaluate update executor capabilities.',
       );
     }
-    if (result is! UpdateAvailable) {
-      return result;
-    }
-
-    final supportedActions = UpdateActionSelector(
-      distributionPolicy: distributionPolicy,
-    ).supportedActions(
-      result.candidate.actions,
-      supports: (action) =>
-          effectiveExecutors.any((executor) => executor.supports(action)),
-    );
-    if (supportedActions.isEmpty) {
-      return UpdateCheckFailed(
-        code: UpdateErrorCode.noSupportedAction,
-        message: 'No executable action for ${result.candidate.version}.',
-      );
-    }
-
-    return UpdateAvailable(
-      candidate: result.candidate,
-      recommendedAction: supportedActions.first,
-      actions: supportedActions,
-      isRequired: result.isRequired,
-    );
   }
 
   UpdateCheckFailed? _validateSelector(UpdateSelector effectiveSelector) {
@@ -336,17 +337,20 @@ class AppUpdater {
     UpdateAction action, {
     UpdateActionCancelToken? cancelToken,
   }) async* {
-    for (final executor in _effectiveExecutors()) {
-      if (!executor.supports(action)) {
-        continue;
-      }
-      yield UpdateActionStarted(action);
-      try {
+    yield UpdateActionStarted(action);
+    if (cancelToken?.isCanceled ?? false) {
+      yield const UpdateActionCompleted(UpdateActionResult.failure(
+        code: UpdateErrorCode.actionCanceled,
+        message: 'Update action canceled before execution.',
+      ));
+      return;
+    }
+    try {
+      for (final executor in _effectiveExecutors()) {
+        if (!executor.supports(action)) continue;
         if (executor is StreamingUpdateActionExecutor) {
-          await for (final event in executor.performStream(
-            action,
-            cancelToken: cancelToken,
-          )) {
+          await for (final event
+              in executor.performStream(action, cancelToken: cancelToken)) {
             switch (event) {
               case UpdateActionStarted():
                 break;
@@ -357,35 +361,25 @@ class AppUpdater {
                 return;
             }
           }
-          yield const UpdateActionCompleted(
-            UpdateActionResult.failure(
-              code: UpdateErrorCode.actionFailed,
-              message: 'Update action ended without a terminal result.',
-            ),
-          );
-          return;
-        }
-
-        final result = await executor.perform(action);
-        yield UpdateActionCompleted(result);
-      } catch (error) {
-        yield UpdateActionCompleted(
-          UpdateActionResult.failure(
+          yield const UpdateActionCompleted(UpdateActionResult.failure(
             code: UpdateErrorCode.actionFailed,
-            message: 'Update action failed: $error',
-          ),
-        );
+            message: 'Update action ended without a terminal result.',
+          ));
+        } else {
+          yield UpdateActionCompleted(await executor.perform(action));
+        }
+        return;
       }
-      return;
-    }
-
-    yield UpdateActionStarted(action);
-    yield const UpdateActionCompleted(
-      UpdateActionResult.failure(
+      yield const UpdateActionCompleted(UpdateActionResult.failure(
         code: UpdateErrorCode.noSupportedAction,
         message: 'No executor supports this update action.',
-      ),
-    );
+      ));
+    } catch (error) {
+      yield UpdateActionCompleted(UpdateActionResult.failure(
+        code: UpdateErrorCode.actionFailed,
+        message: 'Update action failed: $error',
+      ));
+    }
   }
 
   /// Executes the recommended action from [update].
@@ -419,6 +413,7 @@ class AppUpdater {
       StoreUpdateExecutor(targetPlatform: effectivePlatform),
       AndroidMarketExecutor(targetPlatform: effectivePlatform),
       DownloadPackageExecutor(
+        targetPlatform: effectivePlatform,
         downloadDirectory: effectiveDownloadDirectory,
         downloader: downloader,
       ),

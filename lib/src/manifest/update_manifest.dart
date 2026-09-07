@@ -21,4 +21,13 @@ class UpdateManifest {
     required this.channel,
     required this.releases,
   });
+
+  /// Copies release and action collections before validation or selection.
+  UpdateManifest snapshot() => UpdateManifest(
+        schemaVersion: schemaVersion,
+        appId: appId,
+        channel: channel,
+        releases:
+            List.unmodifiable(releases.map((release) => release.snapshot())),
+      );
 }

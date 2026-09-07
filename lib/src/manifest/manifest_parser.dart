@@ -31,7 +31,7 @@ class ManifestParser {
       schemaVersion: document.schemaVersion,
       appId: document.appId,
       channel: document.channel,
-      releases: document.releases.map(_adaptRelease).toList(growable: false),
+      releases: List.unmodifiable(document.releases.map(_adaptRelease)),
     );
   }
 
@@ -45,7 +45,7 @@ class ManifestParser {
       releaseNotes: release.releaseNotes,
       releasedAt: release.releasedAt,
       policy: _adaptPolicy(release.policy),
-      actions: release.actions.map(_adaptAction).toList(growable: false),
+      actions: List.unmodifiable(release.actions.map(_adaptAction)),
     );
   }
 

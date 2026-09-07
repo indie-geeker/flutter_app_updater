@@ -3,7 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../actions/update_action.dart';
 import 'update_policy.dart';
 
-/// An immutable release that can be evaluated and delivered by the updater.
+/// A release that can be evaluated and delivered by the updater.
+///
+/// The const constructor retains the supplied list. [snapshot] copies and
+/// freezes that list at parser and updater boundaries.
 ///
 /// Actions remain in publisher-defined order. After policy and capability
 /// filtering, the first supported action becomes the recommendation.
@@ -35,7 +38,7 @@ class UpdateCandidate {
   /// Ordered delivery alternatives for the release.
   final List<UpdateAction> actions;
 
-  /// Creates an immutable release candidate.
+  /// Creates a release candidate, retaining the supplied action list.
   const UpdateCandidate({
     required this.version,
     this.buildNumber,
@@ -47,4 +50,17 @@ class UpdateCandidate {
     required this.policy,
     required this.actions,
   });
+
+  /// Copies the release with an independent, unmodifiable action list.
+  UpdateCandidate snapshot() => UpdateCandidate(
+        version: version,
+        buildNumber: buildNumber,
+        channel: channel,
+        platform: platform,
+        architecture: architecture,
+        releaseNotes: releaseNotes,
+        releasedAt: releasedAt,
+        policy: policy,
+        actions: List.unmodifiable(actions),
+      );
 }

@@ -4,6 +4,7 @@ import '../actions/update_action.dart';
 import '../models/update_candidate.dart';
 import '../models/update_error_code.dart';
 import '../models/update_policy.dart';
+import '../models/update_selection_policy.dart';
 import '../utils/version_comparator.dart';
 
 /// Selects the newest compatible release for one installed application.
@@ -40,10 +41,14 @@ class UpdateSelector {
   /// Selects a newer compatible release from [releases].
   ///
   /// Returns [UpdateNotAvailable] when no compatible newer release exists.
-  /// The returned recommendation is the first action in manifest order;
-  /// `AppUpdater` subsequently applies distribution and executor capabilities.
+  /// The recommendation is the first action after [actionsForCandidate] applies
+  /// host filtering. [selectionPolicy] controls fallback across releases.
   /// Throws [FormatException] when an input version or build number is invalid.
-  UpdateCheckResult select(List<UpdateCandidate> releases) {
+  UpdateCheckResult select(
+    List<UpdateCandidate> releases, {
+    UpdateSelectionPolicy selectionPolicy = UpdateSelectionPolicy.latestRelease,
+    List<UpdateAction> Function(UpdateCandidate)? actionsForCandidate,
+  }) {
     final newerTargetReleases = releases
         .where(_matchesPlatformAndChannel)
         .where(_isNewer)
@@ -76,21 +81,30 @@ class UpdateSelector {
           .compareTo(_architectureSpecificity(left));
     });
 
-    final candidate = candidates.first;
-    final isRequired = _isRequired(candidate);
-    final recommendedAction = _recommendedAction(candidate);
-    if (recommendedAction == null) {
-      return UpdateCheckFailed(
-        code: UpdateErrorCode.noSupportedAction,
-        message: 'No supported action for ${candidate.version}.',
-      );
+    for (final release in candidates) {
+      final candidate = release.snapshot();
+      final isRequired = _isRequired(candidate);
+      final actions = List<UpdateAction>.unmodifiable(
+          actionsForCandidate?.call(candidate) ?? candidate.actions);
+      if (actions.isNotEmpty) {
+        return UpdateAvailable(
+          candidate: candidate,
+          recommendedAction: actions.first,
+          actions: actions,
+          isRequired: isRequired,
+        );
+      }
+      if (selectionPolicy == UpdateSelectionPolicy.latestRelease ||
+          isRequired) {
+        return UpdateCheckFailed(
+          code: UpdateErrorCode.noSupportedAction,
+          message: 'No executable action for ${candidate.version}.',
+        );
+      }
     }
-
-    return UpdateAvailable(
-      candidate: candidate,
-      recommendedAction: recommendedAction,
-      actions: candidate.actions,
-      isRequired: isRequired,
+    return const UpdateCheckFailed(
+      code: UpdateErrorCode.noSupportedAction,
+      message: 'No executable action in compatible newer releases.',
     );
   }
 
@@ -141,13 +155,6 @@ class UpdateSelector {
     }
 
     return VersionComparator.compare(installedVersion, minSupportedVersion) < 0;
-  }
-
-  UpdateAction? _recommendedAction(UpdateCandidate candidate) {
-    if (candidate.actions.isEmpty) {
-      return null;
-    }
-    return candidate.actions.first;
   }
 }
 

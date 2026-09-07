@@ -16,6 +16,7 @@ export 'src/models/update_candidate.dart';
 export 'src/models/update_distribution_policy.dart';
 export 'src/models/update_error_code.dart';
 export 'src/models/update_policy.dart';
+export 'src/models/update_selection_policy.dart';
 export 'src/platform/android_market_executor.dart';
 export 'src/platform/download_and_install_package_executor.dart';
 export 'src/platform/download_package_executor.dart';
