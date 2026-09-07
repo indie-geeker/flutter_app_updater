@@ -1,3 +1,15 @@
+## Unreleased
+
+* Fix cross-isolate Unix download ownership while retaining legacy cross-process locking.
+* Preserve another owner's partial state on pre-cancellation; stop every action before dispatch when canceled.
+* Require exact size and SHA-256 for every network artifact, including typed desktop actions; reject credential-bearing or hostless artifact URLs.
+* Align default download capabilities and selector overrides with the execution platform.
+* Add opt-in `latestExecutable` selection without bypassing required/minimum-supported releases; retain `latestRelease` by default.
+* Freeze parsed and prepared action snapshots while preserving public const constructors.
+* Extract generic artifact metadata, checkpoint storage and file replacement without changing checkpoint schema.
+* Fix Android foreground FileProvider directory and macOS sandbox network entitlements; align example macOS deployment target to 10.15.
+* Extend minimum-SDK Android and desktop Release gates and add manually triggered device verification.
+
 ## 3.0.0 - 2026-07-15
 
 * **Breaking**: Redesign the public API around `AppUpdater`, `UpdateSource`, `UpdateCandidate`, `UpdatePolicy`, and `UpdateAction`.

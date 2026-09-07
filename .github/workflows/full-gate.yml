@@ -67,8 +67,8 @@ jobs:
         run: |
           awk '
             BEGIN {
-              critical = "(manifest_fetcher|manifest_document_parser|manifest_parser|manifest_schema|remote_action_policy|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
-              expected_critical = 12
+              critical = "(manifest_fetcher|manifest_document_parser|manifest_parser|manifest_schema|remote_action_policy|remote_manifest_policy|manifest_signature|package_downloader|package_download_lock|package_download_posix_lock|package_checkpoint_store|artifact_file_committer|update_selector|install_package_executor|download_and_install_package_executor)\\.dart$"
+              expected_critical = 15
             }
             /^SF:/ { file = substr($0, 4); lf = 0; lh = 0 }
             /^LF:/ { lf = substr($0, 4) + 0; total_lf += lf }
@@ -103,6 +103,10 @@ jobs:
         run: bash tool/ci/publish_dry_run.sh
 
   android-example:
+    strategy:
+      fail-fast: false
+      matrix:
+        flutter: [minimum, stable]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -111,9 +115,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Resolve Flutter version
+        id: flutter
+        shell: bash
+        run: |
+          if [[ '${{ matrix.flutter }}' == 'minimum' ]]; then
+            echo "version=$(tr -d '[:space:]' < tool/ci/flutter_min_version.txt)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: subosito/flutter-action@0ca7a949e71ae44c8e688a51c5e7e93b2c87e295 # v2
         with:
           channel: stable
+          flutter-version: ${{ steps.flutter.outputs.version }}
           cache: true
       - name: Install example dependencies
         working-directory: example
@@ -155,6 +167,13 @@ jobs:
       - name: Install example dependencies
         working-directory: example
         run: flutter pub get
+      - name: Test macOS download ownership
+        run: |
+          flutter pub get
+          flutter test --no-pub test/unit/v3/package_download_lock_test.dart
+      - name: Build macOS Release example
+        working-directory: example
+        run: flutter build macos --release --no-pub
       - name: Build macOS example
         working-directory: example
         run: flutter build macos --debug --no-pub
@@ -173,6 +192,16 @@ jobs:
       - name: Install example dependencies
         working-directory: example
         run: flutter pub get
+      - name: Test Windows download ownership
+        run: |
+          flutter pub get
+          flutter test --no-pub test/unit/v3/package_download_lock_test.dart
+      - name: Build Windows Release example
+        working-directory: example
+        run: flutter build windows --release --no-pub
+      - name: Run Windows Release native tests
+        working-directory: example
+        run: ctest --test-dir build/windows/x64 -C Release --output-on-failure
       - name: Build Windows example and native tests
         working-directory: example
         run: flutter build windows --debug --no-pub

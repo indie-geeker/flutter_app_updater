@@ -15,6 +15,56 @@ Stable v3 scope:
 - macOS: Mac App Store URL, DMG and ZIP installer download then open.
 - Windows: MSIX, MSI, and EXE installer download then open.
 
+## Reliability and integration boundaries
+
+`UpdateSelectionPolicy.latestRelease` remains the default: an unsupported newest
+compatible release returns `noSupportedAction`. Opt into
+`selectionPolicy: UpdateSelectionPolicy.latestExecutable` on `AppUpdater` or
+`AppUpdater.manifest` to try older compatible **newer-than-installed** optional
+releases. Actions retain publisher order after distribution and capability
+filtering. A required release, or one whose minimum supported version excludes
+the installed version, blocks fallback. The complete remote manifest still
+passes trust verification before selection.
+
+Default package downloads are available on Android, macOS, and Windows; iOS
+supports store/URL handoffs, not APK downloads. A per-check selector must target
+the updater's execution platform. Custom executors remain host-owned extensions.
+
+All network artifact downloads, including direct typed actions and desktop
+installers, require positive exact size and a 64-hex SHA-256 before any request.
+The trusted local `InstallPackageAction` keeps its optional paired size/hash
+contract. Artifact URLs reject embedded credentials and missing hosts. Low-level
+HTTP test support retains only `localhost`, `127.0.0.1`, and `::1`; remote manifest
+transport follows its separately configured HTTPS policy.
+
+Cancellation before dispatch (including from `UpdateActionStarted`) prevents
+executor side effects. Cancellation cannot undo a store or installer already
+opened. Only the download owner may remove partial state. Unix ownership uses
+handle-scoped `flock` plus the legacy process lock on a separate inode; keep both
+`.download.owner` and `.download.lock` files, and do not delete them during use.
+New isolates are mutually exclusive. A legacy downloader in the **same process**
+is not covered by the new ownership layer; upgrade all isolate entry points.
+
+Android production downloads use
+`filesDir/flutter_app_updater/foreground/`, explicitly allowed by the bundled
+FileProvider. Custom directories must match a host-configured provider root.
+The example's debug-only provider probe reads a fixture URI without opening the
+installer. macOS hosts need `com.apple.security.network.client` in both Debug and
+Release sandbox entitlements; the example targets macOS 10.15 or later.
+
+Parser output and checked/prepared actions are immutable snapshots. Public const
+constructors remain compatible; callers constructing models directly own the
+mutability of the lists they supply. Successful download, installer handoff, and
+a newly running version are three separate states; handoff success does not
+prove installation. Desktop native file identity between verification and path
+opening remains a future hardening item.
+
+See [verification evidence](doc/reliability-verification.md) for local results
+and pending platform checks. The manually triggered `Device verification`
+workflow exercises Android FileProvider and macOS sandbox HTTPS without
+installing an update.
+
+
 ## Install
 
 ```yaml
@@ -106,11 +156,11 @@ result is sufficient.
   declared size must be positive.
 - Downloads use 30-second request and idle timeouts, retry transient failures,
   preserve validated ETag/Last-Modified resume state, and default to a 1 GiB
-  maximum. A URL fingerprint protects checkpoint privacy, and a process guard
-  plus persistent operating-system lock reject competing writers.
+  maximum. A URL fingerprint protects checkpoint privacy, and an isolate-local fast guard
+  plus persistent operating-system locks reject competing writers.
 - Declared artifact sizes must be positive and are enforced before and during
-  streaming. Cancellation, size violations, and hash mismatches remove partial
-  files.
+  streaming. After ownership is acquired, cancellation, size violations, and
+  hash mismatches remove partial files; pre-cancellation preserves existing state.
 - The manifest `appId`, platform, channel, and architecture are checked before
   action selection. Unknown runtime architecture fails closed for an
   architecture-specific release; only a genuinely universal release matches.

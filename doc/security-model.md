@@ -118,8 +118,8 @@ streaming, and computes SHA-256 before committing the final file.
 
 A foreground checkpoint binds the complete source URL through a SHA-256
 fingerprint without persisting the raw URL or query token. Resume requires safe
-range semantics and strong server validators. A process-local ownership guard
-and a persistent operating-system lock prevent two writers from targeting the
+range semantics and strong server validators. An isolate-local fast guard
+and persistent operating-system ownership locks prevent two writers from targeting the
 same artifact path. Protocol, storage, cancellation, size, and digest failures
 release ownership and preserve or remove checkpoint state according to whether
 a safe resume remains possible.
@@ -184,3 +184,24 @@ The host should treat signature, identity, SHA-256, and signing-lineage failures
 as non-retryable security events. Only transient network and selected server
 failures should use bounded retry. Never fall back from a failed authenticated
 self-hosted path to an unverified local install.
+
+## Foreground ownership and execution boundaries
+
+All foreground network downloads now require exact positive size and SHA-256,
+including trusted typed callers. URL validation rejects embedded credentials and
+missing hosts; historical low-level loopback test hosts remain supported.
+Unix uses a persistent descriptor-scoped flock owner file on a separate inode
+before acquiring the legacy fcntl file. This prevents competing new isolates
+from releasing the owner's process lock by closing a descriptor. Do not delete
+lock files during operation. Mixed legacy/new downloaders in the same process
+must be upgraded together. Windows retains its native file lock semantics.
+Pre-cancellation never cleans state owned by another transfer.
+
+`latestExecutable` is explicit opt-in and filters already trusted compatible
+releases; required/minimum-supported policy is a fallback barrier. Parsed and
+prepared collections are snapshots, while public const constructors continue to
+accept caller-owned collections. Cancellation before dispatch prevents a handoff;
+once an external installer or store opens, cancellation cannot reverse it.
+Desktop verification followed by native path-based opening does not yet bind
+file identity across that interval. See `reliability-verification.md` for what
+was actually tested rather than inferring runtime support from compilation.

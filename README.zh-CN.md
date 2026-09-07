@@ -15,6 +15,41 @@ v3 稳定范围：
 - macOS：Mac App Store 页面，下载并打开 DMG 或 ZIP 安装包。
 - Windows：下载并打开 MSIX、MSI 或 EXE 安装包。
 
+## 可靠性与接入边界
+
+默认 `UpdateSelectionPolicy.latestRelease` 保持原行为：最新兼容版本不可执行时返回
+`noSupportedAction`。在 `AppUpdater` 或 `AppUpdater.manifest` 中显式设置
+`selectionPolicy: UpdateSelectionPolicy.latestExecutable`，才会尝试较旧、但仍高于已安装版本的兼容可选发布。
+动作按发布者顺序经过分发策略和执行能力过滤。强制更新或最低支持版本高于当前安装版本时阻止回退；
+远程清单仍整体完成信任校验后再选择，不会跳过不可执行条目的签名验证。
+
+默认包下载支持 Android、macOS、Windows；iOS 使用商店或 URL 交接，不支持 APK 下载。
+单次检查覆盖的 selector 必须与 updater 的执行平台一致。自定义 executor 的能力由宿主负责。
+
+所有网络制品下载，包括直接构造的动作和桌面安装器，必须在发出请求前具有精确正数大小和
+64 位十六进制 SHA-256。可信本地 `InstallPackageAction` 保留大小/哈希成对可选的契约。
+制品 URL 拒绝内嵌凭据和缺失主机；低层 HTTP 测试入口仍仅允许 `localhost`、`127.0.0.1`、`::1`，
+远程清单遵循独立的 HTTPS 配置策略。
+
+派发前取消（包括收到 `UpdateActionStarted` 时取消）阻止 executor 副作用；
+已打开的商店或安装器无法撤销。仅下载所有者可清理部分文件。
+Unix 使用描述符级 `flock` 与另一 inode 上的旧进程锁组合，运行中不得删除
+`.download.owner` 和 `.download.lock` 文件。新版 isolate 之间互斥；
+同一进程中的旧版下载器不受新锁层约束，应同时升级所有 isolate 入口。
+
+Android 生产示例使用 `filesDir/flutter_app_updater/foreground/`，对应包内精确 FileProvider 根目录。
+自定义下载目录需要与宿主 provider 配置匹配。示例仅 Debug 启用的探针读取测试文件 URI，不打开安装器。
+macOS 宿主需在 Debug、Release 沙盒 entitlement 中均启用
+`com.apple.security.network.client`；示例最低系统版本为 macOS 10.15。
+
+解析输出、检查及准备结果中的动作列表是不可变快照。公开 const 构造器保持兼容，
+直接构造模型的调用方仍负责传入集合的可变性。下载完成、安装器已打开、新版本已运行是三个不同状态；
+交接成功不等于安装成功。桌面校验后按路径打开的文件身份窗口仍是后续加固项。
+
+本地验证与平台缺口见[验证记录](doc/reliability-verification.md)。手动触发的
+`Device verification` 工作流执行 Android FileProvider 与 macOS 沙盒 HTTPS 测试，不安装更新。
+
+
 ## 安装
 
 ```yaml
@@ -94,7 +129,7 @@ cancelToken.cancel();
 - 远程清单和文件默认必须使用绝对 HTTPS URL。普通 HTTP 仅能通过显式配置用于本机回环开发。重定向最多五次，每个目标都会重新校验；HTTPS 不允许降级到 HTTP，敏感请求头只会跟随同源重定向。
 - 远程自托管动作必须声明精确的正数文件大小和 SHA-256，并且在解析 payload 前通过 Ed25519 envelope 验证。
 - 下载请求有超时、瞬时失败重试、最大 1 GiB 默认限制、ETag/Last-Modified 续传校验、URL 指纹、进程内保护和操作系统持久锁。
-- 取消、大小越界或哈希不匹配会清理不可信的部分文件。
+- 获得下载所有权后，取消、大小越界或哈希不匹配会清理不可信的部分文件；获取所有权前取消不改动已有文件。
 - 清单的 `appId`、平台、渠道和架构会在动作选择前校验。运行时架构未知时，架构专用版本会失败关闭，只有省略架构的通用版本可以匹配。
 - 动作保持发布者给出的顺序。`UpdateDistributionPolicy` 和执行器能力只过滤动作，不重排动作；过滤后第一个动作是推荐动作。
 
