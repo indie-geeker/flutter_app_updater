@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../actions/update_action.dart';
 import '../download/package_downloader.dart';
 import '../models/update_error_code.dart';
 import '../utils/safe_artifact_filename.dart';
+import '../utils/trusted_update_uri.dart';
 import 'streaming_update_action_executor.dart';
 import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
@@ -21,14 +24,22 @@ class DownloadPackageExecutor implements StreamingUpdateActionExecutor {
   /// Directory into which verified artifacts are moved.
   final String downloadDirectory;
 
+  /// Runtime platform used to restrict default package downloads.
+  final TargetPlatform targetPlatform;
+
   /// Creates a package download executor.
   DownloadPackageExecutor({
     required this.downloadDirectory,
     PackageDownloader? downloader,
-  }) : downloader = downloader ?? PackageDownloader();
+    TargetPlatform? targetPlatform,
+  })  : targetPlatform = targetPlatform ?? defaultTargetPlatform,
+        downloader = downloader ?? PackageDownloader();
 
   @override
-  bool supports(UpdateAction action) => action is DownloadPackageAction;
+  bool supports(UpdateAction action) =>
+      action is DownloadPackageAction &&
+      {TargetPlatform.android, TargetPlatform.macOS, TargetPlatform.windows}
+          .contains(targetPlatform);
 
   @override
   Future<UpdateActionResult> perform(UpdateAction action) async {
@@ -97,13 +108,19 @@ class DownloadPackageExecutor implements StreamingUpdateActionExecutor {
         message: 'DownloadPackageExecutor only supports package downloads.',
       );
     }
+    if (!supports(action)) {
+      return const UpdateActionResult.failure(
+        code: UpdateErrorCode.platformNotSupported,
+        message: 'Package downloads are not supported on this platform.',
+      );
+    }
     if (downloadDirectory.trim().isEmpty) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.missingRequiredField,
         message: 'downloadDirectory is required for package downloads.',
       );
     }
-    if (!_isAllowedArtifactUrl(action.packageUrl)) {
+    if (!isAllowedArtifactUri(action.packageUrl)) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.manifestInvalid,
         message: 'packageUrl must use HTTPS outside localhost.',
@@ -153,17 +170,5 @@ class DownloadPackageExecutor implements StreamingUpdateActionExecutor {
             ? sha256.substring(0, 12)
             : sha256;
     return 'package-$prefix.${action.packageType.name}';
-  }
-
-  bool _isAllowedArtifactUrl(Uri uri) {
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme == 'https') {
-      return uri.hasAuthority;
-    }
-    if (scheme != 'http' || !uri.hasAuthority) {
-      return false;
-    }
-    final host = uri.host.toLowerCase();
-    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 }

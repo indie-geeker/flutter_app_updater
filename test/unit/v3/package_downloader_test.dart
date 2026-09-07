@@ -39,6 +39,36 @@ void main() {
   });
 
   group('PackageDownloader', () {
+    for (final hash in ['', '  ', 'z' * 64, 'a' * 63]) {
+      test('rejects malformed hash before network: "$hash"', () async {
+        final result = await PackageDownloader(client: client).download(
+            action: _action(sha256: hash), savePath: _path('invalid.apk'));
+        expect(result.code, UpdateErrorCode.manifestInvalid);
+        expect(client.requests, isEmpty);
+      });
+    }
+
+    test('replacement failure restores the previous verified artifact',
+        () async {
+      final target =
+          await File(_path('replace.apk')).writeAsString('old verified bytes');
+      final bytes = utf8.encode('new bytes');
+      client.enqueue(PackageDownloadResponse(
+          statusCode: 200,
+          headers: {'content-length': '${bytes.length}'},
+          bytes: Stream.value(bytes)));
+      final result = await PackageDownloader(
+              client: client, fileOperations: _FailCommitRename())
+          .download(
+              action: _action(
+                  packageSizeBytes: bytes.length,
+                  sha256: crypto.sha256.convert(bytes).toString()),
+              savePath: target.path);
+      expect(result.isSuccess, isFalse);
+      expect(await target.readAsString(), 'old verified bytes');
+      expect(await File('${target.path}.previous').exists(), isFalse);
+    });
+
     test('closes responses idempotently', () async {
       var closeCalls = 0;
       final response = PackageDownloadResponse(
@@ -680,7 +710,8 @@ void main() {
         maxDownloadBytes: 4,
         retryStrategy: RetryStrategy.disabled,
       ).download(
-        action: _action(packageSizeBytes: 4, sha256: ''),
+        action:
+            _action(packageSizeBytes: 4, sha256: _sha256(utf8.encode('safe'))),
         savePath: _path('app.apk'),
       );
 
@@ -914,12 +945,18 @@ void main() {
     });
 
     test('allows loopback HTTP tests but rejects production HTTP', () async {
-      final rejected = await PackageDownloader(client: client).download(
-        action: _action(packageUrl: Uri.parse('http://example.com/app.apk')),
-        savePath: _path('insecure.apk'),
-      );
-      expect(rejected.code, UpdateErrorCode.packageDownloadFailed);
-      expect(client.requests, isEmpty);
+      for (final url in [
+        'http://example.com/app.apk',
+        'https://user:secret@example.com/app.apk',
+        'https:/app.apk'
+      ]) {
+        final rejected = await PackageDownloader(client: client).download(
+          action: _action(packageUrl: Uri.parse(url)),
+          savePath: _path('insecure.apk'),
+        );
+        expect(rejected.code, UpdateErrorCode.packageDownloadFailed);
+        expect(client.requests, isEmpty);
+      }
 
       final body = utf8.encode('package-bytes');
       client.enqueue(
@@ -2110,5 +2147,15 @@ class _ManualCheckpointClock implements PackageDownloadCheckpointClock {
   @override
   void reset() {
     _elapsed = Duration.zero;
+  }
+}
+
+class _FailCommitRename extends PackageDownloadFileOperations {
+  @override
+  Future<File> rename(File file, String path) {
+    if (file.path.endsWith('.download')) {
+      throw FileSystemException('Injected commit rename failure', file.path);
+    }
+    return super.rename(file, path);
   }
 }

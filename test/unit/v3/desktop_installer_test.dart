@@ -136,7 +136,8 @@ void main() {
       expect(platform.openedInstallers, isEmpty);
     });
 
-    test('opens installers without SHA-256', () async {
+    test('rejects installers without SHA-256 before network or handoff',
+        () async {
       final bytes = utf8.encode('windows-installer');
       client.enqueue(
         PackageDownloadResponse(
@@ -153,9 +154,9 @@ void main() {
         downloadDirectory: tempDir,
       ).perform(_installer(sha256: ''));
 
-      expect(result.isSuccess, isTrue);
-      expect(client.requests.single, Uri.parse('https://example.com/app.msi'));
-      expect(platform.openedInstallers.single, endsWith('.msi'));
+      expect(result.code, UpdateErrorCode.manifestInvalid);
+      expect(client.requests, isEmpty);
+      expect(platform.openedInstallers, isEmpty);
     });
 
     test('returns structured failure for unsupported platform', () async {

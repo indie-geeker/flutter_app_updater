@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import '../actions/update_action.dart';
 import '../channel/flutter_app_updater_platform_interface.dart';
 import '../download/package_downloader.dart';
+import '../download/artifact_descriptor.dart';
 import '../models/update_error_code.dart';
 import '../utils/safe_artifact_filename.dart';
+import '../utils/trusted_update_uri.dart';
 import 'streaming_update_action_executor.dart';
 import 'update_action_cancel_token.dart';
 import 'update_action_executor.dart';
@@ -15,7 +17,7 @@ import 'update_action_event.dart';
 
 /// Downloads, verifies, and opens supported desktop installers.
 ///
-/// The executor supports Windows, macOS, and Linux installer types appropriate
+/// The executor supports Windows and macOS installer types appropriate
 /// for [platform]. It never opens an artifact until exact size and SHA-256
 /// verification succeeds.
 class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
@@ -122,17 +124,16 @@ class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
         message: 'Installer type is not supported on this platform.',
       );
     }
-    if (!_isAllowedArtifactUrl(action.installerUrl)) {
+    if (!isAllowedArtifactUri(action.installerUrl)) {
       return const UpdateActionResult.failure(
         code: UpdateErrorCode.manifestInvalid,
         message: 'installerUrl must use HTTPS outside localhost.',
       );
     }
 
-    final downloadResult = await downloader.download(
-      action: DownloadPackageAction(
+    final downloadResult = await downloader.downloadArtifact(
+      action: ArtifactDescriptor(
         packageUrl: action.installerUrl,
-        packageType: PackageType.apk,
         packageSizeBytes: action.installerSizeBytes,
         sha256: action.sha256,
       ),
@@ -230,18 +231,6 @@ class DesktopInstallerExecutor implements StreamingUpdateActionExecutor {
             ? normalizedSha256.substring(0, 12)
             : normalizedSha256;
     return 'installer-$prefix.$extension';
-  }
-
-  bool _isAllowedArtifactUrl(Uri uri) {
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme == 'https') {
-      return uri.hasAuthority;
-    }
-    if (scheme != 'http' || !uri.hasAuthority) {
-      return false;
-    }
-    final host = uri.host.toLowerCase();
-    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 
   String _extensionFor(InstallerType installerType) {

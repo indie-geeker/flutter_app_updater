@@ -1,26 +1,55 @@
 import 'dart:io';
 
+import 'package_download_posix_lock.dart';
+
 /// An advisory OS-level lock that owns one package download target.
 final class PackageDownloadLock {
   final RandomAccessFile _handle;
+  final PackageDownloadPosixLock? _owner;
   bool _released = false;
 
-  PackageDownloadLock._(this._handle);
+  PackageDownloadLock._(this._handle, this._owner);
 
   /// Attempts to own [savePath] without waiting for another process.
   ///
   /// The lock file remains on disk after release so deleting and recreating an
   /// inode cannot let two writers believe they own the same target.
   static Future<PackageDownloadLock?> tryAcquire(String savePath) async {
-    final handle = await File('$savePath.download.lock').open(
-      mode: FileMode.append,
-    );
+    final target = File(savePath).absolute;
+    final parent = await target.parent.resolveSymbolicLinks();
+    final name = target.uri.pathSegments.last;
+    final canonicalPath = '$parent${Platform.pathSeparator}$name';
+    PackageDownloadPosixLock? owner;
+    if (!Platform.isWindows) {
+      owner = await PackageDownloadPosixLock.tryAcquire(
+          '$canonicalPath.download.owner');
+      if (owner == null) return null;
+    }
+    RandomAccessFile? handle;
     try {
-      await handle.lock(FileLock.exclusive);
-      return PackageDownloadLock._(handle);
-    } on FileSystemException {
-      await handle.close();
-      return null;
+      final path = '$canonicalPath.download.lock';
+      final type = await FileSystemEntity.type(path, followLinks: false);
+      if (type != FileSystemEntityType.notFound &&
+          type != FileSystemEntityType.file) {
+        throw FileSystemException('Download lock must be a regular file', path);
+      }
+      handle = await File(path).open(mode: FileMode.append);
+      try {
+        await handle.lock(FileLock.exclusive);
+      } on FileSystemException {
+        await handle.close();
+        handle = null;
+        owner?.release();
+        return null;
+      }
+      return PackageDownloadLock._(handle, owner);
+    } catch (_) {
+      try {
+        await handle?.close();
+      } finally {
+        owner?.release();
+      }
+      rethrow;
     }
   }
 
@@ -44,6 +73,7 @@ final class PackageDownloadLock {
       failure ??= error;
       failureStackTrace ??= stackTrace;
     }
+    _owner?.release();
     if (failure != null) {
       Error.throwWithStackTrace(failure, failureStackTrace!);
     }

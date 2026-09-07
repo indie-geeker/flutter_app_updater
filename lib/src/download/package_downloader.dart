@@ -8,10 +8,15 @@ import '../actions/update_action.dart';
 import '../models/update_error_code.dart';
 import '../platform/update_action_cancel_token.dart';
 import '../utils/retry_strategy.dart';
+import '../utils/trusted_update_uri.dart';
 import 'package_download_lock.dart';
+import 'artifact_descriptor.dart';
 import 'package_download_result.dart';
 
 export 'package_download_result.dart';
+
+part 'package_checkpoint_store.dart';
+part 'artifact_file_committer.dart';
 
 /// Injectable HTTP boundary used by [PackageDownloader].
 abstract class PackageDownloadClient {
@@ -173,6 +178,9 @@ class PackageDownloadFileOperations {
   /// Reads [file] as text.
   Future<String> readAsString(File file) => file.readAsString();
 
+  /// Renames [file] to [path], used for final artifact replacement.
+  Future<File> rename(File file, String path) => file.rename(path);
+
   /// Deletes [file].
   Future<void> delete(File file) => file.delete();
 }
@@ -221,10 +229,9 @@ PackageDownloadCheckpointClock _createCheckpointClock() {
 /// than the URL itself. Both in-process ownership and a persistent OS lock
 /// prevent concurrent writers from corrupting an artifact. A partial transfer
 /// resumes only when server validators and range semantics remain trustworthy.
-class PackageDownloader {
+class PackageDownloader with _PackageCheckpointStore {
   /// Default one-gibibyte package limit.
   static const defaultMaxDownloadBytes = 1024 * 1024 * 1024;
-  static const _checkpointSchemaVersion = 2;
   static const _maxRedirects = 5;
   static final Set<String> _activeSavePaths = <String>{};
 
@@ -232,6 +239,7 @@ class PackageDownloader {
   final PackageDownloadClient client;
 
   /// Hard upper bound for declared and received bytes.
+  @override
   final int maxDownloadBytes;
 
   /// Retry policy for transient transfer failures.
@@ -244,6 +252,7 @@ class PackageDownloader {
   final Duration idleTimeout;
 
   /// Injectable filesystem boundary.
+  @override
   final PackageDownloadFileOperations fileOperations;
 
   /// Frequency of resumable checkpoint persistence.
@@ -283,6 +292,24 @@ class PackageDownloader {
     void Function(PackageDownloadProgress progress)? onProgress,
     UpdateActionCancelToken? cancelToken,
   }) async {
+    return downloadArtifact(
+      action: ArtifactDescriptor(
+          packageUrl: action.packageUrl,
+          packageSizeBytes: action.packageSizeBytes,
+          sha256: action.sha256),
+      savePath: savePath,
+      onProgress: onProgress,
+      cancelToken: cancelToken,
+    );
+  }
+
+  /// Internal shared transfer entry point for packages and desktop installers.
+  Future<PackageDownloadResult> downloadArtifact({
+    required ArtifactDescriptor action,
+    required String savePath,
+    void Function(PackageDownloadProgress progress)? onProgress,
+    UpdateActionCancelToken? cancelToken,
+  }) async {
     final lockKey = File(savePath).absolute.path;
     if (!_activeSavePaths.add(lockKey)) {
       return const PackageDownloadResult.failure(
@@ -303,7 +330,7 @@ class PackageDownloader {
   }
 
   Future<PackageDownloadResult> _downloadUnlocked({
-    required DownloadPackageAction action,
+    required ArtifactDescriptor action,
     required String savePath,
     void Function(PackageDownloadProgress progress)? onProgress,
     UpdateActionCancelToken? cancelToken,
@@ -313,6 +340,12 @@ class PackageDownloader {
     final metadataFile = File('${partialFile.path}.meta');
     final declaredSize = action.packageSizeBytes;
 
+    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(action.sha256.trim())) {
+      return const PackageDownloadResult.failure(
+        code: UpdateErrorCode.manifestInvalid,
+        message: 'A 64-character SHA-256 is required before downloading.',
+      );
+    }
     if (declaredSize <= 0) {
       return const PackageDownloadResult.failure(
         code: UpdateErrorCode.manifestInvalid,
@@ -327,7 +360,7 @@ class PackageDownloader {
       );
     }
     if (cancelToken?.isCanceled ?? false) {
-      await _cleanupPartialState(partialFile, metadataFile);
+      // No ownership has been acquired; another process may own these files.
       return const PackageDownloadResult.failure(
         code: UpdateErrorCode.actionCanceled,
         message: 'Package download canceled.',
@@ -450,7 +483,7 @@ class PackageDownloader {
   }
 
   Future<PackageDownloadResult> _downloadOnce({
-    required DownloadPackageAction action,
+    required ArtifactDescriptor action,
     required File targetFile,
     required File partialFile,
     required File metadataFile,
@@ -567,7 +600,7 @@ class PackageDownloader {
   }
 
   Future<void> _writeResponseBytes({
-    required DownloadPackageAction action,
+    required ArtifactDescriptor action,
     required PackageDownloadResponse response,
     required File partialFile,
     required File metadataFile,
@@ -845,26 +878,6 @@ class PackageDownloader {
     ]);
   }
 
-  Future<File> _replaceTargetFile(File partialFile, File targetFile) async {
-    final backupFile = File('${targetFile.path}.previous');
-    await _deleteIfExists(backupFile);
-    final hadTarget = await targetFile.exists();
-    if (hadTarget) {
-      await targetFile.rename(backupFile.path);
-    }
-    try {
-      final finalFile = await partialFile.rename(targetFile.path);
-      await _deleteIfExists(backupFile);
-      return finalFile;
-    } catch (_) {
-      if (hadTarget && await backupFile.exists()) {
-        await _deleteIfExists(targetFile);
-        await backupFile.rename(targetFile.path);
-      }
-      rethrow;
-    }
-  }
-
   void _validateResponseSize({
     required PackageDownloadResponse response,
     required int initialDownloadedBytes,
@@ -917,169 +930,8 @@ class PackageDownloader {
     return _ContentRange(totalBytes: totalBytes);
   }
 
-  Future<_ResumeMetadata?> _readResumeMetadata({
-    required DownloadPackageAction action,
-    required File partialFile,
-    required File metadataFile,
-  }) async {
-    final expectedSize = action.packageSizeBytes;
-    final expectedSha256 = _normalizedSha256(action.sha256);
-    if (expectedSha256 == null) {
-      await _cleanupPartialState(partialFile, metadataFile);
-      return null;
-    }
-
-    final candidates = <_ResumeMetadata>[];
-    for (var slot = 0; slot < 2; slot++) {
-      final metadata = await _readCheckpointSlot(
-        _checkpointSlot(metadataFile, slot),
-        slot,
-      );
-      if (metadata != null &&
-          metadata.packageUrlSha256 == _packageUrlSha256(action.packageUrl) &&
-          metadata.packageSizeBytes == expectedSize &&
-          metadata.sha256 == expectedSha256 &&
-          metadata.totalBytes == expectedSize &&
-          metadata.downloadedBytes > 0 &&
-          metadata.downloadedBytes <= metadata.totalBytes &&
-          metadata.downloadedBytes <= maxDownloadBytes &&
-          _isStrongEtag(metadata.etag)) {
-        candidates.add(metadata);
-      }
-    }
-
-    if (candidates.isEmpty || !await partialFile.exists()) {
-      await _cleanupPartialState(partialFile, metadataFile);
-      return null;
-    }
-
-    candidates.sort((left, right) => right.revision.compareTo(left.revision));
-    final checkpoint = candidates.first;
-    final fileLength = await partialFile.length();
-    if (fileLength < checkpoint.downloadedBytes) {
-      await _cleanupPartialState(partialFile, metadataFile);
-      return null;
-    }
-    if (fileLength > checkpoint.downloadedBytes) {
-      RandomAccessFile? file;
-      try {
-        file = await partialFile.open(mode: FileMode.writeOnlyAppend);
-        await file.truncate(checkpoint.downloadedBytes);
-        await file.flush();
-      } on FileSystemException catch (error, stackTrace) {
-        Error.throwWithStackTrace(_StorageFailure(error), stackTrace);
-      } finally {
-        await file?.close();
-      }
-    }
-    return checkpoint;
-  }
-
-  Future<_ResumeMetadata?> _readCheckpointSlot(
-    File slotFile,
-    int slot,
-  ) async {
-    if (!await slotFile.exists()) {
-      return null;
-    }
-    try {
-      final data = jsonDecode(await fileOperations.readAsString(slotFile));
-      if (data is! Map<String, Object?> ||
-          data['schemaVersion'] != _checkpointSchemaVersion ||
-          data['revision'] is! int ||
-          data['packageUrlSha256'] is! String ||
-          data['downloadedBytes'] is! int ||
-          data['packageSizeBytes'] is! int ||
-          data['sha256'] is! String ||
-          data['etag'] is! String ||
-          data['totalBytes'] is! int) {
-        return null;
-      }
-      final revision = data['revision']! as int;
-      if (revision <= 0) {
-        return null;
-      }
-      return _ResumeMetadata(
-        slot: slot,
-        revision: revision,
-        packageUrlSha256:
-            (data['packageUrlSha256']! as String).trim().toLowerCase(),
-        downloadedBytes: data['downloadedBytes']! as int,
-        packageSizeBytes: data['packageSizeBytes']! as int,
-        sha256: (data['sha256']! as String).trim().toLowerCase(),
-        etag: data['etag']! as String,
-        totalBytes: data['totalBytes']! as int,
-      );
-    } on FormatException {
-      return null;
-    } on FileSystemException catch (error, stackTrace) {
-      Error.throwWithStackTrace(_CheckpointReadFailure(error), stackTrace);
-    }
-  }
-
-  bool _canCheckpoint({
-    required DownloadPackageAction action,
-    required PackageDownloadResponse response,
-    required int? totalBytes,
-  }) {
-    final expectedSize = action.packageSizeBytes;
-    return _normalizedSha256(action.sha256) != null &&
-        totalBytes == expectedSize &&
-        _isStrongEtag(response.etag);
-  }
-
-  Future<_CheckpointPosition> _flushAndCheckpoint({
-    required RandomAccessFile file,
-    required DownloadPackageAction action,
-    required PackageDownloadResponse response,
-    required File metadataFile,
-    required int downloadedBytes,
-    required int totalBytes,
-    required int previousRevision,
-    required int previousSlot,
-  }) async {
-    try {
-      await file.flush();
-    } on FileSystemException catch (error, stackTrace) {
-      Error.throwWithStackTrace(_StorageFailure(error), stackTrace);
-    }
-
-    final nextRevision = previousRevision + 1;
-    final nextSlot = previousSlot < 0 ? nextRevision % 2 : 1 - previousSlot;
-    final slotFile = _checkpointSlot(metadataFile, nextSlot);
-    final temporaryFile = File('${slotFile.path}.tmp');
-    final metadata = <String, Object?>{
-      'schemaVersion': _checkpointSchemaVersion,
-      'revision': nextRevision,
-      'packageUrlSha256': _packageUrlSha256(action.packageUrl),
-      'downloadedBytes': downloadedBytes,
-      'packageSizeBytes': action.packageSizeBytes,
-      'sha256': _normalizedSha256(action.sha256),
-      'etag': response.etag,
-      'totalBytes': totalBytes,
-    };
-
-    RandomAccessFile? metadataHandle;
-    try {
-      await _deleteIfExists(temporaryFile);
-      metadataHandle = await temporaryFile.open(mode: FileMode.write);
-      await metadataHandle.writeFrom(utf8.encode(jsonEncode(metadata)));
-      await metadataHandle.flush();
-      await metadataHandle.close();
-      metadataHandle = null;
-      await _deleteIfExists(slotFile);
-      await temporaryFile.rename(slotFile.path);
-      return _CheckpointPosition(revision: nextRevision, slot: nextSlot);
-    } on FileSystemException catch (error, stackTrace) {
-      Error.throwWithStackTrace(_StorageFailure(error), stackTrace);
-    } finally {
-      await metadataHandle?.close();
-      await _deleteIfExists(temporaryFile);
-    }
-  }
-
   Future<PackageDownloadResult> _verifyAndFinalize({
-    required DownloadPackageAction action,
+    required ArtifactDescriptor action,
     required File targetFile,
     required File partialFile,
     required File metadataFile,
@@ -1116,7 +968,9 @@ class PackageDownloader {
       }
     }
 
-    final finalFile = await _replaceTargetFile(partialFile, targetFile);
+    final finalFile =
+        await _ArtifactFileCommitter(_deleteIfExists, fileOperations.rename)
+            .replace(partialFile, targetFile);
     try {
       await _cleanupMetadata(metadataFile);
     } on FileSystemException {
@@ -1156,17 +1010,14 @@ class PackageDownloader {
   }
 
   void _validateDownloadUrl(Uri url) {
-    final isLoopbackHttp = url.scheme == 'http' &&
-        (url.host == 'localhost' ||
-            url.host == '127.0.0.1' ||
-            url.host == '::1');
-    if (url.scheme != 'https' && !isLoopbackHttp) {
+    if (!isAllowedArtifactUri(url)) {
       throw const _InvalidResumeResponse(
         'Package URL must use HTTPS (loopback HTTP is test-only).',
       );
     }
   }
 
+  @override
   bool _isStrongEtag(String? value) {
     if (value == null) {
       return false;
@@ -1218,6 +1069,7 @@ class PackageDownloader {
     });
   }
 
+  @override
   Future<void> _cleanupPartialState(
     File partialFile,
     File metadataFile,
@@ -1226,25 +1078,14 @@ class PackageDownloader {
     await _cleanupMetadata(metadataFile);
   }
 
-  Future<void> _cleanupMetadata(File metadataFile) async {
-    await _deleteIfExists(metadataFile);
-    for (var slot = 0; slot < 2; slot++) {
-      final slotFile = _checkpointSlot(metadataFile, slot);
-      await _deleteIfExists(File('${slotFile.path}.tmp'));
-      await _deleteIfExists(slotFile);
-    }
-  }
-
-  File _checkpointSlot(File metadataFile, int slot) {
-    return File('${metadataFile.path}.$slot');
-  }
-
+  @override
   Future<void> _deleteIfExists(File file) async {
     if (await file.exists()) {
       await fileOperations.delete(file);
     }
   }
 
+  @override
   String? _normalizedSha256(String? value) {
     final normalized = value?.trim().toLowerCase();
     if (normalized == null || normalized.isEmpty) {
@@ -1252,42 +1093,6 @@ class PackageDownloader {
     }
     return normalized;
   }
-
-  String _packageUrlSha256(Uri url) {
-    return crypto.sha256.convert(utf8.encode(url.toString())).toString();
-  }
-}
-
-class _ResumeMetadata {
-  final int slot;
-  final int revision;
-  final String packageUrlSha256;
-  final int downloadedBytes;
-  final int packageSizeBytes;
-  final String sha256;
-  final String etag;
-  final int totalBytes;
-
-  const _ResumeMetadata({
-    required this.slot,
-    required this.revision,
-    required this.packageUrlSha256,
-    required this.downloadedBytes,
-    required this.packageSizeBytes,
-    required this.sha256,
-    required this.etag,
-    required this.totalBytes,
-  });
-}
-
-class _CheckpointPosition {
-  final int revision;
-  final int slot;
-
-  const _CheckpointPosition({
-    required this.revision,
-    required this.slot,
-  });
 }
 
 class _CleanRetryRequired implements Exception {

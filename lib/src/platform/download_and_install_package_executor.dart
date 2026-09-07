@@ -35,6 +35,7 @@ class DownloadAndInstallPackageExecutor
   })  : downloadExecutor = DownloadPackageExecutor(
           downloadDirectory: downloadDirectory,
           downloader: downloader,
+          targetPlatform: targetPlatform ?? defaultTargetPlatform,
         ),
         targetPlatform = targetPlatform ?? defaultTargetPlatform,
         installExecutor = installExecutor ??

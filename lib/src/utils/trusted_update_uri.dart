@@ -58,3 +58,14 @@ int _effectivePort(Uri uri) {
     _ => 0,
   };
 }
+
+/// Low-level artifact policy: HTTPS, or the historical local test hosts.
+/// Unlike opt-in manifest loopback policy, this preserves the exact host list.
+bool isAllowedArtifactUri(Uri uri) {
+  if (!uri.hasAuthority || uri.host.isEmpty || uri.userInfo.isNotEmpty) {
+    return false;
+  }
+  return uri.scheme == 'https' ||
+      (uri.scheme == 'http' &&
+          const {'localhost', '127.0.0.1', '::1'}.contains(uri.host));
+}
