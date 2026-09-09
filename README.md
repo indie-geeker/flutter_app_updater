@@ -69,7 +69,7 @@ CI checks do not establish successful Windows or real-device validation.
 
 ```yaml
 dependencies:
-  flutter_app_updater: ^3.0.0
+  flutter_app_updater: ^3.1.0
 ```
 
 ## Quick Start

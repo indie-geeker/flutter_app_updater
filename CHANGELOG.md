@@ -1,4 +1,4 @@
-## Unreleased
+## 3.1.0 - 2026-09-08
 
 * Fix cross-isolate Unix download ownership while retaining legacy cross-process locking.
 * Preserve another owner's partial state on pre-cancellation; stop every action before dispatch when canceled.

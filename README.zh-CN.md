@@ -55,7 +55,7 @@ macOS 宿主需在 Debug、Release 沙盒 entitlement 中均启用
 
 ```yaml
 dependencies:
-  flutter_app_updater: ^3.0.0
+  flutter_app_updater: ^3.1.0
 ```
 
 ## 快速开始
