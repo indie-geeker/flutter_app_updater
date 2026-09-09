@@ -5,3 +5,5 @@ doc/api/
 doc/plans/
 docs/plans/
 **/local.properties
+
+docs/local/

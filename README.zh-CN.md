@@ -46,8 +46,9 @@ macOS 宿主需在 Debug、Release 沙盒 entitlement 中均启用
 直接构造模型的调用方仍负责传入集合的可变性。下载完成、安装器已打开、新版本已运行是三个不同状态；
 交接成功不等于安装成功。桌面校验后按路径打开的文件身份窗口仍是后续加固项。
 
-本地验证与平台缺口见[验证记录](doc/reliability-verification.md)。手动触发的
-`Device verification` 工作流执行 Android FileProvider 与 macOS 沙盒 HTTPS 测试，不安装更新。
+发布前运行 [CONTRIBUTING.md](CONTRIBUTING.md) 中的检查。手动触发的
+`Device verification` 工作流验证 Android 原生锁、FileProvider 与 macOS 沙盒 HTTPS，不安装更新。
+配置了 CI 检查不代表 Windows 或真实设备验收已经通过。
 
 
 ## 安装

@@ -59,10 +59,10 @@ a newly running version are three separate states; handoff success does not
 prove installation. Desktop native file identity between verification and path
 opening remains a future hardening item.
 
-See [verification evidence](doc/reliability-verification.md) for local results
-and pending platform checks. The manually triggered `Device verification`
-workflow exercises Android FileProvider and macOS sandbox HTTPS without
-installing an update.
+Use the checks in [CONTRIBUTING.md](CONTRIBUTING.md) before release. The manually
+triggered `Device verification` workflow exercises Android native ownership,
+FileProvider and macOS sandbox HTTPS without installing an update. Configured
+CI checks do not establish successful Windows or real-device validation.
 
 
 ## Install
