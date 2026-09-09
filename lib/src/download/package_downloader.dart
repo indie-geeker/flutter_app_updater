@@ -520,7 +520,7 @@ class PackageDownloader with _PackageCheckpointStore {
         final serverLength = _unsatisfiedRangeLength(response.contentRange);
         if (serverLength == resume.downloadedBytes &&
             serverLength == resume.totalBytes) {
-          return _verifyAndFinalize(
+          return await _verifyAndFinalize(
             action: action,
             targetFile: targetFile,
             partialFile: partialFile,
@@ -586,7 +586,7 @@ class PackageDownloader with _PackageCheckpointStore {
         cancelToken: cancelToken,
       );
 
-      return _verifyAndFinalize(
+      return await _verifyAndFinalize(
         action: action,
         targetFile: targetFile,
         partialFile: partialFile,
